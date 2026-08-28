@@ -155,11 +155,11 @@ Procedures: [release runbook](docs/release-runbook.md).
 
 ## Current state
 
-**M0 — Skeleton: code in place, first CI run pending** (foundation documents complete).
+**M0 — Skeleton: closed** — CI green on main (build + image jobs), all acceptance criteria evidenced.
 
 | Milestone | Scope | Status |
 |---|---|---|
-| M0 — Skeleton | Maven multi-module, ArchUnit gates, compose, CI, Flyway per schema, queue provisioning | ◐ skeleton in place — CI green on first real PR closes it |
+| M0 — Skeleton | Maven multi-module, ArchUnit gates, compose, CI, Flyway per schema, queue provisioning | ✅ closed — CI green on main |
 | M1 — Happy path | Create cob → PENDING → webhook → CONFIRMED; idempotency; API keys; canonical errors | ☐ |
 | M2 — Events | Outbox + relay + SNS/SQS; ledger journaling; balance projection; notifications | ☐ |
 | M3 — Suffering | Refunds, expiration, resurrection, reconciler, settlement, DLQ/backoff/EXHAUSTED/requeue | ☐ |
