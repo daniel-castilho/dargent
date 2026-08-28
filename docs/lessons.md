@@ -10,6 +10,23 @@ When a lesson repeats three times, promote it to [coding-standards.md](coding-st
 
 ---
 
+## 11. A boundary gate must scan production sources only — proof fixtures live in test scope (2026-08-28)
+
+The CI boundary script (grep-based second net beside ArchUnit) scanned every `*/domain/*` path under
+`modules/` — including test sources. It immediately flagged `BadDomainFixture`, the deliberate Spring
+annotation inside a fake domain package whose entire purpose is to prove the ArchUnit gate fires. First CI
+run died in 1 second: the gate caught its own canary. The script had never been executed locally before the push.
+
+**Golden rules:**
+
+1. Boundary gates that grep the tree restrict themselves to `*/src/main/java/*`; test scope is governed by
+   semantic rules (ArchUnit imports production classes with `DoNotIncludeTests` and fixtures explicitly).
+2. A violation-hunting tool must be run against its own repository before shipping — the failure mode "gate
+   flags its own proof fixture" is deterministic, not flaky, and costs exactly one CI run to discover.
+3. Red CI on step one is a gift: it proves the gate is wired and actually reads the tree. Troubleshoot, don't panic.
+
+---
+
 ## 10. Weight `0` does not exist in NGINX upstreams — use `down` `[SEED · spotpobre]`
 
 Setting `weight=0` on an upstream server to drain it crash-looped the load balancer in the reference project.
