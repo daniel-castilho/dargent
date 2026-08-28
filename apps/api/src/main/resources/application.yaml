@@ -1,0 +1,26 @@
+server:
+  port: 8080
+  shutdown: graceful
+
+spring:
+  application:
+    name: dargent-api
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+  datasource:
+    url: jdbc:postgresql://${DARGENT_DB_HOST:localhost}:${DARGENT_DB_PORT:5432}/${DARGENT_DB_NAME:dargent}
+    username: ${DARGENT_DB_USER:dargent}
+    password: ${DARGENT_DB_PASSWORD:dargent}
+  flyway:
+    # Gap-versioned per-module migrations (payments V1xx, ledger V2xx, notifications V3xx) —
+    # each module owns its schema; zero cross-schema FK/JOIN (design.md §5, D2).
+    locations: classpath:db/migration/payments, classpath:db/migration/ledger, classpath:db/migration/notifications
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never

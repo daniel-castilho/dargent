@@ -1,0 +1,12 @@
+target/
+.git/
+.github/
+.idea/
+.vscode/
+docs/
+tasks/
+perf/
+scripts/
+docker/
+*.md
+.env

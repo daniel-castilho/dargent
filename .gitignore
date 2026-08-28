@@ -1,0 +1,28 @@
+# Build
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+
+# Environment & secrets (AGENTS.md §4.2 — never commit)
+.env
+*.pem
+secrets/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Runtime artifacts
+docker/runtime/
+perf/results/
+.localstack/
+
+# Logs
+*.log

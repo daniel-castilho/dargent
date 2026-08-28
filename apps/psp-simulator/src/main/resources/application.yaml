@@ -1,0 +1,22 @@
+server:
+  port: 8090
+
+spring:
+  application:
+    name: dargent-psp-simulator
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+dargent:
+  psp:
+    webhook-secret: ${PSP_WEBHOOK_SECRET:dev-only-secret}
+  chaos:
+    # All chaos OFF by default; the tests and demos turn them up (design.md §12).
+    webhook-duplicate: ${CHAOS_WEBHOOK_DUPLICATE:false}
+    webhook-delay-ms: ${CHAOS_WEBHOOK_DELAY_MS:0}
+    webhook-drop-rate: ${CHAOS_WEBHOOK_DROP_RATE:0.0}
+    psp-error-rate: ${CHAOS_PSP_ERROR_RATE:0.0}

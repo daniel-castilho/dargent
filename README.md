@@ -1,4 +1,7 @@
-# Cobre — PIX Payment Processing & Transaction System
+# Dargent — PIX Payment Processing & Transaction System
+
+> *d'argent* (French) — "of silver, of money", from Latin *argentum*.
+> The system is where the money lives.
 
 **A payment infrastructure backend in the shape of platforms like Stripe/Razorpay — built for the Brazilian PIX rail.**
 Modular monolith on **Java 25 + Spring Boot 4.1**, engineered from day one to be extracted into microservices.
@@ -7,9 +10,9 @@ Modular monolith on **Java 25 + Spring Boot 4.1**, engineered from day one to be
 
 ---
 
-## What is Cobre?
+## What is Dargent?
 
-Cobre implements the **complete payment lifecycle**: create → process → verify → webhook → success/failure → refund,
+Dargent implements the **complete payment lifecycle**: create → process → verify → webhook → success/failure → refund,
 using **PIX with dynamic QR codes** mediated by a simulated PSP. The value is not the CRUD — it is the guarantees:
 
 | Guarantee | Mechanism |
@@ -75,7 +78,7 @@ POST /v1/payments/{txid}/refunds → partial/total, fee returned proportionally,
 
 | Document | Purpose |
 |---|---|
-| [`docs/design.md`](docs/design.md) | **Official design document** v1.0.0 (pt-BR; EN translation ships at M0) |
+| [`docs/design.md`](docs/design.md) | **Official design document** v1.0.2 (EN, canonical) · [`design-ptbr.md`](docs/design-ptbr.md) is the archived approval snapshot |
 | [`docs/coding-standards.md`](docs/coding-standards.md) | How code must be written here |
 | [`docs/data-model-decisions.md`](docs/data-model-decisions.md) | Recorded data-model decisions with alternatives |
 | [`docs/lessons.md`](docs/lessons.md) | Hard-won lessons and golden rules |
@@ -112,9 +115,9 @@ docker compose -f docker/compose.yaml up -d
 # 2. Run the API (Flyway migrates, queues provision themselves at boot)
 ./mvnw spring-boot:run -pl apps/api
 
-# 3. Create a payment (dev seed provides COBRE_API_KEY)
+# 3. Create a payment (dev seed provides DARGENT_API_KEY)
 curl -sX POST http://localhost:8080/v1/payments \
-  -H "Authorization: Bearer $COBRE_API_KEY" -H "Idempotency-Key: demo-1" \
+  -H "Authorization: Bearer $DARGENT_API_KEY" -H "Idempotency-Key: demo-1" \
   -H 'Content-Type: application/json' \
   -d '{"amount": 10000, "description": "Order #123", "expiresIn": "PT30M"}'
 
@@ -152,11 +155,11 @@ Procedures: [release runbook](docs/release-runbook.md).
 
 ## Current state
 
-**Pre-M0** — design approved, foundation documents in place.
+**M0 — Skeleton: code in place, first CI run pending** (foundation documents complete).
 
 | Milestone | Scope | Status |
 |---|---|---|
-| M0 — Skeleton | Maven multi-module, ArchUnit gates, compose, CI, Flyway per schema, queue provisioning | ☐ |
+| M0 — Skeleton | Maven multi-module, ArchUnit gates, compose, CI, Flyway per schema, queue provisioning | ◐ skeleton in place — CI green on first real PR closes it |
 | M1 — Happy path | Create cob → PENDING → webhook → CONFIRMED; idempotency; API keys; canonical errors | ☐ |
 | M2 — Events | Outbox + relay + SNS/SQS; ledger journaling; balance projection; notifications | ☐ |
 | M3 — Suffering | Refunds, expiration, resurrection, reconciler, settlement, DLQ/backoff/EXHAUSTED/requeue | ☐ |
@@ -166,4 +169,3 @@ Procedures: [release runbook](docs/release-runbook.md).
 ## License
 
 MIT (LICENSE file added at M0).
-# dargent
