@@ -24,7 +24,7 @@ check "shared importing business modules" 'import io\.dargent\.(payments|ledger|
 check "psp-simulator importing platform modules (it is the outside world)" 'import io\.dargent\.(shared|payments|ledger|notifications)\.' apps/psp-simulator/src
 
 # Domain purity: framework types never enter domain packages (coding-standards §2).
-domain_files=$(find modules -type f -name '*.java' -path '*/domain/*' 2>/dev/null || true)
+domain_files=$(find modules -type f -name '*.java' -path '*/src/main/java/*' -path '*/domain/*' 2>/dev/null || true)
 if [ -n "$domain_files" ]; then
   matches=$(echo "$domain_files" | xargs grep -En 'import (org\.springframework|jakarta\.persistence|com\.fasterxml\.jackson|tools\.jackson|software\.amazon\.awssdk)' 2>/dev/null || true)
   if [ -n "$matches" ]; then

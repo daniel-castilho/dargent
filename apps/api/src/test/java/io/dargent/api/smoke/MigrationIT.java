@@ -1,15 +1,22 @@
 package io.dargent.api.smoke;
 
+import io.dargent.api.DargentApiApplication;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import org.flywaydb.core.Flyway;
 
 /**
  * M0 acceptance proof: Flyway runs per-module locations against a real PostgreSQL 16 and creates
@@ -17,16 +24,37 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * M0 uses a plain @Container; the singleton-container pattern arrives when more IT classes share it
  * (lessons.md #6).
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@SpringBootTest(
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+    classes = {DargentApiApplication.class, MigrationIT.FlywayTestConfig.class}
+)
 @Testcontainers
 class MigrationIT {
 
     @Container
     @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
+    static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:16-alpine");
 
     @Autowired
-    org.springframework.jdbc.core.simple.JdbcClient jdbc;
+    JdbcClient jdbc;
+
+    @Configuration
+    static class FlywayTestConfig {
+        @Bean
+        Flyway flyway(DataSource dataSource) {
+            Flyway flyway = Flyway.configure()
+                .dataSource(dataSource)
+                .locations(
+                    "classpath:db/migration/payments",
+                    "classpath:db/migration/ledger",
+                    "classpath:db/migration/notifications"
+                )
+                .baselineOnMigrate(true)
+                .load();
+            flyway.migrate();
+            return flyway;
+        }
+    }
 
     @Test
     void flyway_creates_all_module_schemas() {

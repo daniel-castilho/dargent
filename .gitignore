@@ -26,3 +26,7 @@ perf/results/
 
 # Logs
 *.log
+
+# Conversation debris / internal notes (never committed)
+uploads/
+internal-notes/
