@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      - name: Architecture boundary check (imports + domain purity)
+        run: bash scripts/check-boundaries.sh
+
+      # Unit + slice + integration (Testcontainers: Postgres + LocalStack).
+      # SpotBugs / OWASP / JaCoCo gates and Trivy/SBOM image security land at M4 per design.md §11.
+      - name: Build, unit and integration tests
+        run: mvn -B verify
+
+      - name: Upload test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-reports
+          path: '**/target/*-reports/**'
+          if-no-files-found: ignore
+
+  image:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build API image
+        run: docker build -t dargent-api:${{ github.sha }} -f apps/api/Dockerfile .
+
+      - name: Build simulator image
+        run: docker build -t dargent-psp-simulator:${{ github.sha }} -f apps/psp-simulator/Dockerfile .
+
+      - name: Non-root gate (must fail on UID 0)
+        run: |
+          out="$(docker run --rm --entrypoint id dargent-api:${{ github.sha }})"
+          echo "$out"
+          if echo "$out" | grep -q 'uid=0('; then
+            echo "FATAL: image runs as root (UID 0)"
+            exit 1
+          fi
+          echo "OK: image runs non-root"
+
+      # M4 adds: Trivy 2-pass (SARIF advisory + HIGH/CRITICAL gate), SBOM CycloneDX,
+      # CodeQL, Dependency Review, runtime-smoke (E2E + reconciliation chaos + shutdown under load),
+      # k6 performance (consultative) — design.md §11.1.
