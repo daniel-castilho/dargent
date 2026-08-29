@@ -113,12 +113,13 @@ fix or write tests, do not lower the floor silently.
 
 ## 8. Known technical debt
 
-Ledger of honestly declared debt. Empty at project start — keep it that way by paying debt within the milestone,
-or declare it here with an owner and a target milestone.
+Ledger of honestly declared debt. Keep it short by paying debt within the milestone, or declare it here
+with an owner and a target milestone.
 
 | ID | Debt | Owner | Target |
 |---|---|---|---|
-| — | *(none declared)* | — | — |
+| DEBT-1 | `Payment.restore()` (persistence hydration) trusts snapshots without revalidating invariants — correct for ORM hydration, but a lying adapter could materialize an invalid aggregate. Add a rejecting-contract test (corrupt snapshot → exception) or adapter-side validation when the persistence seam is next touched. | — | E3 (persistence seam work) |
+| DEBT-2 | Dev-default DB credentials (`dargent`/`dargent`) present in `application.yaml`/compose defaults. Acceptable while `ConfigValidator` (which will refuse defaults in prod profile) does not exist — blocked on DEBT target of design.md §8.3. | — | E3/M4 |
 
 ## 9. Release history conventions
 
