@@ -53,6 +53,7 @@ public final class PaymentMapper {
         Money fee = entity.getFeeCents() == null ? null : Money.of(entity.getFeeCents(), BRL);
         Money net = entity.getNetCents() == null ? null : Money.of(entity.getNetCents(), BRL);
         return Payment.restore(
+                entity.getId(),
                 new Txid(entity.getTxid()),
                 entity.getMerchantId(),
                 amount,

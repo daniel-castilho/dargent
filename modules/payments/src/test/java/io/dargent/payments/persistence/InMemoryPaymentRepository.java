@@ -7,6 +7,7 @@ import io.dargent.payments.domain.port.out.PaymentRepository;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * In-memory {@link PaymentRepository} fake with faithful lost-race semantics
@@ -45,7 +46,7 @@ public class InMemoryPaymentRepository implements PaymentRepository {
     /** Rebuilds a detached snapshot via the adapter-only {@code restore} factory. */
     private static Payment cloneViaRestore(Payment p) {
         return Payment.restore(
-                p.txid(), p.merchantId(), p.amount(), p.description(),
+                p.id(), p.txid(), p.merchantId(), p.amount(), p.description(),
                 p.expiresAt(), p.createdAt(),
                 p.status(), p.version(),
                 p.endToEndId(), p.fee(), p.net(),

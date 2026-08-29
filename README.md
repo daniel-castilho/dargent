@@ -106,11 +106,7 @@ POST /v1/payments/{txid}/refunds → partial/total, fee returned proportionally,
 | Tests | JUnit 6, Testcontainers 2.0, WireMock, Awaitility, jqwik, ArchUnit |
 | Runtime | Docker Compose, NGINX blue-green with canary — no k8s |
 
-## Getting started (target flow — lands with M1)
-
-> **⚠️ Honesty note:** the flow below is the **target** happy path — `POST /v1/payments` is implemented at
-> **E3 / M1** (see [epics](docs/epics.md)). Today the API app boots with actuator health only. Do not expect
-> these commands to succeed until the M1 row in *Current state* flips.
+## Getting started
 
 Prerequisites: JDK 25 (Temurin), Docker with Compose, GNU make (optional).
 
@@ -163,12 +159,12 @@ shipped image. Deployment is **blue-green by immutable tag** with a 10%/30s cana
 
 ## Current state
 
-**M0 — Skeleton: code in place, first CI run pending** (foundation documents complete).
+**M0 — Skeleton: code in place, CI green** (foundation documents complete, boundary gates passing).
 
 | Milestone | Scope | Status |
 |---|---|---|
-| M0 — Skeleton | Maven multi-module, ArchUnit gates, compose, CI, Flyway per schema, queue provisioning | ◐ skeleton in place — CI green on first real PR closes it |
-| M1 — Happy path | Create cob → PENDING → webhook → CONFIRMED; idempotency; API keys; canonical errors | ☐ |
+| M0 — Skeleton | Maven multi-module, ArchUnit gates, compose, CI, Flyway per schema, queue provisioning | ✅ |
+| M1 — Happy path | Create cob → PENDING → webhook → CONFIRMED; idempotency; API keys; canonical errors | ✅ |
 | M2 — Events | Outbox + relay + SNS/SQS; ledger journaling; balance projection; notifications | ☐ |
 | M3 — Suffering | Refunds, expiration, resurrection, reconciler, settlement, DLQ/backoff/EXHAUSTED/requeue | ☐ |
 | M4 — Finish | Metrics, blue-green deploy, runtime smoke in CI, tag releases + SBOM, restore drill | ☐ |

@@ -5,6 +5,39 @@ versioning: semantic, cut from annotated git tags (see [release-runbook](docs/re
 
 ## [Unreleased]
 
+### Added — E3 Create Payment (2026-08-29)
+
+- `POST /v1/payments`: creates PIX charge with idempotency (`Idempotency-Key`), API key auth
+  (`Authorization: Bearer psp_test_...`), RFC 9457 `application/problem+json` error envelope,
+  dynamic BR Code (EMV TLV + CRC16-CCITT, golden vector `EDD2`)
+- Idempotency store: per-tenant/per-endpoint PK, `IN_FLIGHT` → `COMPLETED` (2xx snapshot) or delete on
+  exhaustion, 425 `idempotency_key_in_flight` for in-flight retries, 409 conflict on different body
+- Transactional core (single tx): `IN_FLIGHT` row + `Payment PENDING` + outbox row + audit row; explicit
+  PSP seam after commit (not `TransactionSynchronization`, avoids pool exhaustion)
+- `PspPort` + `SimulatorChargeAdapter` (JDK HttpClient, connect 2s/read 5s, linear backoff,
+  409 `txid_already_exists` → read-back success, 5xx/timeout retry, exhaustion → `FAILED` + 502
+  `psp_unavailable` + `PaymentFailed` outbox row + idempotency key deleted)
+- Dynamic BR Code: `BrCode.of(pixKey, receiverName, receiverCity, amountCents, txid)` — EMV TLV tags
+  00/01/26/52/53/54/58/59/60/62 + CRC16-CCITT-FALSE (poly 0x1021, init 0xFFFF), golden vector
+  `EDD2` asserted byte-exact (length 174)
+- Outbox: `payments.outbox` with `PENDING/SENT/FAILED/EXHAUSTED`, backoff 30s→2min→5min, partial
+  index for relay poll, `EventEnvelope` payload pre-serialized (Jackson 3, `tools.jackson.*`)
+- Audit log: minimal command trail (`command_name`, `actor_key_id`, `merchant_id`, `aggregate_id`,
+  `request_id`, `created_at`) — the "who" of commands
+- API keys (Stripe-style): `psp_test_<43 base62>`, SHA-256 hex hash + indexable prefix, constant-time
+  compare, dev seeding via `DARGENT_DEV_API_KEY`, `SecurityConfig` as single source of truth
+  (`/v1/**` auth, `/webhooks/psp` open, actuator health/info open)
+- ConfigValidator: aggregated fail-fast on dev defaults, short secrets, static AWS creds in prod
+- Reads: `GET /v1/payments/{txid}` (cross-tenant → 404), `GET /v1/payments?cursor=&limit=` keyset
+  pagination (base64url `txid|micros`, `created_at DESC, txid DESC`, clamp 100, stable under insert)
+- Scenario proofs (playbook): idempotent replay (1), conflict 409 (2), 425 in-flight (3), snapshot
+  zero-side-effects (4), 4-thread concurrent identical request → one 201 (15), WireMock timeout →
+  3 retries → `FAILED` + 502 `psp_unavailable` + `PaymentFailed` outbox row + key deleted (25);
+  auth/tenancy/pagination proofs
+- Migrations: `V103__api_keys`, `V104__idempotency_keys`, `V105__outbox`, `V106__audit_log`; V107
+  SKIP (`description` already in V102)
+- Jackson 3 (`tools.jackson.*`) only — no `com.fasterxml.jackson` on prod classpath (lesson #13)
+
 ### Added — E2 PSP Simulator API (2026-08-29)
 
 - Full charge API: `POST /cobs` + `GET /cobs/{txid}` + `POST /cobs/{txid}/payments` (payer bank rules:

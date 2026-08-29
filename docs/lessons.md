@@ -10,6 +10,30 @@ When a lesson repeats three times, promote it to [coding-standards.md](coding-st
 
 ---
 
+## 14. Explicit PSP seam beats `TransactionSynchronization.afterCommit` for long-running side effects (2026-08-29)
+
+First design used `TransactionSynchronizationManager.registerSynchronization(afterCommit)` to fire the PSP
+call after the core tx. Under load the callback ran *before* the transaction's connection cleanup, so the
+PostgreSQL connection stayed bound while the PSP phase held it up to ~20s (3 attempts × (connect 2s + read 5s)
++ backoff). A few slow PSPs hostage the whole pool. Unit tests also became Spring-coupled because
+`TransactionSynchronizationManager` dragged spring-tx into the use case.
+
+**Fix:** The `CreatePaymentUseCase` is not `@Transactional`. It delegates the core tx to a private
+transactional method (or `TransactionTemplate`), then runs the PSP phase as plain code **after the
+transactional method returns**. Same observable behavior (201 still waits on PSP for its real `expiresAt`),
+same guarantee ("call PSP only if commit succeeded"), zero pool pressure, zero Spring in the unit test.
+
+**Golden rules:**
+
+1. Side effects that can block I/O (PSP, email, webhook) **never** run inside `afterCommit` — they run in an
+   explicit seam **after** the transactional method returns.
+2. A Spring-tx-free use case stays fake-testable; `TransactionSynchronization` is a leaky abstraction for
+   anything beyond audit logging.
+3. Exception semantics: an explicit seam makes "only call the PSP if the commit succeeded" plain control
+   flow; `afterCommit` propagates exceptions in non-obvious ways (caller sees rollback, not the original cause).
+
+---
+
 ## 13. Boot 4 uses Jackson 3: the package is `tools.jackson.*`, not `com.fasterxml.*` — and the web test client is gone (2026-08-29)
 
 First S5 compile failed with "package `com.fasterxml.jackson.databind` does not exist" while the dependency
@@ -47,6 +71,23 @@ throws `UnexpectedRollbackException` — the loser never gets its clean `false`.
    the race IT is what actually crosses the concurrency seam. Write it before trusting the adapter.
 3. When Hibernate says "transaction silently rolled back … marked rollback-only", it isn't configuration:
    the persistence context already decided. Redesign the write path, don't tune around it.
+
+---
+
+## 11. WireMock admin port is dynamic — `configureFor("localhost", port)` is mandatory in each test class (2026-08-29)
+
+WireMock's static `stubFor()`, `configureFor()`, etc. target a **static admin port** (default 8080). With
+`dynamicPort()`, the admin API moves per test class. Calling `stubFor()` without `configureFor("localhost",
+wireMock.port())` registers stubs against port 8080 (which has no WireMock), so all requests hit "connection
+refused" even though the WireMock server is up.
+
+**Golden rules:**
+
+1. Every WireMock IT class calls `configureFor("localhost", wireMock.port())` in `@BeforeEach` before any
+   `stubFor()`.
+3. The `WireMockServer` instance must be a field (not static) so its `port()` reflects the actual port.
+4. If stubs appear not to match, check `WireMock.getAllServeEvents()` — it will show requests hitting the
+   wrong port (or 404 on the WireMock admin endpoint).
 
 ---
 
@@ -118,7 +159,7 @@ runner's Java 17 cannot load a Java 25 jar. Failures looked like service bugs; t
 
 ---
 
-## 6. Singleton test containers must not use the `@Testcontainers` lifecycle `[SEED · spotpobre-era patterns]`
+## 7. Singleton test containers must not use the `@Testcontainers` lifecycle `[SEED · spotpobre-era patterns]`
 
 A singleton container base class combined with `@Container` stops the container after the first test class;
 Spring's context cache then holds a dead datasource, producing "flaky" connection failures that are actually a

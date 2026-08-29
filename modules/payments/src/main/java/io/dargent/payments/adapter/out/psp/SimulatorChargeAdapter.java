@@ -1,0 +1,167 @@
+package io.dargent.payments.adapter.out.psp;
+
+import io.dargent.payments.domain.model.Txid;
+import io.dargent.payments.domain.port.out.PspPort;
+import java.io.IOException;
+import java.net.URI;
+import java.net.ProxySelector;
+import java.net.Proxy;
+import java.net.SocketAddress;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.function.Supplier;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
+
+/**
+ * PSP adapter for the E2 simulator (E3 spec §5.7, §5.9): uses JDK {@link HttpClient} with
+ * connect 2 s / read 5 s timeouts. Retry policy (D19): linear backoff via injected sleeper;
+ * retryable = connect/read errors, 5xx; **409 {@code txid_already_exists} is NOT retryable** →
+ * treated as already-created success path (read the charge back via {@code GET /cobs/{txid}}).
+ */
+public final class SimulatorChargeAdapter implements PspPort {
+
+    private final java.net.http.HttpClient httpClient;
+    private final String baseUrl;
+    private final int maxAttempts;
+    private final Duration baseBackoff;
+    private final Supplier<Long> sleeperMillis;
+    private final ObjectMapper objectMapper;
+
+    public SimulatorChargeAdapter(String baseUrl, int maxAttempts, Duration baseBackoff,
+            Supplier<Long> sleeperMillis) {
+        this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
+        this.maxAttempts = maxAttempts;
+        this.baseBackoff = baseBackoff;
+        this.sleeperMillis = sleeperMillis;
+        // Disable proxy via system properties before creating HttpClient
+        System.setProperty("http.proxyHost", "");
+        System.setProperty("http.proxyPort", "");
+        System.setProperty("https.proxyHost", "");
+        System.setProperty("https.proxyPort", "");
+        // Create HttpClient with NO_PROXY
+ProxySelector noProxySelector = new ProxySelector() {
+            @Override
+            public List<Proxy> select(URI uri) {
+                System.out.println("PROXY SELECTOR CALLED for: " + uri);
+                return List.of(Proxy.NO_PROXY);
+            }
+            @Override
+            public void connectFailed(URI uri, SocketAddress sa, IOException ioe) {
+                System.err.println("Proxy connect failed: " + uri);
+            }
+        };
+        System.out.println("Creating HttpClient with custom ProxySelector");
+        this.httpClient = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(2))
+                .proxy(noProxySelector)
+                .build();
+        this.objectMapper = JsonMapper.builder().build();
+        System.out.println("Creating SimulatorChargeAdapter with baseUrl: " + baseUrl);
+    }
+
+    @Override
+    public ChargeResult createCharge(CreateChargeInput input) {
+        var requestBody = new ChargeRequest(input.txid().value(), input.amountCents(),
+                input.expiresAt().toString(), input.callbackUrl(), input.description());
+
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                String url = baseUrl + "/cobs";
+                System.out.println("CREATE CHARGE attempting: " + url + " (attempt " + attempt + ")");
+                String json = objectMapper.writeValueAsString(new ChargeRequest(input.txid().value(), input.amountCents(),
+                        input.expiresAt().toString(), input.callbackUrl(), input.description()));
+                var request = HttpRequest.newBuilder()
+                        .uri(URI.create(url))
+                        .timeout(Duration.ofSeconds(5))
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(json))
+                        .build();
+                System.out.println("REQUEST URI: " + request.uri());
+                var response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                int statusCode = response.statusCode();
+                if (statusCode == 200 || statusCode == 201) {
+                    var responseBody = objectMapper.readValue(response.body(), ChargeResponse.class);
+                    return new ChargeResult(new Txid(responseBody.txid()), Instant.parse(responseBody.expiresAt()),
+                            responseBody.endToEndId(), responseBody.brcode());
+                } else if (statusCode == 409) {
+                    return readBackCharge(input.txid());
+                } else if (!isRetryable(statusCode) || attempt == maxAttempts) {
+                    throw new PspException("PSP call failed with status " + statusCode + " after " + attempt + " attempts");
+                }
+            } catch (IOException | InterruptedException e) {
+                if (!isRetryable(0) || attempt == maxAttempts) {
+                    throw new PspException("PSP call failed after " + attempt + " attempts", e);
+                }
+            }
+            if (attempt < maxAttempts) {
+                sleep(baseBackoff.multipliedBy(attempt));
+            }
+        }
+        throw new PspException("PSP exhausted after " + maxAttempts + " attempts");
+    }
+
+    private ChargeResult readBackCharge(Txid txid) {
+        try {
+            String url = baseUrl + "/cobs/" + txid.value();
+            System.out.println("READBACK requesting: " + url);
+            var request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .timeout(Duration.ofSeconds(5))
+                    .GET()
+                    .build();
+            System.out.println("READBACK REQUEST URI: " + request.uri());
+            var response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() == 200) {
+                var responseBody = objectMapper.readValue(response.body(), ChargeResponse.class);
+                return new ChargeResult(new Txid(responseBody.txid()), Instant.parse(responseBody.expiresAt()),
+                        responseBody.endToEndId(), responseBody.brcode());
+            }
+            throw new PspException("PSP read-back failed with status " + response.statusCode() + " for txid " + txid.value());
+        } catch (IOException | InterruptedException e) {
+            System.err.println("READBACK error: " + e.getMessage());
+            throw new PspException("PSP read-back failed for txid " + txid.value(), e);
+        }
+    }
+
+    private boolean isRetryable(int statusCode) {
+        return statusCode >= 500 || statusCode == 0;
+    }
+
+    private void sleep(Duration duration) {
+        try {
+            Thread.sleep(sleeperMillis.get());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new PspException("Sleep interrupted", e);
+        }
+    }
+
+    static class PspException extends RuntimeException {
+        PspException(String msg, Throwable cause) {
+            super(msg, cause);
+        }
+        PspException(String msg) {
+            super(msg);
+        }
+    }
+
+    private record ChargeRequest(
+            String txid,
+            long amount,
+            String expiresAt,
+            String callbackUrl,
+            String description
+    ) {}
+
+    private record ChargeResponse(
+            String txid,
+            String expiresAt,
+            String endToEndId,
+            String brcode
+    ) {}
+}
