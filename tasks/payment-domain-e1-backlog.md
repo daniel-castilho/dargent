@@ -7,7 +7,7 @@
 **Companions:** `payment-domain-e1-spec.md` · `payment-domain-e1-implementation-sequence.md` · `ai-software-engineer-prompt-payment-domain-e1.md`
 
 **Execution status:** opened 2026-08-28 after M0 closure (CI run #33217044326 green). Greenfield epic —
-S1–S10 ☑, S11 (closure) pending. Test-first process is mandatory for S1–S3 (prompt rule 1).
+**S1–S11 ☑ CLOSED 2026-08-28.** Test-first process is mandatory for S1–S3 (prompt rule 1).
 
 ---
 
@@ -176,11 +176,11 @@ S11  Docs sync (design.md §5.1 description column, epics.md, acceptance matrix,
 - [x] Test named per playbook §3 (`concurrent_confirmations_with_version_guard_yield_exactly_one_winner`)
       and stable across 5 consecutive local runs (08-28)
 
-## S11 — Docs sync & closure ☐
+## S11 — Docs sync & closure ☑
 
 ### Work
-- [ ] design.md §5.1 `description` row; epics.md E1 → ✅; `tasks/e1-acceptance-matrix.md` fully evidenced
-- [ ] CHANGELOG Unreleased entry; lessons.md entry if the race IT or the adapter taught something non-obvious
+- [x] design.md §5.1 `description` row; epics.md E1 → ✅; `tasks/e1-acceptance-matrix.md` fully evidenced
+- [x] CHANGELOG Unreleased entry; lessons.md entry (#12: flush-catch vs conditional UPDATE — the race IT's lesson)
 
 ### Acceptance
-- [ ] Zero `pending` cells in the matrix; docs/tree drift list empty
+- [x] Zero `pending` cells in the matrix; docs/tree drift list empty

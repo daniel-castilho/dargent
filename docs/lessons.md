@@ -10,7 +10,25 @@ When a lesson repeats three times, promote it to [coding-standards.md](coding-st
 
 ---
 
-## 11. A boundary gate must scan production sources only — proof fixtures live in test scope (2026-08-28)
+## 12. Catching `OptimisticLockException` from a flush returns `false` but the commit still throws — conditional UPDATE is the only clean lost-race (2026-08-28)
+
+First implementation of `PaymentRepository.updateIfVersionMatches` loaded the row, mutated the managed
+`@Version` entity and caught the `flush()` failure to mean "lost race": catch → `em.clear()` → return
+`false`. The single-threaded contract suite went green because the stale-version check short-circuits
+*before* the flush. The 8-thread race IT exploded on exactly the path the epic exists to prove: Hibernate
+marks the transaction rollback-only the moment the flush misses, and the `@Transactional` proxy's commit
+throws `UnexpectedRollbackException` — the loser never gets its clean `false`.
+
+**Golden rules:**
+
+1. Lost-race semantics are a **conditional UPDATE** (`SET version = :expected+1 WHERE txid = :txid AND
+   version = :expected`; zero rows = lost). Never flush-then-catch for arbitration (AGENTS.md §3.2).
+2. A green unit/contract suite on a fake or on single-threaded paths is *necessary but not sufficient* —
+   the race IT is what actually crosses the concurrency seam. Write it before trusting the adapter.
+3. When Hibernate says "transaction silently rolled back … marked rollback-only", it isn't configuration:
+   the persistence context already decided. Redesign the write path, don't tune around it.
+
+---
 
 The CI boundary script (grep-based second net beside ArchUnit) scanned every `*/domain/*` path under
 `modules/` — including test sources. It immediately flagged `BadDomainFixture`, the deliberate Spring

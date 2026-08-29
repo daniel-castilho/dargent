@@ -5,6 +5,23 @@ versioning: semantic, cut from annotated git tags (see [release-runbook](docs/re
 
 ## [Unreleased]
 
+### Added — E1 Payment Domain & State Machine (2026-08-28)
+
+- `Txid` (25-char `[A-Z0-9]`, D4) + `SecureRandomTxidGenerator`; `EndToEndId` (`E` + 31 alnum)
+- `BpsRate`/`FeeBreakdown`: fee = `floor(amount × bps / 10_000)`, net = amount − fee, reversal formula —
+  property-tested (jqwik)
+- `Payment` aggregate with guarded state machine (PENDING ↔ CONFIRMED/EXPIRED/FAILED/REFUNDED, resurrection
+  with `lateConfirmation` audit flag), typed domain exceptions, and domain events (`PaymentEvent` +
+  concrete records) drained per transition
+- `PaymentRepository` port with lost-race contract (`updateIfVersionMatches` → `false` on stale version,
+  adapter never throws) + in-memory fake + shared contract test suite
+- `V102__create_payments_table.sql` (schema `payments`): uuid PK, unique `txid`, money as `bigint` cents
+  (D5), status CHECK, optimistic `version`, fee/net columns, `late_confirmation`, `refunded_cents`
+- JPA adapter (`PaymentEntity`/`PaymentMapper`/`PaymentJpaAdapter`) at the adapter edge only (D14) —
+  transitions are explicit conditional UPDATEs; the DB arbitrates races (AGENTS.md §3.2)
+- Integration proofs on real PostgreSQL 16 (Testcontainers): `PaymentJpaAdapterIT` (contract suite on the
+  adapter) + `PaymentConcurrentTransitionIT` (8 threads, exactly one winner)
+
 ### Added — M0 Skeleton (2026-08-28)
 
 - Maven multi-module structure by bounded context: `modules/{shared,payments,ledger,notifications}`, `apps/{api,psp-simulator}` (design.md §3.2)
