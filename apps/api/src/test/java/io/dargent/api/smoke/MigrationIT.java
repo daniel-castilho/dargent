@@ -102,7 +102,7 @@ class MigrationIT {
                 .query(String.class)
                 .list();
 
-        assertThat(paymentTables).containsExactlyInAnyOrder("payments", "api_keys", "idempotency_keys", "outbox", "audit_log");
+        assertThat(paymentTables).containsExactlyInAnyOrder("payments", "api_keys", "idempotency_keys", "outbox", "audit_log", "webhook_events");
         assertThat(ledgerTables).isEmpty();
         assertThat(notificationTables).isEmpty();
     }
