@@ -7,12 +7,13 @@
 **Companions:** `psp-simulator-e2-spec.md` · `psp-simulator-e2-implementation-sequence.md` · `ai-software-engineer-prompt-psp-simulator-e2.md`
 
 **Execution status:** opened 2026-08-29 after E1 closure (CI run #33225043138 green). Greenfield epic inside
-`apps/psp-simulator` — S1–S4 ☑, S5–S8 ☐. TDD mandatory for S2 and S5 (prompt rule 1).
+`apps/psp-simulator` — S1–S5 ☑, S6–S8 ☐. TDD mandatory for S2 and S5 (prompt rule 1).
 **Decisions:** S1 resolved the spec-vs-M0 config path mismatch by following spec §3.2 — chaos properties
 moved to `dargent.psp.chaos.*` (env names `CHAOS_*` unchanged, M0 contract intact). S3: Boot 4.1.1 ships no
 `@WebMvcTest` web slice in `spring-boot-test-autoconfigure` (only json/jdbc slices exist) — slice tests boot
 the full app context and use Spring's own `MockMvc` via `webAppContextSetup` (zero new dependencies;
-documented deviation).
+documented deviation). S5: Boot 4.1.1 uses Jackson 3 (`tools.jackson.databind.*`) — `com.fasterxml` packages
+do not exist on this classpath; the event records import from `tools.jackson.*`.
 
 ---
 
@@ -110,17 +111,24 @@ S8   Docs sync, acceptance matrix, ledger, CHANGELOG, lessons
 ### Acceptance
 - [x] All rule branches green; dispatch is triggered exactly once per successful payment (pre-chaos)
 
-## S5 — HMAC signer + async delivery engine ☐ (tests first)
+## S5 — HMAC signer + async delivery engine ☑ (tests first)
 
 ### Work
-- [ ] `WebhookSigner`: lowercase-hex HMAC-SHA256 of `timestamp + "." + rawBody` with the configured secret —
-      **the spec §5.4 test vector asserted verbatim**
-- [ ] `WebhookDispatcher`: builds event JSON per §5.4, signs, delivers via `RestClient` to `callbackUrl`
-      with `X-PSP-Timestamp`/`X-PSP-Signature`; async via a bounded executor; single attempt; no retry
-- [ ] Unit tests first: signer vector, event JSON shape, executor dispatch to a stub receiver
+- [x] `WebhookSigner`: lowercase-hex HMAC-SHA256 of `timestamp + "." + rawBody` with the configured secret —
+      **the spec §5.4 test vector asserted verbatim** (plus an independent known-answer vector)
+- [x] `WebhookEvent.of(charge)` → `{eventId, type, txid, endToEndId, amount, paidAt}` serialized **once** to
+      bytes; those bytes are signed and sent (no re-serialization, no pretty-printing)
+- [x] `AsyncWebhookDispatcher` (replaces the S4 `NoopWebhookDispatcher`, removed): bounded pool (4 workers,
+      daemon threads), `RestClient` connect 2s / read 5s, single attempt, delivery failure → WARN (no retry —
+      reconciliation is the E5 story); clock is the injected `Clock` (no `Instant.now()` in serialization path)
+- [x] Unit tests first: signer vector (byte-exact), event JSON shape byte-exact, wire IT to a test-local
+      `@RestController` receiver (`TestWebhookReceiver`, component-scanned — a duplicate `@Bean` made the
+      mapping ambiguous, so no `@TestConfiguration`); a second test asserts single delivery
+- [x] Dispatcher failure keeps `dispatch()` async and silent — the controller must never see delivery errors
 
 ### Acceptance
-- [ ] Signer output for the spec vector is byte-exact; delivery carries exact headers and raw body
+- [x] Signer output for the spec vector is byte-exact; delivery carries exact headers and raw body;
+      recomputing the signature from captured bytes + timestamp matches the captured `X-PSP-Signature`
 
 ## S6 — Chaos wiring (deterministic) ☐
 
