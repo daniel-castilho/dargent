@@ -243,7 +243,6 @@ Postgres schemas per module; Flyway with per-module locations (each jar carries 
 | `id` | UUIDv7 | app-generated (time-ordered, index-friendly) |
 | `txid` | varchar(25) | **unique**, alphanumeric |
 | `merchant_id` | uuid | inherited from the API key, never from the payload |
-| `description` | varchar(140) | nullable merchant note (added in E1) |
 | `amount_cents` | bigint | Money |
 | `status` | enum | `PENDING, CONFIRMED, PARTIALLY_REFUNDED, REFUNDED, EXPIRED, FAILED` |
 | `version` | int | optimistic locking |
@@ -473,8 +472,8 @@ Ports: `EventPublisher` (relay calls) + an event handler per consumer. Envelope,
 ### 8.3 PCI posture & production
 
 - Never store sensitive payment data — only PSP tokens (PIX doesn't even expose them; stretch-card would follow the rule: token + last 4)
-- **`ConfigValidator` aggregated fail-fast**: boot aborts listing ALL problems (unresolved placeholders, short secrets, static AWS keys in prod)
-- **Production lockdown proven by IT**: Swagger/api-docs absent, actuator health-only with `show-details: never`, isolated management port, API key mandatory on business endpoints
+- **`ConfigValidator` aggregated fail-fast** *(lands M1/E3; nothing of the sort exists yet — M0/M1 boots with dev defaults)*: boot aborts listing ALL problems (unresolved placeholders, short secrets, static AWS keys in prod)
+- **Production lockdown proven by IT** *(lands M4/E11)*: Swagger/api-docs absent, actuator health-only with `show-details: never`, isolated management port, API key mandatory on business endpoints
 
 ---
 
