@@ -67,13 +67,24 @@ class MigrationIT {
     }
 
     @Test
-    void module_schemas_start_empty_of_business_tables_in_m0() {
-        // Schemas exist; business tables arrive with their milestone (expand/contract from day one).
+    void module_schemas_hold_only_their_own_business_tables() {
+        // payments.gains its core table in E1 (V102); ledger/notifications stay schema-only
+        // until their milestone (expand/contract from day one)).
         List<String> paymentTables = jdbc
                 .sql("select table_name from information_schema.tables where table_schema = 'payments'")
                 .query(String.class)
                 .list();
+        List<String> ledgerTables = jdbc
+                .sql("select table_name from information_schema.tables where table_schema = 'ledger'")
+                .query(String.class)
+                .list();
+        List<String> notificationTables = jdbc
+                .sql("select table_name from information_schema.tables where table_schema = 'notifications'")
+                .query(String.class)
+                .list();
 
-        assertThat(paymentTables).isEmpty();
+        assertThat(paymentTables).containsExactlyInAnyOrder("payments");
+        assertThat(ledgerTables).isEmpty();
+        assertThat(notificationTables).isEmpty();
     }
 }

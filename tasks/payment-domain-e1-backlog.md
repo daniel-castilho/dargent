@@ -7,7 +7,7 @@
 **Companions:** `payment-domain-e1-spec.md` · `payment-domain-e1-implementation-sequence.md` · `ai-software-engineer-prompt-payment-domain-e1.md`
 
 **Execution status:** opened 2026-08-28 after M0 closure (CI run #33217044326 green). Greenfield epic —
-S1–S6 ☑, S7+ still ☐. Test-first process is mandatory for S1–S3 (prompt rule 1).
+S1–S8 ☑, S9+ still ☐. Test-first process is mandatory for S1–S3 (prompt rule 1).
 
 ---
 
@@ -125,29 +125,32 @@ S11  Docs sync (design.md §5.1 description column, epics.md, acceptance matrix,
 ### Acceptance
 - [x] Fake passes a contract test suite shared with the JPA adapter (S9 reuses the same assertions)
 
-## S7 — V102 payments table migration ☐
+## S7 — V102 payments table migration ☑
 
 ### Work
-- [ ] `modules/payments/src/main/resources/db/migration/payments/V102__create_payments_table.sql` per spec §8
+- [x] `modules/payments/src/main/resources/db/migration/payments/V102__create_payments_table.sql` per spec §8
       (uuid PK, txid varchar(25) unique, merchant_id, description, amount/status/version, expires_at,
       end_to_end_id, fee/net, late_confirmation, created_at/confirmed_at)
-- [ ] design.md §5.1 gains the `description` row (docs synced in the same change set)
+- [x] design.md §5.1 gains the `description` row (docs synced in the same change set)
 
 ### Acceptance
-- [ ] Migration runs clean on PostgreSQL 16 (proven by S9/S10 ITs); gap numbering preserved (V102, payments V1xx)
+- [x] Migration runs clean on PostgreSQL 16 (proven by S9/S10 ITs); gap numbering preserved (V102, payments V1xx)
 
-## S8 — PaymentEntity + mapper + PaymentJpaAdapter ☐
+## S8 — PaymentEntity + mapper + PaymentJpaAdapter ☑
 
 ### Work
-- [ ] `PaymentEntity` (@Entity, `@Version` on version column, table `payments.payments`) — adapter package only
-- [ ] `PaymentMapper`: domain ↔ persistence, including raised-events preservation across load
-- [ ] `PaymentJpaAdapter implements PaymentRepository`; `updateIfVersionMatches` relies on `@Version`
-      (`OptimisticLockingFailureException` → `false`)
-- [ ] Module gains `spring-boot-starter-data-jpa` (compile) — adapter packages only, per prompt decision 5
+- [x] `PaymentEntity` (@Entity, `@Version` on version column, table `payments.payments`) — adapter package only
+- [x] `PaymentMapper`: domain ↔ persistence, including effects of raised events across load
+- [x] `PaymentJpaAdapter implements PaymentRepository`; `updateIfVersionMatches` relies on `@Version`
+      (`OptimisticLockingFailureException`/`OptimisticLockException` → `false`), and reflects the persisted
+      version back on the aggregate via `Payment.markPersistedVersion`
+- [x] Module gains `spring-boot-starter-data-jpa` (compile) + `spring-context` (compile, for the adapter's
+      `@Repository`/`@Transactional`) — adapter packages only, per prompt decision 5
+- [x] `apps/api` MigrationIT updated: `payments` schema now holds the `payments` table from V102 (E1)
 
 ### Acceptance
-- [ ] ArchUnit domain purity still green (no framework imports under `domain/`)
-- [ ] Boundary script still green (prod-only scan unaffected)
+- [x] ArchUnit domain purity still green (no framework imports under `domain/`)
+- [x] Boundary script still green (prod-only scan unaffected)
 
 ## S9 — PaymentJpaAdapterIT against real PostgreSQL 16 ☐
 

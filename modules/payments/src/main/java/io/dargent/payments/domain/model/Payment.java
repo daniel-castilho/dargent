@@ -247,6 +247,15 @@ public final class Payment {
         raise(event);
     }
 
+    /**
+     * Reflects the version the persistence layer assigned after a successful
+     * guarded update (the DB, not the domain, is the version authority — D6).
+     * Adapter-seam use only.
+     */
+    public void markPersistedVersion(int version) {
+        this.version = version;
+    }
+
     private void raise(PaymentEvent event) {
         domainEvents.add(event);
     }
