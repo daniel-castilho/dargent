@@ -7,7 +7,7 @@
 **Companions:** `psp-simulator-e2-spec.md` · `psp-simulator-e2-implementation-sequence.md` · `ai-software-engineer-prompt-psp-simulator-e2.md`
 
 **Execution status:** opened 2026-08-29 after E1 closure (CI run #33225043138 green). Greenfield epic inside
-`apps/psp-simulator` — S1–S3 ☑, S4–S8 ☐. TDD mandatory for S2 and S5 (prompt rule 1).
+`apps/psp-simulator` — S1–S4 ☑, S5–S8 ☐. TDD mandatory for S2 and S5 (prompt rule 1).
 **Decisions:** S1 resolved the spec-vs-M0 config path mismatch by following spec §3.2 — chaos properties
 moved to `dargent.psp.chaos.*` (env names `CHAOS_*` unchanged, M0 contract intact). S3: Boot 4.1.1 ships no
 `@WebMvcTest` web slice in `spring-boot-test-autoconfigure` (only json/jdbc slices exist) — slice tests boot
@@ -100,15 +100,15 @@ S8   Docs sync, acceptance matrix, ledger, CHANGELOG, lessons
 ### Acceptance
 - [x] Response bodies byte-shape match spec §5.1/§5.2 examples (field names, types)
 
-## S4 — POST /cobs/{txid}/payments (payer bank) ☐
+## S4 — POST /cobs/{txid}/payments (payer bank) ☑
 
 ### Work
-- [ ] Rules: unknown → 404; expired → 409 `charge_expired`; already paid → 409 `already_paid`; else `pay(now)`:
+- [x] Rules: unknown → 404; expired → 409 `charge_expired`; already paid → 409 `already_paid`; else `pay(now)`:
       status PAID, `endToEndId` set, `paidAt` set, webhook dispatch triggered
-- [ ] Response 200 per spec §5.3; slicing tests for every rule branch
+- [x] Response 200 per spec §5.3; slicing tests for every rule branch
 
 ### Acceptance
-- [ ] All rule branches green; dispatch is triggered exactly once per successful payment (pre-chaos)
+- [x] All rule branches green; dispatch is triggered exactly once per successful payment (pre-chaos)
 
 ## S5 — HMAC signer + async delivery engine ☐ (tests first)
 
