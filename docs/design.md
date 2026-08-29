@@ -243,6 +243,7 @@ Postgres schemas per module; Flyway with per-module locations (each jar carries 
 | `id` | UUIDv7 | app-generated (time-ordered, index-friendly) |
 | `txid` | varchar(25) | **unique**, alphanumeric |
 | `merchant_id` | uuid | inherited from the API key, never from the payload |
+| `description` | varchar(140) | nullable merchant note (added in E1) |
 | `amount_cents` | bigint | Money |
 | `status` | enum | `PENDING, CONFIRMED, PARTIALLY_REFUNDED, REFUNDED, EXPIRED, FAILED` |
 | `version` | int | optimistic locking |
