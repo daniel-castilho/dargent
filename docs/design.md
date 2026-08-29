@@ -472,6 +472,8 @@ Ports: `EventPublisher` (relay calls) + an event handler per consumer. Envelope,
 - Route is `permitAll` at the HTTP layer **only with** validation in the filter; raw payload saved **always**, even on invalid signatures (attack audit)
 - Behind NGINX: the app must see the same URL the PSP dialed + forwarded headers configured in the prod profile
 
+> **Endpoint-driven intake (E4 spec §3.1):** The webhook endpoint captures the raw body once, passes it through the validator, then the use case. The intake is **not** a servlet filter; it's a controller route that owns the raw-capture-once contract. Fail-closed is proven by tests, not by filter chain position. This avoids the filter-chain re-serialization trap (body consumed before filter sees it) and keeps the use case Spring-free.
+
 ### 8.3 PCI posture & production
 
 - Never store sensitive payment data — only PSP tokens (PIX doesn't even expose them; stretch-card would follow the rule: token + last 4)

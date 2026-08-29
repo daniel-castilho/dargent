@@ -110,7 +110,7 @@ POST /v1/payments/{txid}/refunds → partial/total, fee returned proportionally,
 
 Prerequisites: JDK 25 (Temurin), Docker with Compose, GNU make (optional).
 
-> **⚠️ Honesty note:** `POST /v1/payments` + `GET /v1/payments` + `GET /v1/payments/{txid}` are **live (E3)**. The webhook → `CONFIRMED` leg lands with **E4**; until then, paying at the simulator leaves the payment `PENDING` by design — that is the declared state, not a bug.
+> **⚠️ Honesty note:** `POST /v1/payments` + `GET /v1/payments` + `GET /v1/payments/{txid}` + **`POST /webhooks/psp`** are **live (E3+E4)**. The full loop works end-to-end: create → pay → webhook → `CONFIRMED`. The **reconciliation** step lands with **E5**; until then, a late webhook (beyond anti-replay window) is rejected and must be reconciled — that is the declared state, not a bug.
 
 ```bash
 # 1. Start the backing services (Postgres, LocalStack, psp-simulator)
@@ -128,8 +128,8 @@ curl -sX POST http://localhost:8080/v1/payments \
 # 4. Pay the QR at the payer bank (simulator)
 curl -sX POST http://localhost:8090/cobs/{txid}/payments
 
-# 5. Watch it land (will show PENDING until E4 webhook arrives)
-curl -s http://localhost:8080/v1/payments/{txid}   # → "status": "PENDING"
+# 5. Watch it land
+curl -s http://localhost:8080/v1/payments/{txid}   # → "status": "CONFIRMED"
 ```
 
 Swagger UI (dev only): `http://localhost:8080/swagger-ui.html` · Simulator chaos knobs: see `docker/.env.example`.

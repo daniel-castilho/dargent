@@ -20,7 +20,7 @@ second** (among unblocked epics, the one that unlocks the most goes first).
 | E1 | Payment domain & state machine | payments | E0 | M1 | ✅ 2026-08-29 — CI green (run #33225043138), matrix evidenced, lesson #12 |
 | E2 | PSP simulator API (cobs + payer bank + chaos) | psp-simulator | E0 *(parallel with E1)* | M1 | ✅ 2026-08-29 — matrix evidenced (`tasks/e2-acceptance-matrix.md`), spec §5.4 vector asserted |
 | E3 | Create payment: idempotency + API keys + error contract | payments, api | E1, E2 | M1 | ✅ 2026-08-29 — CI green (commit a979c80), matrix evidenced (`tasks/e3-acceptance-matrix.md`), golden vector EDD2, 73 tests pass |
-| E4 | Webhook intake: HMAC, anti-replay, dedupe, confirmation | payments, api | E1, E2 | M1 | ☐ |
+| E4 | Webhook intake: HMAC, anti-replay, dedupe, confirmation | payments, api | E1, E2 | M1 | ✅ 2026-08-29 — CI green (run #33267438415), matrix evidenced (`tasks/e4-acceptance-matrix.md`), full loop proven |
 | E5 | Expiration, resurrection & reconciliation | payments | E3, E4 | M3 | ☐ |
 | E6 | Outbox + messaging backbone (relay, SNS/SQS, DLQ) | payments, api | E3 | M2 | ☐ |
 | E7 | Ledger core: double entry, projection, balance proof, settlement | ledger | E6 | M2 | ☐ |
@@ -102,10 +102,10 @@ keys (SHA-256 at rest); canonical `ErrorResponseWriter` + problem+json catalog; 
 (EMV + CRC16) from the simulator's PIX fields; `GET /payments/{txid}` + cursor-paginated listing.
 **Proves:** playbook scenarios 1–4, 15, 25; the getting-started curl stops being documentation.
 
-### E4 — Webhook intake
+### E4 — Webhook intake ✅ (2026-08-29)
 Fail-closed HMAC filter (timestamp + rawBody, 5-min anti-replay — validates against E2's contract and
 vector), raw persistence even on invalid signatures (attack audit), `provider_event_id` dedupe,
-conditional-UPDATE confirmation with fee breakdown. **Proves:** scenarios 6–8.
+conditional-UPDATE confirmation with fee breakdown. **Proves:** scenarios 6–8, 10; full loop proven.
 
 ### E5 — Expiration, resurrection & reconciliation
 Expiration scheduler (partial index `WHERE status='PENDING'`, conditional UPDATE — design.md §5.1);
