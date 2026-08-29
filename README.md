@@ -13,7 +13,9 @@ Modular monolith on **Java 25 + Spring Boot 4.1**, engineered from day one to be
 ## What is Dargent?
 
 Dargent implements the **complete payment lifecycle**: create → process → verify → webhook → success/failure → refund,
-using **PIX with dynamic QR codes** mediated by a simulated PSP. The value is not the CRUD — it is the guarantees:
+using **PIX with dynamic QR codes** mediated by a simulated PSP. The value is not the CRUD — it is the guarantees
+(the *contracts* below are what the project is engineered to prove; each becomes a measured, CI-proven property
+as its milestone closes — see *Current state* and the per-milestone acceptance matrices in `tasks/`):
 
 | Guarantee | Mechanism |
 |---|---|
@@ -104,7 +106,11 @@ POST /v1/payments/{txid}/refunds → partial/total, fee returned proportionally,
 | Tests | JUnit 6, Testcontainers 2.0, WireMock, Awaitility, jqwik, ArchUnit |
 | Runtime | Docker Compose, NGINX blue-green with canary — no k8s |
 
-## Getting started
+## Getting started (target flow — lands with M1)
+
+> **⚠️ Honesty note:** the flow below is the **target** happy path — `POST /v1/payments` is implemented at
+> **E3 / M1** (see [epics](docs/epics.md)). Today the API app boots with actuator health only. Do not expect
+> these commands to succeed until the M1 row in *Current state* flips.
 
 Prerequisites: JDK 25 (Temurin), Docker with Compose, GNU make (optional).
 
@@ -144,22 +150,24 @@ money or race guarantee; the reconciliation scenario ("webhook suppressed → re
 
 ## CI/CD & deployment
 
-Pipeline (GitHub Actions): unit → ArchUnit + boundary script → SpotBugs → OWASP Dependency-Check →
-integration (Testcontainers) → combined coverage → production build → image (non-root gate, Trivy, SBOM) →
-security (CodeQL, Dependency Review) → **runtime smoke that gates** (E2E happy path + reconciliation chaos +
-graceful shutdown under load) → k6 performance (consultative).
+Pipeline **now (M0/M1 scope):** boundary gates (ArchUnit + script) → unit + integration (Testcontainers) →
+production build → image build with **non-root gate**. That is the entire pipeline that runs today — by design.
+
+Pipeline **at M4 (target, per [design](docs/design.md) §11.1):** SpotBugs → OWASP Dependency-Check → combined
+coverage gate → Trivy (2-pass) + SBOM → CodeQL + Dependency Review → **runtime smoke** (E2E happy path +
+reconciliation chaos + graceful shutdown under load) → k6 performance (consultative).
 
 An annotated tag `vX.Y.Z` produces the semver image + GitHub Release with the jar and the SBOM of the exact
-shipped image. Deployment is **blue-green by immutable tag** with a 10%/30s canary and instant rollback.
-Procedures: [release runbook](docs/release-runbook.md).
+shipped image. Deployment is **blue-green by immutable tag** with a 10%/30s canary and instant rollback
+(deploy scripts land at M4). Procedures: [release runbook](docs/release-runbook.md).
 
 ## Current state
 
-**M0 — Skeleton: closed** — CI green on main (build + image jobs), all acceptance criteria evidenced.
+**M0 — Skeleton: code in place, first CI run pending** (foundation documents complete).
 
 | Milestone | Scope | Status |
 |---|---|---|
-| M0 — Skeleton | Maven multi-module, ArchUnit gates, compose, CI, Flyway per schema, queue provisioning | ✅ closed — CI green on main |
+| M0 — Skeleton | Maven multi-module, ArchUnit gates, compose, CI, Flyway per schema, queue provisioning | ◐ skeleton in place — CI green on first real PR closes it |
 | M1 — Happy path | Create cob → PENDING → webhook → CONFIRMED; idempotency; API keys; canonical errors | ☐ |
 | M2 — Events | Outbox + relay + SNS/SQS; ledger journaling; balance projection; notifications | ☐ |
 | M3 — Suffering | Refunds, expiration, resurrection, reconciler, settlement, DLQ/backoff/EXHAUSTED/requeue | ☐ |
