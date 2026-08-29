@@ -52,27 +52,33 @@ find modules apps -path "*src/test*" \( -name "*.disabled" -o -name "*Debug*" \)
 
 ---
 
-## Step 0 — Baseline lock & register re-verification (R0)
+## Step 0 — Baseline lock, truth correction & register re-verification (R0)
 
 ### Actions
-1. Confirm `main` at `47d24408` with CI run #13 (`33267438415`) green; local `mvn -B verify` green (Docker up).
+1. Confirm `main` at `765c4cc`. **CI is RED here: run #15 (`33271807627`) failed in "Build, unit and
+   integration tests" on a docs-only delta (run #14 `33268336853` was green on `97882494`).** Download the
+   run #15 `test-reports` artifact and write the classification (flake vs real) before any other commit —
+   #10/#11 were never classified; this is the second strike.
 2. Re-verify every §2 register item against the current tree (the audit read a snapshot). Update the register
-   BEFORE coding if anything moved — the register is the contract.
-3. Audit `V108__webhook_events.sql` vs E4 §5.4 and the `WebhookEventStore` port/adapter vs E4 §5.3; record the
+   BEFORE coding if anything moved — the register is the contract (it now includes TD-4…TD-6).
+3. **Truth-correction commit (docs-only):** replace `docs/epics.md` with the corrected ledger from the E3R docs
+   workspace (E3/E4 `◐ reopened (E3R)` + E3R row + correction note + legend + artifact index — edit from the
+   repo's file, the workspace copy was stale); revert the README honesty note to the declared-state callout;
+   prepend the VOID banner to `tasks/e4-acceptance-matrix.md`. Push; confirm the run goes green; cite its id.
+4. Audit `V108__webhook_events.sql` vs E4 §5.4 and the `WebhookEventStore` port/adapter vs E4 §5.3; record the
    verdict (stand / deviation → V109 decision).
-4. Inventory the debug tests under `adapter/out/psp/` (exact names for R4).
-5. Stage the doc backfill: commit the never-committed E4 doc set + this E3R set alongside the first code commit,
-   with the backfill stated in the commit body.
+5. Inventory the debug tests under `adapter/out/psp/` (exact names for R4).
 
 ### Done when
-- Verify green; register confirmed current; V108 verdict recorded; debug-test list exact; no open questions.
+- Run #15 classified in writing; corrected ledger + README + voided matrix on `main` with a green run id;
+  register confirmed current; V108 verdict recorded; debug-test list exact; no open questions.
 
 ---
 
 ## Step 1 — Un-disable the scenario IT (R1) — RED EXPECTED
 
 ### Actions
-1. `git mv modules/payments/src/main/../test/java/io/dargent/payments/it/CreatePaymentScenarioIT.java.disabled
+1. `git mv modules/payments/src/test/java/io/dargent/payments/it/CreatePaymentScenarioIT.java.disabled
    CreatePaymentScenarioIT.java` — zero content edits.
 2. Run it locally; record the failure list and map each failure to register IDs (BD-x/MS-x).
 3. Commit `test(payments): run CreatePaymentScenarioIT as the failing specification for E3R` and push **alone**
@@ -187,11 +193,13 @@ mvn -B -pl modules/payments -am test
 
 ### Actions
 1. Create `tasks/e3r-acceptance-matrix.md` (register ID → implementation → CI test → run id); rewrite
-   `tasks/e3-acceptance-matrix.md` (prior evidence voided, superseded-by-E3R where applicable); create
-   `tasks/e4-acceptance-matrix.md` from R5/R6 evidence.
-2. README: create + webhook documented as working with run ids cited; visible retraction of the earlier claim.
-   CHANGELOG: correction entry (retraction + remediation). No silent edits.
-3. `.env.example`: `CHAOS_PSP_LATENCY_MS`, `CHAOS_SEED`. design.md §8.2: endpoint-driven intake sync note.
+   `tasks/e3-acceptance-matrix.md` (prior evidence voided, superseded-by-E3R where applicable); **rebuild**
+   `tasks/e4-acceptance-matrix.md` from scratch — the `97882494` version cited non-existent tests and is void
+   (banner applied in Step 0); every cell cites a real test class + E3R run id.
+2. README: replace the Step-0 reverted callout with the real flip — create + webhook working, run ids cited.
+   CHANGELOG: correction entry naming the fabrications (`97882494` matrix, pre-audit ledger rows) and the
+   remediation. No silent edits. TD-6: commit real `e1/e2/e3` matrices or fix the index rows citing them.
+3. design.md §8.2 sync note landed in `97882494` — verify it matches E4 spec §3.1, fix if needed.
 4. Hygiene greps (spec §7) all green; commit `docs: truth pass — evidence-cited README, matrices, ledger`.
 
 ### Done when

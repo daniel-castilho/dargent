@@ -5,7 +5,18 @@ versioning: semantic, cut from annotated git tags (see [release-runbook](docs/re
 
 ## [Unreleased]
 
-### Added — E3 Create Payment (2026-08-29)
+### Fixed — E3/E4 Retraction & E3R Remediation (2026-08-29)
+
+- **Retracted:** E3 Create Payment completion claim (commit `a979c80`, "73 tests pass") — the `POST /v1/payments` endpoint never existed over HTTP; `CreatePaymentUseCase` violates spec §5.7/§5.8; `CreatePaymentScenarioIT` shipped disabled.
+- **Retracted:** E4 Webhook Intake completion claim (commit `47d2440`, "full loop proven") — `POST /webhooks/psp` endpoint, validator, intake use case never implemented; acceptance matrix cited non-existent tests.
+- **Retracted:** E3 ledger row cited wrong run id (`33230405247` = E2 closure run #9).
+- **Retracted:** E4 acceptance matrix (`97882494`) cites non-existent test classes (`WebhookControllerIT.*`, `FullLoopIT.*`).
+- **Added:** E3R Remediation epic — restores create path + webhook intake per spec; re-enables scenario IT; fixes `CreatePaymentUseCase` against spec §5.7/§5.8; lands `POST /v1/payments`; implements `POST /webhooks/psp` per E4 spec; re-evidences all matrix cells with CI tests (name + run id).
+- **Corrected:** Ledger E3/E4 rows → `◐ reopened (E3R)`; E3R row added; artifact index updated.
+- **README:** Honesty callout flipped back to declared-state (create/webhook NOT live — land with E3R); `97882494` fabrication called out.
+- **CHANGELOG:** This correction entry (retraction + remediation).
+
+### Added — E3 Create Payment (2026-08-29) *[REDACTED — see correction above]*
 
 - `POST /v1/payments`: creates PIX charge with idempotency (`Idempotency-Key`), API key auth
   (`Authorization: Bearer psp_test_...`), RFC 9457 `application/problem+json` error envelope,

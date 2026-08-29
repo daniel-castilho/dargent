@@ -64,6 +64,9 @@ This register is **binding**: every item closes with a CI test (name + run id) o
 | TD-1 | `CreatePaymentScenarioIT.java.disabled` (33 024 B, `modules/payments/src/test/java/io/dargent/payments/it/`) — the E3 scenarios are written and switched off | disabled test = debt | R1 |
 | TD-2 | Two debug tests committed under `adapter/out/psp/` (incl. `HttpClientDebugTest`) — manual debugging aids, not specifications | evidence = CI test | R4 |
 | TD-3 | `tasks/e3-acceptance-matrix.md` cites non-CI evidence; README demonstrates "create live" that does not exist; CHANGELOG claims E3 delivered; ledger E3 row cites the wrong run id (#9's id `33230405247` is E2's run); `.env.example` missing `CHAOS_PSP_LATENCY_MS`/`CHAOS_SEED`; E4 doc set never committed; design §8.2 sync note pending | commit msg = diff; honesty callouts | R7 |
+| TD-4 | **False closure commit `97882494`** ("docs(e4): close webhook intake epic"): message announces `POST /webhooks/psp` + full-loop IT; the diff is docs-only (+263/−6, zero code). It committed `tasks/e4-acceptance-matrix.md` citing test classes that do not exist in the tree (`WebhookControllerIT.*`, `FullLoopIT.*`) with run #13 as their "evidence"; flipped the README honesty note to "the full loop works end-to-end"; flipped the ledger E4 row to ✅ | commit msg = diff; evidence = CI test; honesty callouts | R0 (void banner + README revert) / R7 (rebuild) |
+| TD-5 | **Commit `765c4cc` message claims "E3/E4 ledger status updated to 'reopened (E3R)' in docs/epics.md"** — the diff does not touch `docs/epics.md` (0 deletions in stats). The reopened statuses never landed; `main`'s ledger asserts E3 ✅ ("commit a979c80, 73 tests pass" — pre-audit fabrication) and E4 ✅ ("full loop proven"), contradicting the E3R docs committed in the same push. First violation of the commit-message rule (§5.7) | commit msg = diff | R0 (corrected ledger commit) |
+| TD-6 | Artifact index cites matrix files never committed: `tasks/e1-acceptance-matrix.md`, `tasks/e2-acceptance-matrix.md`, `tasks/e3-acceptance-matrix.md` are not in the tree (only `tasks/m0-acceptance-matrix.md` exists) | evidence = CI test | R7 (commit real matrices or correct the index rows) |
 
 ### 2.D — Explicitly NOT defects (verified correct — do not "fix")
 
@@ -201,7 +204,11 @@ Test-local hand-signer only — **never** import `WebhookSigner` from the simula
 
 ### 5.6 Ledger & documentation truth (TD-3) — exact diffs for `docs/epics.md`
 
-Applied in the same change set as R1 (statuses) and finalized in R7/R8 (closures). Row texts:
+**Baseline for these edits is the ledger as it exists on `main` at `765c4cc`** (verified raw): the E3 row is
+currently `✅ … (commit a979c80) … 73 tests pass`, the E4 row is `✅ … run #33267438415 … full loop proven`, the
+artifact index carries only E0/E1/E2, and the workspace copy of this file is stale — always edit from the repo's
+content. Applied in the same change set as R0 (statuses, correction note) and finalized in R7/R8 (closures).
+Row texts:
 
 - **E3 row →** `◐ reopened (E3R) — 2nd external audit (2026-08-29): POST /v1/payments absent over HTTP
   (PaymentController ships GETs only); CreatePaymentUseCase violates spec §5.7/§5.8 (defect register,

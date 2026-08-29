@@ -49,20 +49,27 @@ R8   Governance: AGENTS §5.5/§5.6/§7/DEBT-3 + lesson #14; closure; E3/E4/E3R 
 
 ---
 
-## R0 — Baseline lock, register re-verification, V108 audit ☐
+## R0 — Baseline lock, register re-verification, truth correction, V108 audit ☐
 
 ### Work
-- [ ] Confirm `main` at `47d24408`, CI run #13 green; local `mvn -B verify` green (Docker up)
+- [ ] Confirm `main` at `765c4cc` (docs package landed; **run #15 `33271807627` RED** on a docs-only delta,
+      run #14 `33268336853` green on `97882494`); download the run #15 `test-reports` artifact and write the
+      failure classification (flake vs real) BEFORE any other commit — second unclassified red (#10/#11 never
+      got one)
 - [ ] Re-verify each §2 register item against the current tree (the audit read a snapshot; if anything moved,
-      update the register BEFORE coding — the register is the contract)
+      update the register BEFORE coding — the register is the contract). Register now includes TD-4…TD-6
+- [ ] **Truth-correction commit (docs-only, first):** replace `docs/epics.md` with the corrected ledger
+      (E3/E4 → `◐ reopened (E3R)`, E3R row, correction note, legend, artifact index — deliverable prepared in
+      the docs workspace); revert the README honesty note flipped by `97882494` back to the declared-state
+      callout (create/webhook NOT live — land with E3R); prepend a VOID banner to
+      `tasks/e4-acceptance-matrix.md` (fabricated evidence, cites non-existent tests)
 - [ ] Audit `V108__webhook_events.sql` against E4 spec §5.4 (columns, `provider_event_id varchar(96) UNIQUE`,
       CHECK constraint, index) and the `WebhookEventStore` port/adapter against §5.3 — record divergences
 - [ ] Inventory the debug tests under `adapter/out/psp/` (exact class names for R4)
-- [ ] Commit the never-committed doc sets with the first code changeset: E4 set (`webhook-intake-e4-*`) +
-      E3R set — annotated in the commit body as documentation-backfill, not new work
 
 ### Acceptance
-- [ ] Register confirmed current; V108 verdict recorded (stand vs V109 deviation); nothing coded yet
+- [ ] Run #15 classified in writing; corrected ledger + README + voided matrix on `main` (CI green again —
+      note the run id); register confirmed current; V108 verdict recorded; nothing coded yet
 
 ## R1 — Un-disable the scenario IT (red by design) ☐
 
@@ -149,17 +156,20 @@ R8   Governance: AGENTS §5.5/§5.6/§7/DEBT-3 + lesson #14; closure; E3/E4/E3R 
 ### Work
 - [ ] `tasks/e3r-acceptance-matrix.md` created (register ID → implementation → CI test → run id)
 - [ ] `tasks/e3-acceptance-matrix.md` rewritten: prior non-CI evidence voided and replaced (or explicitly marked
-      superseded-by-E3R); `tasks/e4-acceptance-matrix.md` created from R5/R6 evidence
-- [ ] README: create + webhook documented as working **with CI run ids cited**; earlier "live" claim retracted
-      in a visible callout (honesty, not airbrushing)
-- [ ] CHANGELOG: correction entry under Unreleased (E3/E4 completion claims retracted; remediation delivered)
-- [ ] `.env.example`: `CHAOS_PSP_LATENCY_MS` + `CHAOS_SEED` added (E2 follow-up)
-- [ ] design.md §8.2 sync note (endpoint-driven intake interpretation — E4 spec §3.1)
+      superseded-by-E3R); `tasks/e4-acceptance-matrix.md` **rebuilt from scratch** — the `97882494` version is
+      void (R0 banner); every cell cites a real test class + run id from E3R's runs
+- [ ] README: the reverted honesty note (R0) is now replaced by the real flip — create + webhook documented as
+      working **with CI run ids cited**; the `97882494` "loop is REAL" fabrication is called out in CHANGELOG,
+      not airbrushed
+- [ ] CHANGELOG: correction entry under Unreleased (E3/E4 completion claims retracted twice-fabricated evidence
+      named: `97882494` matrix + pre-audit ledger rows; remediation delivered with evidence)
+- [ ] TD-6 decision: commit the real `e1/e2/e3` matrix files or correct the artifact-index rows that cite them
+- [ ] design.md §8.2 sync note kept (landed in `97882494` — verify content matches E4 spec §3.1, fix if needed)
 - [ ] Hygiene greps green (spec §7): no `String.format` JSON, no hardcoded callback/merchant, no
       `Instant.now()` in request paths, no `com.fasterxml.jackson` in prod sources
 
 ### Acceptance
-- [ ] Zero pending cells across the three matrices; every cited run id verified real (API check)
+- [ ] Zero pending cells across the three matrices; every cited run id verified real (API check); docs honest
 
 ## R8 — Governance + closure ☐
 
