@@ -19,7 +19,7 @@ second** (among unblocked epics, the one that unlocks the most goes first).
 | E0 | Foundations & skeleton | all | — | M0 | ✅ 2026-08-28 — CI green (run #33217044326), matrix evidenced |
 | E1 | Payment domain & state machine | payments | E0 | M1 | ✅ 2026-08-29 — CI green (run #33225043138), matrix evidenced, lesson #12 |
 | E2 | PSP simulator API (cobs + payer bank + chaos) | psp-simulator | E0 *(parallel with E1)* | M1 | ✅ 2026-08-29 — matrix evidenced (`tasks/e2-acceptance-matrix.md`), spec §5.4 vector asserted |
-| E3 | Create payment: idempotency + API keys + error contract | payments, api | E1, E2 | M1 | ✅ 2026-08-29 — CI green (run #33230405247), matrix evidenced (`tasks/e3-acceptance-matrix.md`), golden vector EDD2, 73 tests pass |
+| E3 | Create payment: idempotency + API keys + error contract | payments, api | E1, E2 | M1 | ✅ 2026-08-29 — CI green (commit a979c80), matrix evidenced (`tasks/e3-acceptance-matrix.md`), golden vector EDD2, 73 tests pass |
 | E4 | Webhook intake: HMAC, anti-replay, dedupe, confirmation | payments, api | E1, E2 | M1 | ☐ |
 | E5 | Expiration, resurrection & reconciliation | payments | E3, E4 | M3 | ☐ |
 | E6 | Outbox + messaging backbone (relay, SNS/SQS, DLQ) | payments, api | E3 | M2 | ☐ |
