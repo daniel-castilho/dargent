@@ -597,7 +597,7 @@ First-party actions pinned by version; third-party **pinned by commit SHA**. Dep
 
 Environment contract via `.env.example` (twelve-factor): `DARGENT_DB_*`, `AWS_ENDPOINT_URL`, `PSP_BASE_URL`, `PSP_WEBHOOK_SECRET`, `DARGENT_FEE_BPS`, `CHAOS_*` (simulator), shutdown knobs. **Sources 100% English** (identifiers, comments, logs).
 
-**psp-simulator chaos knobs** (env): `CHAOS_WEBHOOK_DUPLICATE` (duplicates), `CHAOS_WEBHOOK_DELAY_MS` (delays), `CHAOS_WEBHOOK_DROP_RATE` ("forgets" a fraction), `CHAOS_PSP_ERROR_RATE`. Endpoints: `POST /cobs`, `GET /cobs/{txid}`, `POST /cobs/{txid}/payments` (the "payer bank" pays the QR → fires the signed webhook), `GET /health`.
+**psp-simulator chaos knobs** (env): `CHAOS_WEBHOOK_DUPLICATE` (duplicates), `CHAOS_WEBHOOK_DELAY_MS` (delays; cap 30 000), `CHAOS_WEBHOOK_DROP_RATE` ("forgets" a fraction), `CHAOS_PSP_ERROR_RATE` (request-side 503), `CHAOS_PSP_LATENCY_MS` (request-side delay; cap 30 000), `CHAOS_SEED` (seeds the probabilistic knobs; unset = system-random). Endpoints: `POST /cobs`, `GET /cobs/{txid}`, `POST /cobs/{txid}/payments` (the "payer bank" pays the QR → fires the signed webhook), `GET /health`.
 
 ---
 

@@ -5,6 +5,22 @@ versioning: semantic, cut from annotated git tags (see [release-runbook](docs/re
 
 ## [Unreleased]
 
+### Added — E2 PSP Simulator API (2026-08-29)
+
+- Full charge API: `POST /cobs` + `GET /cobs/{txid}` + `POST /cobs/{txid}/payments` (payer bank rules:
+  expiry → `409 charge_expired`, double-pay → `409 already_paid`, unknown → `404 cob_not_found`);
+  canonical `{code, message}` error envelope
+- `Charge` domain with transition rules; in-memory concurrent store (`putIfAbsent` for duplicate txid);
+  `endToEndId` (`E` + 31 alnum, SecureRandom) and stable per-payment `eventId` (`psp-evt-<uuid4>`)
+- Signed webhook engine: `WebhookSigner` HMAC-SHA256 over `timestamp + "." + rawBody` with the **spec §5.4
+  test vector asserted verbatim**, event serialized once to bytes, async single-attempt delivery
+  (bounded pool 4, RestClient 2s/5s, injected Clock); recovery stays E5's reconciler — no retries
+- Six deterministic chaos knobs: duplicate / delay / drop / error-rate / latency / seed — enforced bounds
+  at binding, forced-mode tests, defaults all-off (M0 contract intact); latencies capped at 30 000 ms,
+  request-side knobs scoped to `/cobs/**` only so actuator health is never squashed
+- Proofs: 46 unit/slice tests + 4 integration tests (lifecycle + endpoint-driven chaos), wire IT recomputes
+  the signature from captured bytes + timestamp (the exact procedure E4 will implement)
+
 ### Added — E1 Payment Domain & State Machine (2026-08-28)
 
 - `Txid` (25-char `[A-Z0-9]`, D4) + `SecureRandomTxidGenerator`; `EndToEndId` (`E` + 31 alnum)

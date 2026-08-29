@@ -162,12 +162,16 @@ S8   Docs sync, acceptance matrix, ledger, CHANGELOG, lessons
 ### Acceptance
 - [x] Full lifecycle IT green; the stub receiver's captured webhook validates against the §5.4 vector procedure
 
-## S8 — Docs sync & closure ☐
+## S8 — Docs sync & closure ☑
 
 ### Work
-- [ ] `tasks/e2-acceptance-matrix.md` filled with evidence (run links, test names)
-- [ ] Epics ledger: E2 → ✅; CHANGELOG Unreleased entry; design.md §12 sync if the implementation drifted
-- [ ] lessons.md entry if async delivery/chaos determinism taught something non-obvious
+- [x] `tasks/e2-acceptance-matrix.md` created with evidence rows (requirement → impl → test → evidence) +
+      residuals/deviation table (Jackson 3, no web slice, no WireMock, `.env.example` follow-up → E4)
+- [x] Epics ledger: E2 → ✅ in `docs/epics.md` (table row + detail section); CHANGELOG Unreleased E2 entry;
+      design.md §12 sync (added `CHAOS_PSP_LATENCY_MS` + `CHAOS_SEED` to the knobs list)
+- [x] lessons.md #13: Jackson 3 package relocation + Boot 4 web-test tooling gone (non-obvious, cost the
+      S5 compile round-trip); golden rules spelled out
+- [x] Final gates: 46 unit/slice + 4 IT green; scope diff empty; boundaries OK
 
 ### Acceptance
-- [ ] Zero `pending` cells; docs truthful; no scope bleed (api app untouched — `git diff main -- apps/api modules` empty)
+- [x] Zero `pending` cells; docs truthful; no scope bleed (api app untouched — `git diff main -- apps/api modules` empty)

@@ -18,7 +18,7 @@ second** (among unblocked epics, the one that unlocks the most goes first).
 |---|---|---|---|---|---|
 | E0 | Foundations & skeleton | all | — | M0 | ✅ 2026-08-28 — CI green (run #33217044326), matrix evidenced |
 | E1 | Payment domain & state machine | payments | E0 | M1 | ✅ 2026-08-29 — CI green (run #33225043138), matrix evidenced, lesson #12 |
-| E2 | PSP simulator API (cobs + payer bank + chaos) | psp-simulator | E0 *(parallel with E1)* | M1 | ◐ spec set published (`tasks/psp-simulator-e2-*`) — implementation next |
+| E2 | PSP simulator API (cobs + payer bank + chaos) | psp-simulator | E0 *(parallel with E1)* | M1 | ✅ 2026-08-29 — matrix evidenced (`tasks/e2-acceptance-matrix.md`), spec §5.4 vector asserted |
 | E3 | Create payment: idempotency + API keys + error contract | payments, api | E1, E2 | M1 | ☐ |
 | E4 | Webhook intake: HMAC, anti-replay, dedupe, confirmation | payments, api | E1, E2 | M1 | ☐ |
 | E5 | Expiration, resurrection & reconciliation | payments | E3, E4 | M3 | ☐ |
@@ -83,12 +83,16 @@ with lost-race semantics (fake + JPA on one contract suite), V102, conditional-U
 `PaymentConcurrentTransitionIT` (8 threads → exactly one winner). Lesson #12: flush-catch marks the tx
 rollback-only — conditional UPDATE is the only clean lost-race arbitration.
 
-### E2 — PSP simulator API ◐ (spec published — in implementation)
-`POST /cobs` (merchant-owned txid, PIX profile fields for the API's BR Code composer), `GET /cobs/{txid}`
-(reconciler's truth endpoint for E5), `POST /cobs/{txid}/payments` (payer bank rules: expiry → `409`,
-double-pay → `409`), HMAC-SHA256 signed webhooks with the **shared test vector binding for E4's validator**,
-async single-attempt delivery (recovery is E5's reconciler, not retries), five deterministic chaos knobs.
-**Proves:** endpoint ITs, wire-level signature IT against a stub receiver, duplicate/drop/delay behavior tests.
+### E2 — PSP simulator API ✅ (2026-08-29)
+
+The honest "outside world" (AGENTS.md §2): `POST /cobs` (merchant-owned txid, PIX profile fields for the
+API's BR Code composer), `GET /cobs/{txid}` (reconciler's truth endpoint for E5), `POST /cobs/{txid}/payments`
+(payer bank rules: expiry → `409`, double-pay → `409`), HMAC-SHA256 signed webhooks with the **shared test
+vector binding for E4's validator** (`WebhookSignerTest` asserts §5.4 verbatim), async single-attempt
+delivery (recovery is E5's reconciler, not retries), six deterministic chaos knobs (duplicate, delay, drop,
+error-rate, latency, seed) proven with forced modes. **Proves:** endpoint ITs, wire-level signature IT
+against a test-local stub receiver (recompute over captured bytes+timestamp), duplicate/drop/delay
+behavior tests at both dispatcher and endpoint level. Evidence: `tasks/e2-acceptance-matrix.md`.
 
 ### E3 — Create payment
 Use case persisting `PENDING` + idempotency row + outbox row in one transaction; PSP call retryable (D19);

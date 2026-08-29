@@ -10,6 +10,26 @@ When a lesson repeats three times, promote it to [coding-standards.md](coding-st
 
 ---
 
+## 13. Boot 4 uses Jackson 3: the package is `tools.jackson.*`, not `com.fasterxml.*` — and the web test client is gone (2026-08-29)
+
+First S5 compile failed with "package `com.fasterxml.jackson.databind` does not exist" while the dependency
+tree clearly pulled Jackson in. Not a missing start: Boot 4.1.1 resolves the Jackson 3 line —
+`tools.jackson.core:jackson-databind:3.x` (groupId moved from `com.fasterxml.jackson` to `tools.jackson`),
+annotations stay at `com.fasterxml.jackson.core:jackson-annotations:2.x`. Imports become
+`tools.jackson.databind.ObjectMapper` / `tools.jackson.databind.JsonNode` / `tools.jackson.core.JacksonException`
+(no `JsonProcessingException` in Jackson 3). Boot 4 also stripped the classic web-test client tooling: the
+`spring-boot-starter-test` no longer drags `TestRestTemplate`/`WebTestClient`, and the only test
+autoconfigure slices shipped are json/jdbc — there is no `@WebMvcTest` web slice. `@LocalServerPort`
+survives at `org.springframework.boot.test.web.server.LocalServerPort`.
+
+**Golden rules:**
+
+1. Before writing Jackson code on Boot 4, prove the resolved tree (`mvn dependency:tree -Dincludes=tools.jackson,com.fasterxml`) — the groupId relocation is invisible until you compile against it.
+2. When a "package not found" references a library you know is transitively present, check for a groupId/artifactId relocation before adding dependencies.
+3. ITs that need an HTTP client on Boot 4 use Spring's `RestClient` (`RestClient.builder().baseUrl(...)`) — plain spring-web, zero extra deps. Test doubles that must observe the wire (capture raw body + headers) are test-scope `@RestController`s; a `@Bean` of an already component-scanned `@RestController` double-registers it (Ambiguous mapping) — let component scanning own it.
+
+---
+
 ## 12. Catching `OptimisticLockException` from a flush returns `false` but the commit still throws — conditional UPDATE is the only clean lost-race (2026-08-28)
 
 First implementation of `PaymentRepository.updateIfVersionMatches` loaded the row, mutated the managed
