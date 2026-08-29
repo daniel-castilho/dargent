@@ -1,0 +1,300 @@
+# Create & Webhook Remediation E3R — Technical Specification
+
+## Epic E3R — "The Code Must Match the Docs": restore the create path and land webhook intake for real
+
+**Priority:** P0 — the platform's public promises (README curl, money loop) are currently unsubstantiated in code
+**Companions:** `create-webhook-remediation-e3r-backlog.md` · `create-webhook-remediation-e3r-implementation-sequence.md` · `ai-software-engineer-prompt-create-webhook-remediation-e3r.md`
+**Baseline:** commit `47d24408`, CI run #13 (`33267438415`) green. E1/E2 stand as delivered. **E3 is reopened in
+substance** (create path never landed over HTTP; use case violates its own spec). **E4 is reopened** (only V108 +
+the `WebhookEventStore` port/adapter exist). Origin: the 2nd external audit (2026-08-29), every claim verified
+against the code before acceptance.
+
+> **Driving principle (new, binding):** a green CI proves that tests pass — not that they are right, and not
+> that the code exists. Evidence for every claim in this epic is a test that runs in CI, cited by name + run id.
+
+---
+
+## 1. Purpose
+
+The 2nd external audit established that E3's closure was documentation, not software: `PaymentController` ships
+**two `@GetMapping`s and no `POST /v1/payments`**; `CreatePaymentUseCase` exists but violates the spec it claims
+to implement (§5.7/§5.8 of `create-payment-e3-spec.md`) in at least ten ways; the scenario IT that proves the
+contract was shipped **disabled** (33 KB of written-but-off evidence); two debug tests were committed. E4's
+"~90% done" was refuted the same way: commit `47d24408` delivered `V108__webhook_events.sql` + the
+`WebhookEventStore` port and JDBC adapter — **no validator, no intake use case, no `POST /webhooks/psp`**, and
+the E4 document set was never committed.
+
+This epic does not re-plan E3/E4 — their specs remain the binding behavior contracts. E3R makes the code obey
+them: re-enable the disabled specification, fix the use case, land the two missing endpoints, delete the debug
+artifacts, re-evidence every matrix cell with CI tests, and install the governance that makes this class of
+failure impossible to repeat silently.
+
+## 2. Defect register (audit 2026-08-29 — each item verified in code)
+
+This register is **binding**: every item closes with a CI test (name + run id) or an honest doc correction.
+"No change needed" is a valid closure only with a written justification in the matrix.
+
+### 2.A — Behavior defects in the create path (vs `create-payment-e3-spec.md` §5.7/§5.8)
+
+| ID | Defect (observed) | Violates | Fix |
+|---|---|---|---|
+| BD-1 | Transactional core is announced but not structured — no `TransactionTemplate`/transactional wiring; the §5.8 script (idempotency → payment → outbox → audit) does not run atomically | E3 §5.8; coding-standards §5 | R2 |
+| BD-2 | Payment does not land canonically in `PENDING` (confirmed-on-create behavior), instead of `PENDING` after the core with `CONFIRMED` reserved to the webhook | E3 §5.1/§5.8; design §6.1 | R2 |
+| BD-3 | PSP truth is discarded: `updatedPayment`/`failedPayment` results are dropped and `updateIfVersionMatches(payment, 0)` is invoked with the stale pre-PSP aggregate (and a hardcoded expected version `0`) in both branches — `expires_at` (PSP truth) and the FAILED reason never reach the DB | E3 §5.7; AGENTS §3.2 | R2 |
+| BD-4 | Zero D19 retry: a single catch marks the payment failed; no `PSP_CREATE_MAX_ATTEMPTS`, no linear backoff via injected sleeper, no 409 `txid_already_exists` read-back path | E3 §5.7; D19 | R2 |
+| BD-5 | `requestId=""` — the `X-Request-Id` never reaches the outbox envelope | E3 §5.4/§5.6 | R2 |
+| BD-6 | Idempotency snapshot is a stub (`Map.of("txid")`) instead of status + exact 2xx response body; replay is not byte-equal | E3 §5.1.3 | R2 |
+| BD-7 | `actor_key_id = UUID.randomUUID()` — the audit trail fabricates an actor instead of recording the authenticated API key's id | E3 §5.8/§5.9 | R2 |
+| BD-8 | Outbox payload built via `String.format` JSON instead of the shared Jackson-3 serializer (escaping, determinism, lesson #13) | E3 §5.6; lesson #13 | R2 |
+| BD-9 | PSP callback hardcoded to `https://example.com/callback` instead of `PSP_CALLBACK_URL` — the simulator's webhooks would fire into the void | E3 §3.3/§5.7; E2 contract | R2 |
+| BD-10 | Controller read side: BR Code merchant hardcoded (`dargent-dev-receber@example.com` / `Dargent Dev LTDA` / `SAO PAULO`) instead of the configured PIX profile; `Instant.now()` instead of the injected `Clock`; cursor decoded for validation but the **raw string** forwarded to `findPage` instead of the decoded keyset | E3 §5.2/§5.3/§3.3; AGENTS §5.3 | R3 |
+
+### 2.B — Missing HTTP surface
+
+| ID | Gap (observed) | Contract | Fix |
+|---|---|---|---|
+| MS-1 | `POST /v1/payments` does not exist — `PaymentController` is the only controller and exposes exactly two `@GetMapping`s | E3 spec §5.1 (verbatim) | R3 |
+| MS-2 | Create use case not exposed: no endpoint wiring in `apps/api` for the command path | E3 §3.1 | R3 |
+| MS-3 | `POST /webhooks/psp` does not exist: no `WebhookSignatureValidator`, no `WebhookIntakeUseCase`, no `WebhookController` (only `V108` + `WebhookEventStore` port + JDBC adapter, `47d24408`) | E4 spec §5.1–§5.3 (binding here) | R5–R6 |
+
+### 2.C — Test & evidence debt
+
+| ID | Debt (observed) | Rule (new, §5.5) | Fix |
+|---|---|---|---|
+| TD-1 | `CreatePaymentScenarioIT.java.disabled` (33 024 B, `modules/payments/src/test/java/io/dargent/payments/it/`) — the E3 scenarios are written and switched off | disabled test = debt | R1 |
+| TD-2 | Two debug tests committed under `adapter/out/psp/` (incl. `HttpClientDebugTest`) — manual debugging aids, not specifications | evidence = CI test | R4 |
+| TD-3 | `tasks/e3-acceptance-matrix.md` cites non-CI evidence; README demonstrates "create live" that does not exist; CHANGELOG claims E3 delivered; ledger E3 row cites the wrong run id (#9's id `33230405247` is E2's run); `.env.example` missing `CHAOS_PSP_LATENCY_MS`/`CHAOS_SEED`; E4 doc set never committed; design §8.2 sync note pending | commit msg = diff; honesty callouts | R7 |
+
+### 2.D — Explicitly NOT defects (verified correct — do not "fix")
+
+- The GET detail endpoint recomputing the BR Code on read is **spec behavior** (E3 §5.2), not a defect.
+- `limit` clamp (1–100) and `nextCursor` when `size == limit` match §5.3.
+- E1/E2 stand: domain, simulator, HMAC scheme, chaos knobs — the audit confirmed them solid.
+- V103–V107 stand (S0 verifies V108 only, since it landed without its review pass).
+
+## 3. Scope
+
+### In scope
+- R1–R4: create path remediation (BD-1…BD-10, MS-1, MS-2, TD-1, TD-2);
+- R5–R6: webhook intake implemented for real per E4 spec §5.1–§5.4, including its ITs and the full-loop IT;
+- R7: documentation honesty pass — README, CHANGELOG, ledger (`docs/epics.md`), `.env.example`, design §8.2;
+  `tasks/e3-acceptance-matrix.md` rewritten; `tasks/e4-acceptance-matrix.md` and `tasks/e3r-acceptance-matrix.md`
+  created; every cell cites a CI test name + run id;
+- R8: governance — AGENTS.md amendments (§5.5/§5.6, §7 rule, DEBT-3 row), `docs/lessons.md` entry;
+- Committing the previously uncommitted doc sets (E4 set + this E3R set) in the same changesets as the code
+  they document.
+
+### Out of scope
+- E5 (expiration/reconciliation) — stays blocked until E3R closes; E6+ unchanged;
+- Any new Flyway migration by default: **V103–V108 stand as-is**. S0 audits V108 against E4 spec §5.4; only a
+  proven divergence justifies an expand-only V109 (record the deviation; do not edit V108 — forward-only rule);
+- Refunds, ledger, notifications, relay: untouched; no changes to `apps/psp-simulator` (the simulator is the
+  audit's reference implementation of the webhook scheme — its `WebhookSigner` is scheme documentation, never
+  an import);
+- No git history rewrite (audit recommendation rejected previously — stands);
+- No branch protection / repo hardening (that is E3.5, still not executed; unchanged).
+
+## 4. Architectural constraints
+
+### 4.1 Package shape (only what was missing gets created)
+
+```
+modules/payments
+├── application/             CreatePaymentUseCase        ← fixed in place (R2), behavior per §5.1
+├── domain/model/            + WebhookSignatureValidator (pure, TDD, R5)
+├── application/             + WebhookIntakeUseCase      (one transaction, TDD, R6)
+├── adapter/in/rest/         PaymentController           ← gains POST /v1/payments; read side fixed (R3)
+├── adapter/in/webhook/      + WebhookController         (raw capture once → use case, R6)
+└── adapter/out/psp/         SimulatorChargeAdapter      ← retry D19 + read-back + PSP truth (R2)
+apps/api                     + wiring only (create path bean, webhook controller scan)
+```
+
+Existing and correct (do not rebuild): error contract classes, API-key security (7 classes), provisioning,
+`RequestIdFilter`, `CursorCodec`, `BrCode` + domain tests, V103–V107, `WebhookEventStore` port + JDBC adapter.
+
+### 4.2 Config surface — env names are contract, unchanged
+
+| Property | Env | Note |
+|---|---|---|
+| `dargent.psp.base-url` | `PSP_BASE_URL` | exists; adapter must actually read it |
+| `dargent.psp.callback-url` | `PSP_CALLBACK_URL` | **BD-9 fix: this value, never a literal** |
+| `dargent.psp.create-max-attempts` | `PSP_CREATE_MAX_ATTEMPTS` | BD-4 fix: retry loop bound (default 3) |
+| `dargent.psp.create-backoff-base-ms` | `PSP_CREATE_BACKOFF_BASE_MS` | BD-4 fix: linear backoff base (default 200) |
+| `dargent.pix.profile.*` | `DARGENT_PIX_KEY` / `DARGENT_RECEIVER_NAME` / `DARGENT_RECEIVER_CITY` | BD-10 fix: BR Code composes from these |
+| `dargent.psp.webhook-secret` | `PSP_WEBHOOK_SECRET` | E4 §3.2 — same value both apps in compose |
+
+Zero new env names. Zero new dependencies (WireMock standalone is already test-scoped in `modules/payments`).
+
+### 4.3 Binding sources for the webhook side
+
+`tasks/webhook-intake-e4-spec.md` §1–§9 is the binding contract for MS-3: pipeline order (§5.1), validator and
+vectors (§5.2), processing transaction (§5.3), V108 shape (§5.4). The E4 backlog/sequence/prompt are superseded
+by E3R (their step-0 gates and scope assumptions predate the audit).
+
+## 5. Exact contracts
+
+### 5.1 `CreatePaymentUseCase` — remediated behavior (binding script)
+
+The command context carries `(merchantId, apiKeyId, idempotencyKey, requestFingerprint, requestId, command)`.
+`requestId` = the validated `X-Request-Id` (generated UUID when absent); `apiKeyId` = the authenticated
+principal's key id — **never** generated.
+
+1. **Core transaction** (`TransactionTemplate` — BD-1): insert `idempotency_keys` `IN_FLIGHT` (PK violation →
+   loser re-reads → `425 idempotency_key_in_flight` + `Retry-After: 1`) → `Payment.create(txid, merchantId,
+   amount, description, expiresAtRequested, clock.now())` → `PaymentRepository.save` (duplicate txid → bounded
+   regeneration ≤ 3) → outbox row (`payment.created` envelope, §5.2) → audit row (`command_name=create_payment`,
+   `actor_key_id = apiKeyId` — BD-7) → commit. Aggregate lands **`PENDING`** (BD-2).
+2. **PSP phase, strictly after commit** (BD-4/D19): `PspPort.createCharge(txid, amountCents, expiresAt,
+   callbackUrl = PSP_CALLBACK_URL resolved, description)` — connect 2 s / read 5 s; up to
+   `PSP_CREATE_MAX_ATTEMPTS` attempts, linear backoff `base × attempt` via the **injected sleeper**; retryable =
+   connect/read IO and 5xx; **409 `txid_already_exists` is not retryable** → read-back `GET /cobs/{txid}`.
+3. **Success tx** (BD-3): a **second short transaction** that conditionally updates the payment from the PSP
+   response (`expires_at` = PSP truth) **and** moves the idempotency row to `COMPLETED` with the real snapshot
+   (`response_status` + exact 201 body — BD-6). The aggregate is re-read/re-attached in this tx; the stale
+   pre-PSP instance is never written; the expected version comes from the row just read, never a literal.
+4. **Exhaustion tx** (BD-3/BD-4): mark `FAILED("psp_create_exhausted")` via `updateIfVersionMatches` with the
+   re-read aggregate's current version (lost race → re-read → decide); append a `PaymentFailed` outbox row
+   (serialized via the shared Jackson-3 serializer — BD-8); **delete** the idempotency key row (audit_log keeps
+   the trail); answer `502 psp_unavailable`.
+5. Replay = byte-equal snapshot, `Idempotent-Replay: true`, zero side effects; same key + different fingerprint
+   = `409 idempotency_key_conflict` (E3 §5.1.3 table, all five rows, unchanged).
+
+### 5.2 Outbox envelope (unchanged shape — remediated construction)
+
+`{ "eventId", "type": "payment.created"|"payment.failed", "version": 1, "aggregateId": txid, "merchantId",
+"requestId": <BD-5: the real request id>, "occurredAt", "payload": {…} }` — serialized **once** through the
+shared Jackson-3 serializer with deterministic key order (BD-8). No `String.format` JSON anywhere in prod sources
+(grep gate in R7).
+
+### 5.3 `POST /v1/payments` (MS-1/MS-2)
+
+Contract = E3 spec §5.1 **verbatim** (request shape, validation order and field maps, `Idempotency-Key` 8–200,
+`201 Created` + `Location: /v1/payments/{txid}` + `X-Request-Id` echoed, response body with PSP-true `expiresAt`
+and the composed BR Code). Security per AGENTS §4.1: the route exists in `SecurityConfig` under `/v1/**`
+authenticated. The controller composes the BR Code from the configured PIX profile (BD-10), never literals.
+
+### 5.4 Read-side corrections (BD-10)
+
+`GET /v1/payments/{txid}` / `GET /v1/payments` keep §5.2/§5.3 shapes. Fixes: PIX profile from config; `Clock`
+injected (no `Instant.now()` in controller code); the cursor is decoded **once** and the decoded keyset
+`(txid, createdAtMicros)` — not the raw string — is passed to `findPage`.
+
+### 5.5 Webhook intake (MS-3) — E4 spec §5.1–§5.4 binding
+
+Pipeline order is binding: capture raw once → validate (fail-closed: persist raw + `401 invalid_signature`) →
+anti-replay 300 s (persist raw + `401 signature_expired`) → persist `RECEIVED` → process (dedupe
+`provider_event_id = endToEndId + "|" + type` unique; unknown type/txid/amount-mismatch → `IGNORED` + `200`;
+confirm via E1 `confirm(endToEndId, FeeBreakdown.of(amount, BpsRate.of(100)), paidAt)` with conditional UPDATE;
+`payment.confirmed` outbox row with `payload {amount, fee, net, late}`; audit row; `PROCESSED`). Vectors asserted
+byte-exact (recomputed before writing the tests — audit rule):
+
+```
+secret = dev-only-secret
+vector 1: ts = 1787932800
+  body = {"eventId":"psp-evt-test-001","type":"payment.confirmed","txid":"8KD4Z9X2Q7W1M5T3R6Y0A1B2C","endToEndId":"E9040381234567890123456789012345","amount":10000,"paidAt":"2026-08-29T00:00:00Z"}
+  sign("1787932800", body) = 549eabc4c6f862fdb9322861f43091039de9c75de8107a60945d464755549113
+vector 2: sign("1", "{}") = e3f75e30c05fa6ab20d1cdd115d4172f6adba335dca3ed37842195aa05305529
+scheme: HMAC-SHA256(secret, UTF-8(ts + "." + rawBody)), lowercase hex, constant-time compare, ±300 s
+```
+
+Test-local hand-signer only — **never** import `WebhookSigner` from the simulator (E4 rule, restated).
+
+### 5.6 Ledger & documentation truth (TD-3) — exact diffs for `docs/epics.md`
+
+Applied in the same change set as R1 (statuses) and finalized in R7/R8 (closures). Row texts:
+
+- **E3 row →** `◐ reopened (E3R) — 2nd external audit (2026-08-29): POST /v1/payments absent over HTTP
+  (PaymentController ships GETs only); CreatePaymentUseCase violates spec §5.7/§5.8 (defect register,
+  E3R spec §2); CreatePaymentScenarioIT shipped disabled. Prior matrix/README/CHANGELOG claims void.
+  Remediation = E3R`
+- **E4 row →** `◐ reopened (E3R) — audit: only V108 + WebhookEventStore port/adapter landed (47d24408);
+  validator, intake use case, POST /webhooks/psp absent; E4 doc set never committed. Remediation = E3R`
+- **New E3R row (after E4):** `| E3R | Remediation: create path + webhook intake (audit pass) | payments, api |
+  E1, E2 (remediates E3+E4) | M1 | ◐ spec set published — blocks E5 |`
+- **E5 depends-on cell →** `E3R (E3+E4 remediated)` · **legend gains:** `◐ reopened = documented as closed but
+  refuted in code (audited; remediated via E3R)` · **artifact index gains E4 + E3R rows** · **briefs updated**
+  (E3/E4 marked reopened with one-line audit notes; E3R brief added).
+- README callout flips only when the evidence exists; until then it states the truth: *create and webhook land
+  with E3R — the earlier "live" claim was wrong*. CHANGELOG gets a correction entry (retraction), not a silent
+  edit. `.env.example` gains `CHAOS_PSP_LATENCY_MS` + `CHAOS_SEED` (E2 follow-up, declared and never landed).
+
+### 5.7 Governance amendments (R8 — exact text)
+
+**AGENTS.md §5 (testing rules), append:**
+
+- `5.5. A disabled or skipped test is debt: register it in §8 with an owner and a target milestone. A disabled
+  test is never acceptable evidence in an acceptance matrix. Re-enabling a disabled test that then fails means
+  the code violates the spec — fix the code; editing the test's expectations to get green is a defect.`
+- `5.6. Acceptance-matrix evidence is a test that runs in CI, cited by test name + run id. A cell citing code
+  review, local-only runs, or a disabled test is void.`
+
+**AGENTS.md §7 (commits), append:** `- A commit message describes exactly the diff it contains. It never
+announces work the diff does not carry; required follow-ups become tasks, not promises in messages.`
+
+**AGENTS.md §8 (debt), add:** `| DEBT-3 | E3/E4 closed on paper before the code existed (audit 2026-08-29):
+endpoint missing, use case off-spec, scenario IT disabled. Root causes: evidence not required to be CI tests;
+commit messages allowed to outrun diffs. Paid by E3R; rules §5.5/§5.6 + §7 prevent recurrence. | E3R | M1 |`
+
+**`docs/lessons.md`, new entry:** `#14 — Green CI proves that tests pass — not that they are right, and not that
+the code exists. E3 closed with a green run over a changeset whose endpoint was never written and whose proving
+IT was disabled. Matrix evidence must be a CI test; the first act of remediation is re-enabling the disabled
+specification and watching it fail.`
+
+## 6. Concurrency & races (all proven by tests — no new arbitration designs)
+
+| Race | Arbitration | Proof |
+|---|---|---|
+| Two concurrent creates, same key | PK violation on `idempotency_keys`; loser → 425 | scenario 15 IT (barrier, 4 threads) |
+| PSP create already exists (409) | not retryable → read-back | WireMock IT (BD-4 fix) |
+| `markFailed`/PSP-truth lost race | conditional UPDATE with the re-read aggregate's version; loser re-reads | unit + IT (BD-3 fix) |
+| Duplicate webhook while processing | `provider_event_id` unique → re-read → `PROCESSED`/`RECEIVED` decision | E4 §6 ITs (twice sequentially + 2 threads) |
+| Confirm lost race (webhook vs any confirm path) | conditional `updateIfVersionMatches`; loser → `duplicate` | unit (fake returns false) — lesson #12 pattern |
+| Replay of `payload_raw` after crash | row `RECEIVED` → reprocess → same result once | scenario 10 IT |
+
+## 7. Testing requirements
+
+- **R1 is red by design:** `CreatePaymentScenarioIT.java.disabled` → `CreatePaymentScenarioIT.java`, run on CI;
+  the red run id is recorded in the matrix as the debt-made-visible evidence. It goes green only via R2/R3 code.
+- **Unit (no Spring), tests first in R2/R5/R6:** use case fakes for every §5.1 branch (all five §5.1.3 rows,
+  D19 exhaustion + read-back, PSP-truth conditional update, snapshot content, actor id, requestId propagation);
+  validator vectors + byte-sensitivity (wrong key, flipped byte, `1.0` vs `10`, non-canonical order).
+- **Full-context MockMvc ITs** (house pattern; no `@WebMvcTest` in Boot 4.1; PG16 Testcontainers; WireMock for
+  the outbound PSP only): scenarios 1, 2, 3, 4, 15, 25 (create) and 6, 7, 8, 10 (webhook) + the **full-loop IT**
+  (create → hand-signed webhook → `CONFIRMED`, `fee=100`, `net=9900`, outbox row exact, `webhook_events
+  PROCESSED`) + cross-tenant 404 + pagination walk. Zero `Thread.sleep`; injected `Clock`/sleeper recorded.
+- **Hygiene gates (R7):** `grep -rn "String.format" modules/payments/src/main` (JSON construction) = 0 hits;
+  `grep -rn "example.com/callback\|Instant.now()" apps/api modules/payments/src/main` = 0 hits;
+  `find . -name "*.disabled" -o -name "*Debug*"` under test trees = 0 hits; no `com.fasterxml.jackson` imports.
+- Coverage floors per module maintained (measured post-IT).
+
+## 8. Risks & troubleshooting
+
+| Risk | Likelihood | Mitigation |
+|---|---|---|
+| "Fixing" the red IT by editing its expectations | High (the exact failure pattern being remediated) | §5.7 rule: the test encodes the spec; change code, or stop and change the spec first — never silently |
+| Pressure to re-disable to keep `main` green | Medium | forbidden by new AGENTS §5.5; the red run between R1 and R3 is a documented, bounded state |
+| Stale-aggregate fix done cosmetically (reload but still write old fields) | Medium | the IT asserts `expires_at` == PSP value in the DB, not in the response object |
+| Retry loop reintroduced around 409 | Medium | 409 `txid_already_exists` → read-back, never retried (E3 §5.7) |
+| Importing the simulator's `WebhookSigner` for webhook tests | Medium | test-local signer only; simulator module is out of scope and must not appear in payments' imports |
+| Signature vector "almost matches" | High (classic) | UTF-8 explicit, `ts + "." + rawBody` exact bytes, lowercase hex; recompute the vector before blaming code |
+| Raw body re-serialized before signing/persisting | High (classic) | capture bytes once in the controller; sign, store, and parse THOSE bytes |
+| Ledger edits drift between docs and `docs/epics.md` | High (history: 2×) | §5.6 carries exact row texts; R7 greps the ledger for the new strings before closing |
+| Jackson 3 regression | Medium | lesson #13 grep gate; `tools.jackson.*` only |
+| Scope creep into E3.5 (protection/backup) or E5 | Medium | scope check before every push: `git diff --stat main -- apps/psp-simulator modules/ledger modules/notifications` = 0 |
+
+## 9. Closure checklist (epic DoD)
+
+- [ ] Defect register §2 zero open: every BD/MS/TD id closed by CI test (name + run id) or §5.6 doc correction
+- [ ] `CreatePaymentScenarioIT` runs green in CI (the red run id and the green run id both cited in the matrix)
+- [ ] Webhook intake per E4 §5.1–§5.4: validator vectors byte-exact, pipeline order proven, scenarios 6/7/8/10 +
+      full-loop IT green in CI
+- [ ] Hygiene gates green: no debug/disabled tests, no `String.format` JSON, no hardcoded callback/merchant,
+      no `Instant.now()` in request paths, no `com.fasterxml.jackson` in prod sources
+- [ ] Matrices: `e3r-acceptance-matrix.md` zero pending; `e3-acceptance-matrix.md` rewritten;
+      `e4-acceptance-matrix.md` created — every cell = CI test + run id (runs #12 `33263651319` and #13
+      `33267438415` are the only green runs predating this epic; everything cites runs from E3R onward)
+- [ ] Ledger per §5.6 applied and raw-verified; README/CHANGELOG truthful (create + webhook work, evidence cited);
+      `.env.example` complete; design §8.2 sync note landed
+- [ ] AGENTS.md §5.5/§5.6/§7/DEBT-3 + lessons #14 landed
+- [ ] `mvn -B verify` green locally; CI green on `main` with the final run id cited; scope diff = 0
+- [ ] E5 unblocked (and only now)

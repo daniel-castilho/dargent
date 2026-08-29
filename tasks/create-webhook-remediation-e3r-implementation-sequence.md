@@ -1,0 +1,243 @@
+# Create & Webhook Remediation E3R — Implementation Sequence
+
+## Epic E3R — "The Code Must Match the Docs"
+
+**Companions:** `create-webhook-remediation-e3r-spec.md` · `create-webhook-remediation-e3r-backlog.md`
+**Rule:** Complete each step's acceptance before starting the next. The spec's defect register (§2) is the
+contract; the E4 spec (§5.1–§5.4) binds the webhook side. Do not invent scope beyond the register.
+**Process rule:** R1 is red by design and stays red until R2/R3 make it green — re-disabling it is the defect
+pattern this epic exists to remove (new AGENTS §5.5). R2/R5/R6 are test-first. All JSON is Jackson 3
+(`tools.jackson.*` — lesson #13). A commit message describes exactly the diff it contains (new AGENTS §7).
+
+---
+
+## Global execution rules
+
+1. Small reviewable vertical commits: `fix(payments): …`, `feat(payments): …`, `feat(api): …`,
+   `test(payments): …`, `docs: …`. **No message may claim more than its diff carries.**
+2. The register wins over the code; the spec wins over the register. If a disabled test's expectation
+   contradicts the spec, stop — resolve in the spec first, in the open.
+3. No new dependencies. No new migrations by default (V103–V108 stand; V109 only for a proven V108 divergence,
+   expand-only, deviation recorded).
+4. Env names are contract: `PSP_CALLBACK_URL`, `PSP_CREATE_MAX_ATTEMPTS`, `PSP_CREATE_BACKOFF_BASE_MS`,
+   `DARGENT_PIX_KEY`, `DARGENT_RECEIVER_NAME`, `DARGENT_RECEIVER_CITY`, `PSP_WEBHOOK_SECRET` — read them, never
+   inline their defaults in code paths.
+5. After each step: update backlog checkboxes, note deviations here, and confirm repo state via the GitHub API
+   after every push (owner pushes; cite run ids, never commit hashes alone).
+6. Scope: ONLY `modules/payments`, `apps/api` (wiring), `docs/`, `tasks/`, `.env.example`, `README.md`,
+   `CHANGELOG.md`, `AGENTS.md`. Zero lines in `apps/psp-simulator`, `modules/ledger`, `modules/notifications`.
+7. **Red-`main` exception (bounded):** between R1's push and R3's merge, `main` is knowingly red. The red run
+   id is evidence. Nothing else may merge on top of the red state until R3 lands.
+
+### Fast verification used throughout
+
+```bash
+mvn -B -pl modules/payments,apps/api -am test
+```
+
+### Full verification (reactor; ITs need Docker — Testcontainers PG16 + WireMock)
+
+```bash
+mvn -B verify
+```
+
+### Scope discipline check (run before every push)
+
+```bash
+git diff --stat main -- apps/psp-simulator modules/ledger modules/notifications | wc -l   # expect 0
+bash scripts/check-boundaries.sh                                                          # domain purity
+grep -rn "com.fasterxml.jackson" --include="*.java" modules apps | grep -v test || true    # expect: none
+find modules apps -path "*src/test*" \( -name "*.disabled" -o -name "*Debug*" \)           # expect: none (from R4)
+```
+
+---
+
+## Step 0 — Baseline lock & register re-verification (R0)
+
+### Actions
+1. Confirm `main` at `47d24408` with CI run #13 (`33267438415`) green; local `mvn -B verify` green (Docker up).
+2. Re-verify every §2 register item against the current tree (the audit read a snapshot). Update the register
+   BEFORE coding if anything moved — the register is the contract.
+3. Audit `V108__webhook_events.sql` vs E4 §5.4 and the `WebhookEventStore` port/adapter vs E4 §5.3; record the
+   verdict (stand / deviation → V109 decision).
+4. Inventory the debug tests under `adapter/out/psp/` (exact names for R4).
+5. Stage the doc backfill: commit the never-committed E4 doc set + this E3R set alongside the first code commit,
+   with the backfill stated in the commit body.
+
+### Done when
+- Verify green; register confirmed current; V108 verdict recorded; debug-test list exact; no open questions.
+
+---
+
+## Step 1 — Un-disable the scenario IT (R1) — RED EXPECTED
+
+### Actions
+1. `git mv modules/payments/src/main/../test/java/io/dargent/payments/it/CreatePaymentScenarioIT.java.disabled
+   CreatePaymentScenarioIT.java` — zero content edits.
+2. Run it locally; record the failure list and map each failure to register IDs (BD-x/MS-x).
+3. Commit `test(payments): run CreatePaymentScenarioIT as the failing specification for E3R` and push **alone**
+   (owner's call). Capture the red run id for the matrix.
+4. Flip ledger E3/E4 rows to `◐ reopened (E3R)` (spec §5.6 texts) in the same push.
+
+### Done when
+- The IT executes in CI (red); failure↔register mapping recorded; **no expectation edited**; ledger flipped.
+
+### Verify
+```bash
+git status --porcelain          # expect empty
+# CI run for this push is RED — record its id; that is the evidence, not a failure of the process
+```
+
+---
+
+## Step 2 — Fix the create use case (R2) — TESTS FIRST
+
+### Actions
+1. Unit tests first with fakes (one per register ID): §5.1.3 rows incl. real snapshot content (BD-6); D19
+   schedule + exhaustion (BD-4); 409 read-back; PSP-truth conditional update with the re-read version (BD-3);
+   requestId propagation (BD-5); actor = context key id (BD-7); envelope via the shared serializer (BD-8);
+   callback from config (BD-9); atomic core (BD-1). Watch them fail.
+2. Fix `CreatePaymentUseCase`: `TransactionTemplate` core per spec §5.8 order; `PENDING` canonical; PSP phase
+   after commit (injected sleeper, attempts × linear backoff); success tx = conditional PSP-truth update +
+   `COMPLETED` + snapshot; exhaustion tx = conditional FAILED + `PaymentFailed` outbox + key-row delete.
+3. Fix `SimulatorChargeAdapter` (timeouts 2 s/5 s; `PSP_CALLBACK_URL`; retry bounds from config).
+4. Turn the scenario IT green scenario by scenario — code changes only.
+
+### Done when
+- All new unit tests green; the scenario IT green through the PSP exhaustion case; `mvn -B verify` green.
+
+### Verify
+```bash
+mvn -B -pl modules/payments -am test
+```
+
+---
+
+## Step 3 — POST /v1/payments + read-side fixes (R3)
+
+### Actions
+1. POST handler per E3 spec §5.1 verbatim: validation order + field maps; `Idempotency-Key` 8–200 required;
+   `201` + `Location` + `X-Request-Id` echo; response body with PSP-true `expiresAt`; BR Code from
+   `dargent.pix.profile.*`; injected `Clock`; explicit `SecurityConfig` rule (AGENTS §4.1); bean wired (MS-2).
+2. Cursor: decode once, pass the decoded keyset `(txid, createdAtMicros)` to `findPage` (BD-10).
+3. Full-context tests: 201 byte-shape (golden BR Code), 401, 400 field maps, cross-tenant 404, cursor walk.
+4. `main` returns to green here — the bounded red window closes; record the green run id.
+
+### Done when
+- MS-1/MS-2/BD-10 closed by named tests; the README curl answers `201` against a local compose stack; CI green.
+
+### Verify
+```bash
+mvn -B verify
+git diff --stat main -- apps/psp-simulator modules/ledger modules/notifications | wc -l   # expect 0
+```
+
+---
+
+## Step 4 — Delete the debug tests (R4)
+
+### Actions
+1. `git rm` the exact classes inventoried in Step 0 (incl. `HttpClientDebugTest`).
+2. Gate: `find modules apps -path "*src/test*" \( -name "*.disabled" -o -name "*Debug*" \)` = empty; suite green.
+
+### Done when
+- TD-2 closed; the test tree contains only specifications; verify green.
+
+---
+
+## Step 5 — WebhookSignatureValidator (R5) — TESTS FIRST
+
+### Actions
+1. Tests first: shared vector byte-exact (spec §5.5 — recompute it independently before writing the assertion);
+   independent vector `sign("1","{}")`; verdict order (parse → EXPIRED window ±300 s → HMAC, constant-time);
+   byte-sensitivity (wrong key, flipped byte, `1.0` vs `10`, non-canonical order). Watch them fail.
+2. Implement pure `WebhookSignatureValidator` in `domain/model/` (bytes in, verdict out, injected `Clock`;
+   UTF-8 explicit everywhere; no Spring/Jackson).
+
+### Done when
+- Vectors green byte-exact; verdict table covered; zero framework imports in the class.
+
+### Verify
+```bash
+mvn -B -pl modules/payments -am test
+```
+
+---
+
+## Step 6 — WebhookIntakeUseCase + WebhookController (R6) — TESTS FIRST
+
+### Actions
+1. Unit tests first with fakes: E4 §5.3 branch by branch (new; duplicate `PROCESSED`; `RECEIVED`-reprocess from
+   `payload_raw`; unknown type → `IGNORED`; unknown txid → `IGNORED` + WARN; amount mismatch → `IGNORED`;
+   confirm lost race → `duplicate`; `payment.confirmed` outbox `{amount, fee, net, late}`; audit row;
+   `PROCESSED` transition). Watch them fail.
+2. Implement the use case (one transaction, order fixed) + `WebhookController` (raw bytes captured ONCE;
+   `X-PSP-Timestamp`/`X-PSP-Signature` extraction; 401s via the single `ErrorResponseWriter`; 200 outcome bodies).
+3. Reuse the `WebhookEventStore` adapter (apply only the Step 0 audit findings, if any).
+4. Full-context ITs: scenarios 6, 7, 8, 10 + unknown txid/amount/type `200 ignored` + 401 problem+json shapes.
+5. Full-loop IT: create → hand-signed webhook (test-local signer; NEVER the simulator's `WebhookSigner`) →
+   `CONFIRMED`, `fee=100`, `net=9900`, outbox row exact, `webhook_events PROCESSED`.
+
+### Done when
+- MS-3 closed; E4 §5.1 pipeline order proven; `mvn -B verify` green; record the run id.
+
+---
+
+## Step 7 — Documentation truth pass (R7)
+
+### Actions
+1. Create `tasks/e3r-acceptance-matrix.md` (register ID → implementation → CI test → run id); rewrite
+   `tasks/e3-acceptance-matrix.md` (prior evidence voided, superseded-by-E3R where applicable); create
+   `tasks/e4-acceptance-matrix.md` from R5/R6 evidence.
+2. README: create + webhook documented as working with run ids cited; visible retraction of the earlier claim.
+   CHANGELOG: correction entry (retraction + remediation). No silent edits.
+3. `.env.example`: `CHAOS_PSP_LATENCY_MS`, `CHAOS_SEED`. design.md §8.2: endpoint-driven intake sync note.
+4. Hygiene greps (spec §7) all green; commit `docs: truth pass — evidence-cited README, matrices, ledger`.
+
+### Done when
+- Three matrices zero pending; every cited run id verified via the GitHub API; docs honest.
+
+---
+
+## Step 8 — Governance + closure (R8)
+
+### Actions
+1. AGENTS.md §5.5, §5.6, §7 commit-msg rule, DEBT-3 row (exact texts: spec §5.7); `docs/lessons.md` #14.
+2. Ledger final flips — E3 ✅, E4 ✅, E3R ✅, each citing its run id — in the same changeset as the last code
+   commit; raw-verify `docs/epics.md` after push (history: ledger edits have failed to land twice).
+3. Final CI run green on `main`; scope diff = 0; E5 unblocked.
+
+### Done when
+- Spec §9 checklist fully checked; the repo's public claims all trace to CI evidence.
+
+### Verify
+```bash
+grep -n "pending" tasks/e3r-acceptance-matrix.md tasks/e3-acceptance-matrix.md tasks/e4-acceptance-matrix.md  # expect: none
+grep -n "reopened (E3R)" docs/epics.md    # expect: no output after the final flip
+git status --porcelain                    # expect empty
+```
+
+---
+
+## Failure playbooks (stop conditions)
+
+| Symptom | Stop and do this |
+|---|---|
+| Temptation to edit the red IT's expectations to get green | Forbidden (AGENTS §5.5). The test encodes the spec. Fix the code; if test and spec truly conflict, stop and change the spec in the open first |
+| Temptation to re-disable "temporarily" | That is the exact failure being remediated. Register it as DEBT instead, in writing, with an owner — or keep fixing |
+| Pressure to push R2/R3 on top of the red run to "hide" it | The red run is evidence, not shame. Cite it in the matrix; the bounded window closes at Step 3 |
+| Stale aggregate still written after the PSP phase (BD-3 persists) | Re-read the aggregate INSIDE the second tx; conditional UPDATE with the row's current version; assert the DB value in the IT, never the response object |
+| PSP adapter retries a 409 | 409 `txid_already_exists` is the already-created success path (read-back), never a retry (E3 §5.7) |
+| Backoff test takes seconds | You slept for real. The sleeper is injected and recorded — assert the values, never wait them |
+| HMAC vector "almost matches" | UTF-8 explicit; canonical string is exactly `ts + "." + rawBody`; lowercase hex; `MessageDigest.isEqual`. Recompute the expected vector before blaming the code |
+| Signature passes but the stored payload differs from the verified bytes | The body was re-serialized after capture. Capture raw ONCE in the controller; sign, store, and parse THOSE bytes |
+| `ClassNotFoundException` / missing `com.fasterxml.*` | Wrong Jackson. Boot 4.1 = Jackson 3: `tools.jackson.databind` (lesson #13). Never add `com.fasterxml` deps to "fix" it |
+| Slice test can't find `@WebMvcTest` | It does not exist in Boot 4.1. Full-context MockMvc (`webAppContextSetup`) is the house pattern |
+| Webhook test imported the simulator's `WebhookSigner` | Remove it. Hand-sign with a test-local signer; the simulator module must not appear in payments' imports (scope + boundary) |
+| Envelope JSON key order varies | Serialize once through the shared Jackson-3 serializer; fixed-order test. `String.format` JSON is a register defect (BD-8), not a style choice |
+| 425/duplicate IT flaky | `CyclicBarrier` before requests; assert counts, not identities; a flake means a race in the test |
+| WireMock port collision in CI | Dynamic ports only; reset per test |
+| Auth 403 where 401/404 expected | Missing explicit `SecurityConfig` rule for the new route (AGENTS §4.1) — build breaker. Cross-tenant is a 404 from the query, never a 403 |
+| Commit message drifted aspirational ("delivers X" not in diff) | Rewrite before push (AGENTS §7). The message describes the diff; follow-ups become tasks |
+| Ledger edit didn't land (again) | Raw-verify `docs/epics.md` via the API after every push; the §5.6 row texts are verbatim — no paraphrase |
+| Scope creep into psp-simulator/ledger/notifications (or E3.5/E5 work) | Revert; the scope check before every push is zero lines or the push does not happen |
