@@ -7,7 +7,7 @@
 **Companions:** `psp-simulator-e2-spec.md` · `psp-simulator-e2-implementation-sequence.md` · `ai-software-engineer-prompt-psp-simulator-e2.md`
 
 **Execution status:** opened 2026-08-29 after E1 closure (CI run #33225043138 green). Greenfield epic inside
-`apps/psp-simulator` — S1–S6 ☑, S7–S8 ☐. TDD mandatory for S2 and S5 (prompt rule 1).
+`apps/psp-simulator` — S1–S7 ☑, S8 ☐. TDD mandatory for S2 and S5 (prompt rule 1).
 **Decisions:** S1 resolved the spec-vs-M0 config path mismatch by following spec §3.2 — chaos properties
 moved to `dargent.psp.chaos.*` (env names `CHAOS_*` unchanged, M0 contract intact). S3: Boot 4.1.1 ships no
 `@WebMvcTest` web slice in `spring-boot-test-autoconfigure` (only json/jdbc slices exist) — slice tests boot
@@ -146,20 +146,21 @@ S8   Docs sync, acceptance matrix, ledger, CHANGELOG, lessons
 ### Acceptance
 - [x] Every knob demonstrably changes behavior in a test; defaults keep everything off (M0 contract intact)
 
-## S7 — Integration proofs ☐
+## S7 — Integration proofs ☑
 
 ### Work
-- [ ] Endpoint ITs over the full HTTP surface (`@SpringBootTest` + client): create → get → pay lifecycle with
-      a stub receiver capturing webhook deliveries (WireMock **or** a test-local `@RestController` receiver —
-      pick one, document)
-- [ ] Wire assertions: signature header matches recomputation from raw body + timestamp; event JSON fields
-      present; `Content-Type: application/json`
-- [ ] Chaos ITs: duplicate (two deliveries, same eventId — Awaitility count 2), drop (zero deliveries),
-      delay (delivery observed only after the window)
-- [ ] Reactor verify green; image build unaffected
+- [x] Test-local `@RestController` receiver chosen and documented (WireMock not used — no new deps; abandoned the
+      `spring-boot-webtestclient-testsupport` idea for the same reason). ITs drive real HTTP with plain
+      `RestClient` (spring-web), no TestRestTemplate needed (Boot 4.1.1 dragged it out of the test starter)
+- [x] `ChargeLifecycleIT`: create → get → pay over the live stack with knobs off; the single delivered webhook
+      validates via the §5.4 procedure (recompute over captured bytes+timestamp), event JSON fields + Content-Type asserted
+- [x] Chaos ITs driven through the real payment endpoints (not direct dispatcher calls): duplicate → 2 deliveries
+      SAME `eventId`; drop-rate 1.0 → zero; delay-ms → quiet before window, one after (endpoint itself still 200)
+- [x] Failsafe `*IT.java` runs at `verify` (maven-failsafe integration-test+verify goals in the parent pom) —
+      the module `mvn -B -pl apps/psp-simulator -am verify` is green outside Docker too
 
 ### Acceptance
-- [ ] Full lifecycle IT green; the stub receiver's captured webhook validates against the §5.4 vector procedure
+- [x] Full lifecycle IT green; the stub receiver's captured webhook validates against the §5.4 vector procedure
 
 ## S8 — Docs sync & closure ☐
 
