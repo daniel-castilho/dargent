@@ -7,7 +7,7 @@
 **Companions:** `payment-domain-e1-spec.md` · `payment-domain-e1-implementation-sequence.md` · `ai-software-engineer-prompt-payment-domain-e1.md`
 
 **Execution status:** opened 2026-08-28 after M0 closure (CI run #33217044326 green). Greenfield epic —
-S1–S5 ☑, S6+ still ☐. Test-first process is mandatory for S1–S3 (prompt rule 1).
+S1–S6 ☑, S7+ still ☐. Test-first process is mandatory for S1–S3 (prompt rule 1).
 
 ---
 
@@ -112,16 +112,18 @@ S11  Docs sync (design.md §5.1 description column, epics.md, acceptance matrix,
 ### Acceptance
 - [x] Exceptions carry enough context for the future 409 mapping (from, to, txid / remaining, requested)
 
-## S6 — PaymentRepository port + in-memory fake ☐
+## S6 — PaymentRepository port + in-memory fake ☑
 
 ### Work
-- [ ] `PaymentRepository` (domain/port/out): `save(Payment)`, `findByTxid(Txid) → Optional<Payment>`,
+- [x] `PaymentRepository` (domain/port/out): `save(Payment)`, `findByTxid(Txid) → Optional<Payment>`,
       `updateIfVersionMatches(Payment, expectedVersion) → boolean`
-- [ ] Contract documented on the interface: `false` = lost race, caller re-reads; adapter must never throw on lost races
-- [ ] `InMemoryPaymentRepository` (test scope) implementing semantics including version-mismatch → `false`
+- [x] Contract documented on the interface: `false` = lost race, caller re-reads; adapter must never throw on lost races;
+      `save` rejects duplicate txid with `DuplicatePaymentTxidException` (adapter-agnostic, txid-regeneration contract D4)
+- [x] `InMemoryPaymentRepository` (test scope) implementing semantics including version-mismatch → `false` — snapshots
+      on read/write via `restore` (no aliasing, faithful reload semantics)
 
 ### Acceptance
-- [ ] Fake passes a contract test suite shared with the JPA adapter (S9 reuses the same assertions)
+- [x] Fake passes a contract test suite shared with the JPA adapter (S9 reuses the same assertions)
 
 ## S7 — V102 payments table migration ☐
 
