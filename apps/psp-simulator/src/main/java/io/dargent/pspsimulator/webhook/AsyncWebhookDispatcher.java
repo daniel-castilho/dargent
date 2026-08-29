@@ -4,7 +4,9 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -29,8 +31,10 @@ import org.springframework.web.client.RestClient;
  * not a retry loop.
  *
  * <p>Executor: bounded pool sized 4 (workers), unbounded queue — documented in the failure playbook.
- * Threads are daemon so a test context can never leak a JVM. Chaos knobs (delay/drop/duplicate) plug
- * into {@link #scheduleDelivery} (S6).
+ * Threads are daemon so a test context can never leak a JVM. Delivery-side chaos (spec §6) order per
+ * delivery: {@code delay} (shared scheduler — schedule-based, never a sleep-per-thread) → {@code drop}
+ * (seedable {@link Random}, forced extremes are deterministic) → {@code duplicate} (dispatch enqueues
+ * two copies of the SAME event). Request-side knobs (error-rate/latency) live in {@link ChaosFilter}.
  */
 @Component
 public class AsyncWebhookDispatcher implements WebhookDispatcher, DisposableBean {
@@ -44,6 +48,7 @@ public class AsyncWebhookDispatcher implements WebhookDispatcher, DisposableBean
     private final Clock clock;
     private final RestClient restClient;
     private final ExecutorService executor;
+    private final ScheduledExecutorService scheduler;
 
     public AsyncWebhookDispatcher(WebhookSigner signer, ObjectMapper mapper, ChaosProperties chaos,
             Random random, Clock clock) {
@@ -54,18 +59,37 @@ public class AsyncWebhookDispatcher implements WebhookDispatcher, DisposableBean
         this.clock = clock;
         this.restClient = RestClient.builder().requestFactory(clientFactory()).build();
         this.executor = new ThreadPoolExecutor(4, 4, 0L, TimeUnit.MILLISECONDS,
-                new LinkedBlockingQueue<>(), deliveryThreadFactory());
+                new LinkedBlockingQueue<>(), deliveryThreadFactory("webhook-delivery"));
+        this.scheduler = Executors.newSingleThreadScheduledExecutor(
+                deliveryThreadFactory("webhook-scheduler"));
     }
 
     @Override
     public void dispatch(Charge charge) {
-        executor.execute(() -> scheduleDelivery(charge));
+        int copies = chaos.isWebhookDuplicate() ? 2 : 1;
+        for (int copy = 0; copy < copies; copy++) {
+            scheduleDelivery(charge);
+        }
     }
 
     /**
-     * Chaos hooks: S6 overrides this to add delay/drop/duplicate per the spec §6 interaction order.
+     * Per-delivery chaos order (spec §6): {@code delay} first (schedule-based), then {@code drop}
+     * (seedable Random; forced extremes deterministic), then the send itself.
      */
     void scheduleDelivery(Charge charge) {
+        int delayMs = chaos.getWebhookDelayMs();
+        if (delayMs > 0) {
+            scheduler.schedule(() -> maybeDeliver(charge), delayMs, TimeUnit.MILLISECONDS);
+        } else {
+            executor.execute(() -> maybeDeliver(charge));
+        }
+    }
+
+    private void maybeDeliver(Charge charge) {
+        if (chaos.getWebhookDropRate() > 0.0 && random.nextDouble() < chaos.getWebhookDropRate()) {
+            log.debug("webhook dropped by chaos knob for txid {}", charge.txid());
+            return;
+        }
         attemptDelivery(charge);
     }
 
@@ -95,10 +119,10 @@ public class AsyncWebhookDispatcher implements WebhookDispatcher, DisposableBean
         return factory;
     }
 
-    private static ThreadFactory deliveryThreadFactory() {
+    private static ThreadFactory deliveryThreadFactory(String prefix) {
         AtomicInteger counter = new AtomicInteger();
         return runnable -> {
-            Thread thread = new Thread(runnable, "webhook-delivery-" + counter.incrementAndGet());
+            Thread thread = new Thread(runnable, prefix + "-" + counter.incrementAndGet());
             thread.setDaemon(true);
             return thread;
         };
@@ -107,5 +131,6 @@ public class AsyncWebhookDispatcher implements WebhookDispatcher, DisposableBean
     @Override
     public void destroy() {
         executor.shutdownNow();
+        scheduler.shutdownNow();
     }
 }

@@ -7,7 +7,7 @@
 **Companions:** `psp-simulator-e2-spec.md` · `psp-simulator-e2-implementation-sequence.md` · `ai-software-engineer-prompt-psp-simulator-e2.md`
 
 **Execution status:** opened 2026-08-29 after E1 closure (CI run #33225043138 green). Greenfield epic inside
-`apps/psp-simulator` — S1–S5 ☑, S6–S8 ☐. TDD mandatory for S2 and S5 (prompt rule 1).
+`apps/psp-simulator` — S1–S6 ☑, S7–S8 ☐. TDD mandatory for S2 and S5 (prompt rule 1).
 **Decisions:** S1 resolved the spec-vs-M0 config path mismatch by following spec §3.2 — chaos properties
 moved to `dargent.psp.chaos.*` (env names `CHAOS_*` unchanged, M0 contract intact). S3: Boot 4.1.1 ships no
 `@WebMvcTest` web slice in `spring-boot-test-autoconfigure` (only json/jdbc slices exist) — slice tests boot
@@ -130,17 +130,21 @@ S8   Docs sync, acceptance matrix, ledger, CHANGELOG, lessons
 - [x] Signer output for the spec vector is byte-exact; delivery carries exact headers and raw body;
       recomputing the signature from captured bytes + timestamp matches the captured `X-PSP-Signature`
 
-## S6 — Chaos wiring (deterministic) ☐
+## S6 — Chaos wiring (deterministic) ☑
 
 ### Work
-- [ ] `duplicate`: after a successful payment, the same event (same `eventId`) is delivered twice
-- [ ] `delay`: deliveries scheduled after `delayMs` (single shared scheduler; cap 30 000)
-- [ ] `dropRate`: seedable-Random discard per delivery; forced modes for tests (`dropRate=1.0` drops all)
-- [ ] `errorRate`: endpoint calls may fail 503 `psp_unavailable`; `latencyMs`: sleep before handling (cap 30 000)
-- [ ] Behavior tests with forced modes and zero probabilistic assertions; knob semantics documented in class javadoc
+- [x] `duplicate`: `AsyncWebhookDispatcher.dispatch` enqueues two copies of the SAME event per success
+- [x] `delay`: shared single-thread `ScheduledExecutorService`; schedule-based (never a sleep-per-thread); cap 30 000
+- [x] `dropRate`: seedable-`Random` discard per delivery; forced `1.0`/`0.0` modes deterministic (no mid-probability assertions)
+- [x] `errorRate`/`latencyMs` in `ChaosFilter` (`OncePerRequestFilter`, spec §6 order latency → error → handler);
+      503 `psp_unavailable` envelope byte-shape per §5.3; filter is `shouldNotFilter` for anything outside `/cobs/**`
+      (actuator health can never be squashed)
+- [x] Behavior tests with forced modes: count/absence/timing asserts via Awaitility; latency measured as elapsed
+      time on the filter unit tests; knob semantics documented in class javadoc
+- [x] Defaults keep every knob off — the M0 compose contract (`all off`) passes untouched
 
 ### Acceptance
-- [ ] Every knob demonstrably changes behavior in a test; defaults keep everything off (M0 contract intact)
+- [x] Every knob demonstrably changes behavior in a test; defaults keep everything off (M0 contract intact)
 
 ## S7 — Integration proofs ☐
 
