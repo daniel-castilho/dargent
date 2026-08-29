@@ -7,7 +7,7 @@
 **Companions:** `payment-domain-e1-spec.md` · `payment-domain-e1-implementation-sequence.md` · `ai-software-engineer-prompt-payment-domain-e1.md`
 
 **Execution status:** opened 2026-08-28 after M0 closure (CI run #33217044326 green). Greenfield epic —
-S1–S2 ☑, S3+ still ☐. Test-first process is mandatory for S1–S3 (prompt rule 1).
+S1–S3 ☑, S4+ still ☐. Test-first process is mandatory for S1–S3 (prompt rule 1).
 
 ---
 
@@ -67,17 +67,19 @@ S11  Docs sync (design.md §5.1 description column, epics.md, acceptance matrix,
 ### Acceptance
 - [x] All tests green; PSP-style sample (`E904038…` 32 chars) accepted
 
-## S3 — BpsRate + FeeBreakdown (fee math) ☐
+## S3 — BpsRate + FeeBreakdown (fee math) ☑
 
 ### Work
-- [ ] `BpsRate` int 0..10 000 validated
-- [ ] `FeeBreakdown.of(amountCents, bps)`: `fee = amount × bps / 10 000` **floor**; `net = amount − fee`; records `amount`, `fee`, `net` as `Money`
-- [ ] `feeReversalFor(refundCents, originalFeeCents)`: proportional floor
-- [ ] Property tests (jqwik): for random amounts/rates — `fee + net == amount`; `reversal(refund1) + reversal(refund2) ≤ fee` when `refund1 + refund2 ≤ amount`; full-amount reversal ≤ original fee with equality iff divisible
-- [ ] Zero-amount and zero-bps edges: fee 0, net = amount
+- [x] `BpsRate` int 0..10 000 validated
+- [x] `FeeBreakdown.of(amountCents, bps)`: `fee = amount × bps / 10 000` **floor**; `net = amount − fee`; records `amount`, `fee`, `net` as `Money`
+- [x] `feeReversalFor(refundCents, originalFeeCents)`: proportional floor — implemented as instance
+      `feeReversalFor(refundCents)` using this breakdown's amount/fee (the formula also needs the
+      original amount; see sequence-file deviation note)
+- [x] Property tests (jqwik): for random amounts/rates — `fee + net == amount`; `reversal(refund1) + reversal(refund2) ≤ fee` when `refund1 + refund2 ≤ amount`; full-amount reversal ≤ original fee with equality iff divisible
+- [x] Zero-amount and zero-bps edges: fee 0, net = amount (zero amount rejected upstream, `of` guards it)
 
 ### Acceptance
-- [ ] Properties green over generated inputs; documented rounding rule matches coding-standards §3 (down, merchant-favorable, documented)
+- [x] Properties green over generated inputs; documented rounding rule matches coding-standards §3 (down, merchant-favorable, documented)
 
 ## S4 — Payment state machine ☐
 

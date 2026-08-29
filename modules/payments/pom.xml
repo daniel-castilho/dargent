@@ -35,5 +35,12 @@
       <artifactId>archunit-junit5</artifactId>
       <scope>test</scope>
     </dependency>
+    <!-- Fee-math property tests (spec §3.3): engine coexists with JUnit on junit-platform. -->
+    <dependency>
+      <groupId>net.jqwik</groupId>
+      <artifactId>jqwik</artifactId>
+      <version>1.9.2</version>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 </project>

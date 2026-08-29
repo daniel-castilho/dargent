@@ -180,3 +180,11 @@ git status --porcelain                           # expect empty
 | Flyway location not picked up in the module IT | Locations must point at `classpath:db/migration/payments`; check test config before touching migration names |
 | jqwik property fails on an edge | Treat as a real bug in the formula first; adjust the property only with a documented reason in the test |
 | CI slower than M0 significantly | Check the module IT reuses one container per class (not per test); singleton pattern is E5+ — acceptable to be class-scoped now |
+
+---
+
+## Deviation log
+
+| Date | Step | Deviation |
+|---|---|---|
+| 2026-08-28 | S3 | `FeeBreakdown.feeReversalFor` is an **instance method** taking only `refundCents` (spec formula requires the original amount, which comes from this breakdown's `amount`/`fee`). The backlog's stated signature `(refundCents, originalFeeCents)` would be ambiguous without the amount; a static `feeReversal(long, long, long)` keeps the pure formula unit-testable. |
