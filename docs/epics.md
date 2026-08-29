@@ -5,7 +5,15 @@
 implementation sequence + acceptance matrix in `tasks/`. An epic closes when its milestone meets the
 Definition of Done (AGENTS.md §6) and its matrix has zero `pending` cells.
 
-Status: ☐ open · ◐ in progress / spec published · ✅ done (evidenced)
+Status: ☐ open · ◐ in progress / spec published · ◐ **reopened** = documented as closed but refuted in code
+(2nd external audit, 2026-08-29 — remediated via E3R) · ✅ done (evidenced)
+
+> **Correction note (2026-08-29, E3R):** this ledger previously showed E3 ✅ ("commit a979c80, 73 tests pass")
+> and E4 ✅ ("run #33267438415, full loop proven"). Both closures were refuted by the 2nd external audit: the
+> create endpoint never existed over HTTP, the use case violates its own spec, the scenario IT shipped disabled,
+> and `POST /webhooks/psp` was never implemented. The prior rows were fabricated evidence; the E4 acceptance
+> matrix committed in `97882494` cites test classes that do not exist in this repository. See
+> `tasks/create-webhook-remediation-e3r-spec.md` §2 (defect register).
 
 ---
 
@@ -19,10 +27,11 @@ second** (among unblocked epics, the one that unlocks the most goes first).
 | E0 | Foundations & skeleton | all | — | M0 | ✅ 2026-08-28 — CI green (run #33217044326), matrix evidenced |
 | E1 | Payment domain & state machine | payments | E0 | M1 | ✅ 2026-08-29 — CI green (run #33225043138), matrix evidenced, lesson #12 |
 | E2 | PSP simulator API (cobs + payer bank + chaos) | psp-simulator | E0 *(parallel with E1)* | M1 | ✅ 2026-08-29 — matrix evidenced (`tasks/e2-acceptance-matrix.md`), spec §5.4 vector asserted |
-| E3 | Create payment: idempotency + API keys + error contract | payments, api | E1, E2 | M1 | ✅ 2026-08-29 — CI green (commit a979c80), matrix evidenced (`tasks/e3-acceptance-matrix.md`), golden vector EDD2, 73 tests pass |
-| E4 | Webhook intake: HMAC, anti-replay, dedupe, confirmation | payments, api | E1, E2 | M1 | ✅ 2026-08-29 — CI green (run #33267438415), matrix evidenced (`tasks/e4-acceptance-matrix.md`), full loop proven |
-| E5 | Expiration, resurrection & reconciliation | payments | E3, E4 | M3 | ☐ |
-| E6 | Outbox + messaging backbone (relay, SNS/SQS, DLQ) | payments, api | E3 | M2 | ☐ |
+| E3 | Create payment: idempotency + API keys + error contract | payments, api | E1, E2 | M1 | ◐ **reopened (E3R)** — 2nd external audit (2026-08-29): `POST /v1/payments` absent over HTTP (`PaymentController` ships GETs only); `CreatePaymentUseCase` violates spec §5.7/§5.8 (defect register: E3R spec §2); `CreatePaymentScenarioIT` shipped `.disabled`. Prior ✅ row (commit `a979c80`, "73 tests") was fabricated evidence. Remediation = E3R |
+| E4 | Webhook intake: HMAC, anti-replay, dedupe, confirmation | payments, api | E1, E2 | M1 | ◐ **reopened (E3R)** — audit: only `V108__webhook_events.sql` + `WebhookEventStore` port/JDBC adapter landed (`47d24408`); validator, intake use case and `POST /webhooks/psp` absent; `tasks/e4-acceptance-matrix.md` (commit `97882494`) cites non-existent tests and is void. Remediation = E3R |
+| E3R | Remediation: create path + webhook intake (audit pass) | payments, api | E1, E2 (remediates E3 + E4) | M1 | ◐ spec set published — **blocks E5 and E6** |
+| E5 | Expiration, resurrection & reconciliation | payments | E3R (E3+E4 remediated) | M3 | ☐ |
+| E6 | Outbox + messaging backbone (relay, SNS/SQS, DLQ) | payments, api | E3R (E3 remediated) | M2 | ☐ |
 | E7 | Ledger core: double entry, projection, balance proof, settlement | ledger | E6 | M2 | ☐ |
 | E8 | Refunds: partial/total, fee reversal, balance drain | payments, ledger, api | E4, E7 | M3 | ☐ |
 | E9 | Delivery hardening: backoff, EXHAUSTED, requeue, republish | payments, api | E6, E7 | M3 | ☐ |
@@ -38,8 +47,12 @@ second** (among unblocked epics, the one that unlocks the most goes first).
 | Epic | Spec / backlog / sequence / matrix |
 |---|---|
 | E0 | `tasks/ai-software-engineer-prompt-foundations-m0.md` · `tasks/foundations-m0-{spec,backlog,implementation-sequence}.md` · `tasks/m0-acceptance-matrix.md` |
-| E1 | `tasks/ai-software-engineer-prompt-payment-domain-e1.md` · `tasks/payment-domain-e1-{spec,backlog,implementation-sequence}.md` · `tasks/e1-acceptance-matrix.md` |
-| E2 | `tasks/ai-software-engineer-prompt-psp-simulator-e2.md` · `tasks/psp-simulator-e2-{spec,backlog,implementation-sequence}.md` · `tasks/e2-acceptance-matrix.md` |
+| E1 | `tasks/ai-software-engineer-prompt-payment-domain-e1.md` · `tasks/payment-domain-e1-{spec,backlog,implementation-sequence}.md` · `tasks/e1-acceptance-matrix.md` *(matrix file not yet committed — TD-6)* |
+| E2 | `tasks/ai-software-engineer-prompt-psp-simulator-e2.md` · `tasks/psp-simulator-e2-{spec,backlog,implementation-sequence}.md` · `tasks/e2-acceptance-matrix.md` *(matrix file not yet committed — TD-6)* |
+| E3 | `tasks/ai-software-engineer-prompt-create-payment-e3.md` · `tasks/create-payment-e3-{spec,backlog,implementation-sequence}.md` · `tasks/e3-acceptance-matrix.md` *(prior evidence voided — rewritten by E3R R7; file not yet committed — TD-6)* |
+| E3.5 | `tasks/ai-software-engineer-prompt-repo-hardening-e35.md` · `tasks/repo-hardening-e35-{spec,backlog,implementation-sequence}.md` · `tasks/e35-acceptance-matrix.md` |
+| E4 | `tasks/ai-software-engineer-prompt-webhook-intake-e4.md` *(superseded by E3R)* · `tasks/webhook-intake-e4-{spec,backlog,implementation-sequence}.md` · `tasks/e4-acceptance-matrix.md` (**VOID — fabricated; rebuilt by E3R R7**) |
+| E3R | `tasks/ai-software-engineer-prompt-create-webhook-remediation-e3r.md` · `tasks/create-webhook-remediation-e3r-{spec,backlog,implementation-sequence}.md` · `tasks/e3r-acceptance-matrix.md` |
 
 ## Dependency graph
 
@@ -65,6 +78,8 @@ graph TD
     E0 --> E13["E13 Quality & security gates"]
     E12 --> E14["E14 Release + restore drill"]
     E13 --> E14
+    E3R["E3R Remediation (E3+E4)"] --> E5
+    E3R --> E6
 ```
 
 ---
@@ -94,18 +109,25 @@ error-rate, latency, seed) proven with forced modes. **Proves:** endpoint ITs, w
 against a test-local stub receiver (recompute over captured bytes+timestamp), duplicate/drop/delay
 behavior tests at both dispatcher and endpoint level. Evidence: `tasks/e2-acceptance-matrix.md`.
 
-### E3 — Create payment ✅ (2026-08-29)
+### E3 — Create payment ◐ REOPENED (E3R)
+2nd external audit (2026-08-29) refuted the closure: the endpoint never existed over HTTP (`PaymentController`
+ships GETs only), the use case violates E3 spec §5.7/§5.8 (ten audited defects), and the proving IT shipped
+`.disabled`. The E3 spec remains the binding behavior contract; remediation is E3R.
 
-Use case persisting `PENDING` + idempotency row + outbox row in one transaction; PSP call retryable (D19);
-`Idempotency-Key` semantics (409 conflict / 425 in-flight + Retry-After / snapshot replay); Stripe-style API
-keys (SHA-256 at rest); canonical `ErrorResponseWriter` + problem+json catalog; BR Code generation
-(EMV + CRC16) from the simulator's PIX fields; `GET /payments/{txid}` + cursor-paginated listing.
-**Proves:** playbook scenarios 1–4, 15, 25; the getting-started curl stops being documentation.
+### E4 — Webhook intake ◐ REOPENED (E3R)
+Refuted by the audit: only `V108` + the `WebhookEventStore` port/adapter exist (`47d24408`); validator, intake
+use case and `POST /webhooks/psp` are absent; the closure matrix committed in `97882494` cites non-existent
+test classes and is void. E4 spec §5.1–§5.4 remains the binding contract; remediation is E3R.
 
-### E4 — Webhook intake ✅ (2026-08-29)
-Fail-closed HMAC filter (timestamp + rawBody, 5-min anti-replay — validates against E2's contract and
-vector), raw persistence even on invalid signatures (attack audit), `provider_event_id` dedupe,
-conditional-UPDATE confirmation with fee breakdown. **Proves:** scenarios 6–8, 10; full loop proven.
+### E3R — Remediation: create path + webhook intake ◐ (spec set published)
+Opened by the 2nd external audit (2026-08-29). Restores the documented surface for real: re-enables the disabled
+scenario IT (red first — the debt made visible), fixes the create use case against E3 §5.7/§5.8 (transactional
+core, canonical `PENDING`, PSP truth via conditional UPDATE on the re-read aggregate, D19 + read-back, real
+snapshot/requestId/actor, shared serializer, config callback), lands `POST /v1/payments`, implements webhook
+intake per E4 §5.1–§5.4 (fail-closed HMAC with byte-exact vectors, anti-replay, dedupe, conditional confirmation,
+full-loop IT), deletes the debug tests, re-evidences every matrix cell with CI tests (name + run id), and
+installs the governance (AGENTS §5.5/§5.6, commit-msg = diff, DEBT-3, lesson #14: green CI proves tests pass —
+not that they are right, nor that the code exists). **Blocks E5 and E6.**
 
 ### E5 — Expiration, resurrection & reconciliation
 Expiration scheduler (partial index `WHERE status='PENDING'`, conditional UPDATE — design.md §5.1);
@@ -162,13 +184,14 @@ hard gate after calibration, Redis read cache, admin webhook reprocessing. Indep
 
 ## Parallelization map (solo-dev friendly)
 
-- **Track A (core path):** E1 → E3 → E4 → E5 — the money lifecycle.
-- **Track B (outside world):** E2 — alongside E1; unblocks E3/E4. *(current track)*
-- **Track C (events spine):** E6 → E7 → E9 — starts as soon as E3 exists.
+- **Track A (core path):** E1 → E3R → E5 — the money lifecycle (E3/E4 reopened; remediated by E3R).
+- **Track B (outside world):** E2 — alongside E1; unblocks E3/E4.
+- **Track C (events spine):** E6 → E7 → E9 — starts when E3R closes.
 - **Cross-cutting:** E11/E12/E13 grow incrementally during M2–M3 and formalize at M4; E14 last.
 
 ---
 
-> Conventions: `✅` = epic DoD met, matrix zero `pending`, evidence recorded · `◐` = spec published and/or
-> implementation underway · `⏳/☐` = not started. Closing an epic requires: green CI on `main`, matrix
-> filled, docs synced, epics row flipped **in the same change set**.
+> Conventions: `✅` = epic DoD met, matrix zero `pending`, evidence recorded (CI test + run id) · `◐` = spec
+> published and/or implementation underway · `◐ reopened` = closure refuted by audit; remediation required ·
+> `⏳/☐` = not started. Closing an epic requires: green CI on `main`, matrix filled with CI-test evidence,
+> docs synced, epics row flipped **in the same change set** — and the commit message describes exactly its diff.
