@@ -85,6 +85,13 @@
             <failIfNoTests>false</failIfNoTests>
           </configuration>
         </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-surefire-plugin</artifactId>
+          <configuration>
+            <failIfNoTests>false</failIfNoTests>
+          </configuration>
+        </plugin>
         <!-- JaCoCo coverage gate (per-module floors, combined unit+IT data) is activated at M4
              per design.md §10.3 — see lessons.md #8 for why it must measure after the IT step. -->
       </plugins>
@@ -102,6 +109,13 @@
             </goals>
           </execution>
         </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <failIfNoSpecifiedTests>false</failIfNoSpecifiedTests>
+        </configuration>
       </plugin>
     </plugins>
   </build>

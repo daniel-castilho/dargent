@@ -254,6 +254,8 @@ Postgres schemas per module; Flyway with per-module locations (each jar carries 
 
 Indexes: unique(`txid`), partial `WHERE status='PENDING' AND expires_at < now()`, (`merchant_id`, `created_at DESC`) for listing.
 
+> **Note:** V107 (`description` column restore) was SKIPPED — the column already exists in V102 from E1.
+
 **`idempotency_keys`** — `key` unique · `request_fingerprint` (body hash) · `response_snapshot` (http status + JSONB) · `payment_id` · `state` (`IN_FLIGHT`/`COMPLETED`) · cleanup job > 24h.
 
 **`webhook_events`** — `provider_event_id` (= `endToEndId + type`) **unique** (dedupe) · `payload_raw` JSONB **immutable** (parse replay) · `status` (`RECEIVED→PROCESSED/IGNORED`) · `signature_valid` · `received_at`.
@@ -379,6 +381,7 @@ Clients branch on `code`, never on messages. **A single `ErrorResponseWriter` em
 | `refund_exceeds_remaining` | 409 | `Σ refunds + amount > original` |
 | `invalid_transition` | 409 | Illegal state transition |
 | `idempotency_key_in_flight` | **425** + `Retry-After` | Retry arrived while the 1st request processes (D18) |
+| `psp_unavailable` | 502 | PSP unreachable/unhealthy after creation retries; payment persisted as FAILED |
 | `internal` | 500 | Logs method+URI+exception; **never leaks internal message** |
 
 Protocol detail: `NoResourceFoundException` → canonical 404 (never 500).

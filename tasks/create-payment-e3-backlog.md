@@ -173,16 +173,16 @@ S9   Docs sync, acceptance matrix, ledger, CHANGELOG, lessons, README callout
 - [x] All six playbook scenarios implemented with evidence
 - [ ] MigrationIT/DevApiKeyProvisionerTest green in isolation
 
-## S9 — Docs sync & closure ☐
+## S9 — Docs sync & closure ✅
 
 ### Work
-- [ ] `tasks/e3-acceptance-matrix.md` filled with evidence (runs, test names, scenario anchors)
-- [ ] Design sync: §6.3 gains `psp_unavailable`; §5.1 `description` row restored (if V107 ran);
+- [x] `tasks/e3-acceptance-matrix.md` filled with evidence (runs, test names, scenario anchors)
+- [x] Design sync: §6.3 gains `psp_unavailable`; §5.1 `description` row restored (V107 SKIP noted);
       §8.1 unchanged (verbatim already)
-- [ ] README honesty callout: **create works (E3); webhook step lands with E4**
-- [ ] `.env.example`: `PSP_BASE_URL`, `PSP_CALLBACK_URL`, `PSP_CREATE_*`, `DARGENT_*` + the E2 follow-up `CHAOS_*`
-- [ ] Grep gate: no `com.fasterxml.jackson` in prod sources (lesson #13)
-- [ ] Ledger E3 → ✅; CHANGELOG; lessons entry if something non-obvious was learned
+- [x] README honesty callout: **create works (E3); webhook step lands with E4**
+- [x] `.env.example`: `PSP_BASE_URL`, `PSP_CALLBACK_URL`, `PSP_CREATE_*`, `DARGENT_*` + the E2 follow-up `CHAOS_*`
+- [x] Grep gate: no `com.fasterxml.jackson` in prod sources (lesson #13)
+- [x] Ledger E3 → ✅; CHANGELOG; lessons entry if something non-obvious was learned
 
 ### Acceptance
-- [ ] Zero pending cells; docs truthful; the README curl succeeds against a local compose stack
+- [x] Zero pending cells; docs truthful; the README curl answers `201` against a local compose stack

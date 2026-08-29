@@ -1,8 +1,11 @@
 package io.dargent.api.smoke;
 
-import io.dargent.api.DargentApiApplication;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
+import io.dargent.api.DargentApiApplication;
+import io.dargent.api.security.ApiKeyAuthenticationFilter;
+import io.dargent.payments.domain.port.out.PaymentQueryPort;
 import java.util.List;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
@@ -11,7 +14,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -43,18 +46,33 @@ class MigrationIT {
         @Bean
         Flyway flyway(DataSource dataSource) {
             Flyway flyway = Flyway.configure()
-                .dataSource(dataSource)
-                .locations(
-                    "classpath:db/migration/payments",
-                    "classpath:db/migration/ledger",
-                    "classpath:db/migration/notifications"
-                )
-                .baselineOnMigrate(true)
-                .load();
+                    .dataSource(dataSource)
+                    .locations(
+                            "classpath:db/migration/payments",
+                            "classpath:db/migration/ledger",
+                            "classpath:db/migration/notifications"
+                    )
+                    .baselineOnMigrate(true)
+                    .load();
             flyway.migrate();
             return flyway;
         }
+
+        @Bean
+        @Primary
+        PaymentQueryPort paymentQueryPort() {
+            return mock(PaymentQueryPort.class);
+        }
+
+        @Bean
+        @Primary
+        ApiKeyAuthenticationFilter apiKeyAuthenticationFilter() {
+            return mock(ApiKeyAuthenticationFilter.class);
+        }
     }
+
+    @Autowired
+    PaymentQueryPort paymentQueryPort;
 
     @Test
     void flyway_creates_all_module_schemas() {
@@ -68,7 +86,8 @@ class MigrationIT {
 
     @Test
     void module_schemas_hold_only_their_own_business_tables() {
-        // payments gains its core table in E1 (V102) + api_keys in E3 (V103);
+        // payments gains its core table in E1 (V102) + api_keys in E3 (V103)
+        // + idempotency_keys/outbox/audit_log in E3 (V104-V106);
         // ledger/notifications stay schema-only until their milestone (expand/contract from day one)).
         List<String> paymentTables = jdbc
                 .sql("select table_name from information_schema.tables where table_schema = 'payments'")
@@ -83,7 +102,7 @@ class MigrationIT {
                 .query(String.class)
                 .list();
 
-        assertThat(paymentTables).containsExactlyInAnyOrder("payments", "api_keys");
+        assertThat(paymentTables).containsExactlyInAnyOrder("payments", "api_keys", "idempotency_keys", "outbox", "audit_log");
         assertThat(ledgerTables).isEmpty();
         assertThat(notificationTables).isEmpty();
     }

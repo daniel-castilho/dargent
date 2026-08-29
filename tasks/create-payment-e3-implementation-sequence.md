@@ -201,11 +201,11 @@ git diff --stat main -- apps/psp-simulator modules/ledger modules/notifications 
 
 ---
 
-## Step 9 — Closure (S9)
+## Step 9 — Closure (S9) ✅
 
 ### Actions
 1. Fill `tasks/e3-acceptance-matrix.md` (requirement → implementation → test → evidence).
-2. Docs sync: design §6.3 `psp_unavailable`; §5.1 `description` row if V107 ran; README honesty callout
+2. Docs sync: design §6.3 `psp_unavailable`; §5.1 `description` row V107 SKIP note; README honesty callout
    (create works; webhook step E4); `.env.example` (`PSP_*`, `DARGENT_*`, E2 follow-up `CHAOS_*`).
 3. Lesson #13 grep gate clean; ledger E3 → ✅; CHANGELOG; lessons entry if warranted.
 4. Final commit: `docs(e3): close create payment epic — acceptance matrix evidenced`.
@@ -218,6 +218,20 @@ git diff --stat main -- apps/psp-simulator modules/ledger modules/notifications 
 grep -n pending tasks/e3-acceptance-matrix.md    # expect: no output
 git status --porcelain                           # expect empty
 ```
+
+### Deviations (rule 5)
+- **DEV-1** — PSP phase runs on an explicit seam, not `TransactionSynchronization.afterCommit` (approved decision 3).
+  Proposal rejected on architectural grounds: pool exhaustion under load (callbacks run before tx cleanup, so the
+  Postgres connection stays bound while the PSP phase holds it up to ~20s; a few slow PSPs hostage the whole pool),
+  unit-testability (a Spring-tx-free `CreatePaymentUseCase` stays fake-testable), and exception semantics (an explicit
+  seam makes "only call the PSP if the commit succeeded" plain control flow). The approved shape:
+  `CreatePaymentUseCase.execute()` is **not** `@Transactional`; it calls the transactional core (internal transactional
+  component or `TransactionTemplate`), receives the result, and runs the PSP phase as ordinary code **after the
+  transactional method has returned**. Same observable behavior (201 still waits on the PSP for its real `expiresAt`),
+  same guarantee ("call PSP only if commit succeeded"). Candidate lesson for lessons.md.
+- **DEV-2** — V107 SKIP — `description` column already exists in V102 from E1. Recorded in backlog S0 and design.md §5.1.
+- **DEV-3** — WireMock ITs require `configureFor("localhost", port)` for dynamic admin port.
+- **DEV-4** — JDK HttpClient instead of Spring RestClient (proxy/system property issues).
 
 ---
 
