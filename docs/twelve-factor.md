@@ -1,22 +1,26 @@
 # Twelve-Factor Compliance
 
-Factor-by-factor audit of Dargent against the [twelve-factor methodology](https://12factor.net), with honest
+Factor-by-factor audit of Cobre against the [twelve-factor methodology](https://12factor.net), with honest
 deviations declared. Reviewed at each milestone; new deviations are declared, never discovered.
 
-| # | Factor | How Dargent complies | Deviations / notes |
-|---|---|---|---|
-| I | **Codebase** | One repo, one deployable API + one simulator app; Maven multi-module tracks; deploys = immutable image tags | — |
-| II | **Dependencies** | All dependencies declared in POMs; Maven wrapper; no system-global jars; containers pin base images by digest | — |
-| III | **Config** | Environment-only contract in prod (`.env.example` documents every var); `ConfigValidator` fails fast at boot with an aggregated report (unresolved placeholders, short secrets, static AWS keys in prod) | Dev `application.yaml` carries dev-only placeholders by design; prod must override |
-| IV | **Backing services** | Postgres and SNS/SQS attached via URL/endpoint config (`AWS_ENDPOINT_URL` for LocalStack); swapping LocalStack for real AWS is config, not code | — |
-| V | **Build, release, run** | Strict separation in CI: build (jar+image by SHA) → release (tag = semver image + SBOM + GitHub Release) → run (blue-green deploy of an immutable tag). Rollback = previous tag | — |
-| VI | **Processes** | The API is stateless — all state in Postgres; shares nothing; horizontally addable | *Declared nuance:* schedulers (relay, expiration, reconciliation, settlement) run in-process. Safe under overlap by design (conditional UPDATEs, `SKIP LOCKED`, unique constraints) — chosen over a separate worker process + distributed lock for v1 simplicity |
-| VII | **Port binding** | Boot embedded server; app is self-contained; NGINX is a plain reverse proxy, not an app server | — |
-| VIII | **Concurrency** | Scale-out = more fleet containers behind NGINX; request handling is stateless; SQS consumers are per-queue with idempotent processing; no sticky sessions | Vertical scale of a single JVM is the honest ceiling for v1; factor preserved in shape |
-| IX | **Disposability** | `server.shutdown=graceful` with phase timeouts; fast startup (Flyway + queue provisioning are bounded); **shutdown-under-load drain test gates CI**; SIGTERM handled by the JVM/compose | — |
-| X | **Dev/prod parity** | Same compose shape in dev and prod (Postgres 16, LocalStack SNS/SQS); same app image; prod profile only tightens (lockdown IT proves the exposure differences) | LocalStack ≈ real AWS, not equality — accepted and documented (SNS/SQS APIs are stable; behavior proof ITs guard the seams) |
-| XI | **Logs** | Structured JSON to **stdout** (Boot 4 ECS profile); correlation id in every line; environment/collector owns shipping & retention | On-prem v1 ships to docker json-file + host retention; a collector (Loki/ELK) is a stretch, not a factor violation |
-| XII | **Admin processes** | One-off/maintenance runs as code in the same image & env: Flyway migrations (boot + CLI), outbox republish script, DLQ requeue endpoint (audited), restore drill scripts, balance proof job | — |
+**Status legend (as-built honesty, added 2026-08-29 after external review):**
+✅ operating in the tree today · ◐ partial (mechanism exists, scope grows) · 📋 **planned** — documented target
+with a named milestone, **not yet written**. A factor is only ✅ when the code proves it.
+
+| # | Factor | How Dargent complies | Status | Deviations / notes |
+|---|---|---|---|---|
+| I | **Codebase** | One repo, one deployable API + one simulator app; Maven multi-module tracks; deploys = immutable image tags (semver tags: 📋 M4) | ✅ | — |
+| II | **Dependencies** | All dependencies declared in POMs; Maven wrapper absence declared; containers pin base image *versions* (digest-pinning: 📋 M4) | ✅ | — |
+| III | **Config** | Environment-only contract (`.env.example`); prod must override dev defaults | ◐ | **`ConfigValidator` is 📋 planned (M1/M4)** — does not exist in the tree yet; today the app boots with dev defaults |
+| IV | **Backing services** | Postgres attached via URL config; LocalStack endpoint via `AWS_ENDPOINT_URL` | ◐ | SNS/SQS clients arrive at **E6** — LocalStack runs empty by design today |
+| V | **Build, release, run** | CI builds jar+image by SHA today | ◐ | Release tiers (semver tag → image + SBOM + GitHub Release) are 📋 **M4/E14** |
+| VI | **Processes** | API stateless; all durable state in Postgres | ◐ | *Declared nuance:* schedulers (relay/expiration/reconciliation) run in-process from **E5/E6** — safe under overlap by design; **no scheduler exists yet** |
+| VII | **Port binding** | Boot embedded server; NGINX as plain reverse proxy | ✅ | — |
+| VIII | **Concurrency** | Scale-out = more fleet containers behind NGINX; stateless request path | ◐ | Blue-green fleets exist as compose topology; canary flip scripts are 📋 **M4/E12** |
+| IX | **Disposability** | `server.shutdown: graceful` configured | ◐ | Shutdown-under-load drain test gating CI is 📋 **M4/E12** |
+| X | **Dev/prod parity** | Same compose shape in dev and prod; same app image | ✅ | LocalStack ≈ real AWS, not equality — accepted and documented (behavior-proof ITs at E6) |
+| XI | **Logs** | Structured JSON to stdout via Boot 4 ECS profile | ◐ | Correlation filter (`X-Request-Id` MDC) is 📋 **E11**; today logs are Boot defaults + graceful shutdown config |
+| XII | **Admin processes** | Flyway migrations run at boot | ◐ | Outbox republish script, audited DLQ requeue endpoint, restore-drill scripts are 📋 **E9/E14** — cited in runbook as targets, not present yet |
 
 ## Declared non-goals (not deviations, choices)
 
@@ -26,5 +30,9 @@ deviations declared. Reviewed at each milestone; new deviations are declared, ne
 
 ## Review notes
 
-- Factors VI and X carry the only declared nuances — both are decisions with ADRs, not accidents.
-- Any new architectural pattern that touches a factor updates this file in the same PR.
+- Factors VI and X carry declared design nuances; factors III–V and VIII–XII carry 📋 planned mechanisms —
+  every one of them has a named epic/milestone and an acceptance-matrix row where it must be *proven*, not
+  just written.
+- **Rule added after external review (2026-08-29):** this file may never describe a mechanism as compliant
+  before its proving test exists. Any new architectural pattern that touches a factor updates this file in
+  the same PR — with the status marker, not without it.
