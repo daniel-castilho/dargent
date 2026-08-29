@@ -7,7 +7,7 @@
 **Companions:** `payment-domain-e1-spec.md` · `payment-domain-e1-implementation-sequence.md` · `ai-software-engineer-prompt-payment-domain-e1.md`
 
 **Execution status:** opened 2026-08-28 after M0 closure (CI run #33217044326 green). Greenfield epic —
-S1–S8 ☑, S9+ still ☐. Test-first process is mandatory for S1–S3 (prompt rule 1).
+S1–S10 ☑, S11 (closure) pending. Test-first process is mandatory for S1–S3 (prompt rule 1).
 
 ---
 
@@ -141,9 +141,9 @@ S11  Docs sync (design.md §5.1 description column, epics.md, acceptance matrix,
 ### Work
 - [x] `PaymentEntity` (@Entity, `@Version` on version column, table `payments.payments`) — adapter package only
 - [x] `PaymentMapper`: domain ↔ persistence, including effects of raised events across load
-- [x] `PaymentJpaAdapter implements PaymentRepository`; `updateIfVersionMatches` relies on `@Version`
-      (`OptimisticLockingFailureException`/`OptimisticLockException` → `false`), and reflects the persisted
-      version back on the aggregate via `Payment.markPersistedVersion`
+- [x] `PaymentJpaAdapter implements PaymentRepository`; `updateIfVersionMatches` is an explicit conditional
+      UPDATE (`SET … version = :expected+1 WHERE txid = :txid AND version = :expected`, zero rows → `false`),
+      reflecting the persisted version back on the aggregate via `Payment.markPersistedVersion`
 - [x] Module gains `spring-boot-starter-data-jpa` (compile) + `spring-context` (compile, for the adapter's
       `@Repository`/`@Transactional`) — adapter packages only, per prompt decision 5
 - [x] `apps/api` MigrationIT updated: `payments` schema now holds the `payments` table from V102 (E1)
@@ -152,28 +152,29 @@ S11  Docs sync (design.md §5.1 description column, epics.md, acceptance matrix,
 - [x] ArchUnit domain purity still green (no framework imports under `domain/`)
 - [x] Boundary script still green (prod-only scan unaffected)
 
-## S9 — PaymentJpaAdapterIT against real PostgreSQL 16 ☐
+## S9 — PaymentJpaAdapterIT against real PostgreSQL 16 ☑
 
 ### Work
-- [ ] IT in payments module: Testcontainers `postgres:16-alpine`, Flyway pointed at
+- [x] IT in payments module: Testcontainers `postgres:16-alpine`, Flyway pointed at
       `classpath:db/migration/payments`, JPA wired via a minimal test configuration
-- [ ] Reuses the S6 contract suite: save → find round-trip, update with matching version → true + persisted
+- [x] Reuses the S6 contract suite: save → find round-trip, update with matching version → true + persisted
       state, stale version → false, confirm-transition persistence (fee/net/late/endToEndId columns)
 
 ### Acceptance
-- [ ] IT green in CI (`mvn -B verify` picks `*IT` via Failsafe); no H2 anywhere
+- [x] IT green in CI (`mvn -B verify` picks `*IT` via Failsafe); no H2 anywhere
 
-## S10 — Concurrent transition IT — exactly one winner ☐
+## S10 — Concurrent transition IT — exactly one winner ☑
 
 ### Work
-- [ ] `PaymentConcurrentTransitionIT`: one persisted `PENDING` payment; 8 threads barrier-synced; each loads,
+- [x] `PaymentConcurrentTransitionIT`: one persisted `PENDING` payment; 8 threads barrier-synced; each loads,
       attempts `confirm(...)`, calls `updateIfVersionMatches`; then exactly-one-winner assertions
-- [ ] Loser path asserted: `false` returned, re-read shows winner's state, domain guard rejects a re-attempt
-- [ ] Deterministic barrier (playbook §3) — no sleeps, no probabilistic stress in the PR gate
+- [x] Loser path asserted: `false` returned, re-read shows winner's state, domain guard rejects a re-attempt
+- [x] Deterministic barrier (playbook §3) — no sleeps, no probabilistic stress in the PR gate
 
 ### Acceptance
-- [ ] Exactly one thread returns `true` across runs; payment ends `CONFIRMED` with one event set
-- [ ] Test named per playbook §3 (`concurrent_confirmations_with_version_guard_yield_exactly_one_winner`)
+- [x] Exactly one thread returns `true` across runs; payment ends `CONFIRMED` with one event set
+- [x] Test named per playbook §3 (`concurrent_confirmations_with_version_guard_yield_exactly_one_winner`)
+      and stable across 5 consecutive local runs (08-28)
 
 ## S11 — Docs sync & closure ☐
 

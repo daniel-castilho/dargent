@@ -21,7 +21,9 @@ public final class PaymentMapper {
 
     public static PaymentEntity toEntity(Payment payment) {
         PaymentEntity entity = new PaymentEntity();
-        entity.setId(java.util.UUID.randomUUID());
+        // id is DB-generated (Hibernate GenerationType.UUID): the row key is not part of
+        // the balance-carrying aggregate, and assigning one here would collide with
+        // @GeneratedValue (detached-entity reject) — see deviation log S8.
         entity.setTxid(payment.txid().value());
         entity.setMerchantId(payment.merchantId());
         entity.setDescription(payment.description());
@@ -38,24 +40,6 @@ public final class PaymentMapper {
         if (payment.net() != null) {
             entity.setNetCents(payment.net().cents());
         }
-        entity.setLateConfirmation(payment.lateConfirmation());
-        entity.setRefundedCents(payment.refunded().cents());
-        entity.setCreatedAt(payment.createdAt());
-        entity.setConfirmedAt(payment.confirmedAt());
-        return entity;
-    }
-
-    public static PaymentEntity copyFieldsInto(Payment payment, PaymentEntity entity) {
-        entity.setTxid(payment.txid().value());
-        entity.setMerchantId(payment.merchantId());
-        entity.setDescription(payment.description());
-        entity.setAmountCents(payment.amount().cents());
-        entity.setStatus(payment.status().name());
-        entity.setVersion(payment.version());
-        entity.setExpiresAt(payment.expiresAt());
-        entity.setEndToEndId(payment.endToEndId() == null ? null : payment.endToEndId().value());
-        entity.setFeeCents(payment.fee() == null ? null : payment.fee().cents());
-        entity.setNetCents(payment.net() == null ? null : payment.net().cents());
         entity.setLateConfirmation(payment.lateConfirmation());
         entity.setRefundedCents(payment.refunded().cents());
         entity.setCreatedAt(payment.createdAt());
