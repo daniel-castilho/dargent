@@ -7,9 +7,12 @@
 **Companions:** `psp-simulator-e2-spec.md` · `psp-simulator-e2-implementation-sequence.md` · `ai-software-engineer-prompt-psp-simulator-e2.md`
 
 **Execution status:** opened 2026-08-29 after E1 closure (CI run #33225043138 green). Greenfield epic inside
-`apps/psp-simulator` — S1–S2 ☑, S3–S8 ☐. TDD mandatory for S2 and S5 (prompt rule 1).
+`apps/psp-simulator` — S1–S3 ☑, S4–S8 ☐. TDD mandatory for S2 and S5 (prompt rule 1).
 **Decisions:** S1 resolved the spec-vs-M0 config path mismatch by following spec §3.2 — chaos properties
-moved to `dargent.psp.chaos.*` (env names `CHAOS_*` unchanged, M0 contract intact).
+moved to `dargent.psp.chaos.*` (env names `CHAOS_*` unchanged, M0 contract intact). S3: Boot 4.1.1 ships no
+`@WebMvcTest` web slice in `spring-boot-test-autoconfigure` (only json/jdbc slices exist) — slice tests boot
+the full app context and use Spring's own `MockMvc` via `webAppContextSetup` (zero new dependencies;
+documented deviation).
 
 ---
 
@@ -85,17 +88,17 @@ S8   Docs sync, acceptance matrix, ledger, CHANGELOG, lessons
 - [x] All rules green as pure unit tests — no Spring, no HTTP
 - [x] Generated `endToEndId` matches the API-side `EndToEndId` VO regex `^E[A-Za-z0-9]{31}$`
 
-## S3 — POST /cobs + GET /cobs/{txid} ☐
+## S3 — POST /cobs + GET /cobs/{txid} ☑
 
 ### Work
-- [ ] Create: validate txid `^[A-Z0-9]{25}$`, amount > 0, `expiresAt` in the future, `callbackUrl` http(s)
+- [x] Create: validate txid `^[A-Z0-9]{25}$`, amount > 0, `expiresAt` in the future, `callbackUrl` http(s)
       → 201 with the charge + PIX profile fields (spec §5.1); duplicate txid → 409 `txid_already_exists`;
       invalid → 400 with `{code, message}`
-- [ ] Get: 200 per spec §5.2; unknown → 404 `cob_not_found`; EXPIRED computed for unpaid past expiry
-- [ ] Slice tests (MockMvc): happy paths, each validation branch, each error code
+- [x] Get: 200 per spec §5.2; unknown → 404 `cob_not_found`; EXPIRED computed for unpaid past expiry
+- [x] Slice tests (MockMvc): happy paths, each validation branch, each error code
 
 ### Acceptance
-- [ ] Response bodies byte-shape match spec §5.1/§5.2 examples (field names, types)
+- [x] Response bodies byte-shape match spec §5.1/§5.2 examples (field names, types)
 
 ## S4 — POST /cobs/{txid}/payments (payer bank) ☐
 
