@@ -7,7 +7,7 @@
 **Companions:** `psp-simulator-e2-spec.md` · `psp-simulator-e2-implementation-sequence.md` · `ai-software-engineer-prompt-psp-simulator-e2.md`
 
 **Execution status:** opened 2026-08-29 after E1 closure (CI run #33225043138 green). Greenfield epic inside
-`apps/psp-simulator` — S1 ☑, S2–S8 ☐. TDD mandatory for S2 and S5 (prompt rule 1).
+`apps/psp-simulator` — S1–S2 ☑, S3–S8 ☐. TDD mandatory for S2 and S5 (prompt rule 1).
 **Decisions:** S1 resolved the spec-vs-M0 config path mismatch by following spec §3.2 — chaos properties
 moved to `dargent.psp.chaos.*` (env names `CHAOS_*` unchanged, M0 contract intact).
 
@@ -70,20 +70,20 @@ S8   Docs sync, acceptance matrix, ledger, CHANGELOG, lessons
 ### Acceptance
 - [x] All knobs resolvable from environment with M0-compatible names; no `Instant.now()` outside the Clock bean
 
-## S2 — Charge model + store + ids ☐ (tests first)
+## S2 — Charge model + store + ids ☑ (tests first)
 
 ### Work
-- [ ] `Charge` (txid, amount, expiresAt, callbackUrl, description?, status, endToEndId?, paidAt?) with
+- [x] `Charge` (txid, amount, expiresAt, callbackUrl, description?, status, endToEndId?, paidAt?) with
       transition logic: `pay(now)` → rules per spec §5.3; `statusFor(now)` computing EXPIRED
-- [ ] `EndToEndIdGenerator` producing `E` + 31 alphanumeric (32 total; SecureRandom)
-- [ ] `eventId` generator: `psp-evt-<uuid>`
-- [ ] `ChargeStore` (`ConcurrentHashMap<String, Charge>`, `putIfAbsent` for duplicate txid detection)
-- [ ] Unit tests first: lifecycle rules, expiry computation across the boundary, generator formats (100-sample
+- [x] `EndToEndIdGenerator` producing `E` + 31 alphanumeric (32 total; SecureRandom)
+- [x] `eventId` generator: `psp-evt-<uuid>`
+- [x] `ChargeStore` (`ConcurrentHashMap<String, Charge>`, `putIfAbsent` for duplicate txid detection)
+- [x] Unit tests first: lifecycle rules, expiry computation across the boundary, generator formats (100-sample
       property), store duplicate rejection
 
 ### Acceptance
-- [ ] All rules green as pure unit tests — no Spring, no HTTP
-- [ ] Generated `endToEndId` matches the API-side `EndToEndId` VO regex `^E[A-Za-z0-9]{31}$`
+- [x] All rules green as pure unit tests — no Spring, no HTTP
+- [x] Generated `endToEndId` matches the API-side `EndToEndId` VO regex `^E[A-Za-z0-9]{31}$`
 
 ## S3 — POST /cobs + GET /cobs/{txid} ☐
 
