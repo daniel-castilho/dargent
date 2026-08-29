@@ -188,3 +188,4 @@ git status --porcelain                           # expect empty
 | Date | Step | Deviation |
 |---|---|---|
 | 2026-08-28 | S3 | `FeeBreakdown.feeReversalFor` is an **instance method** taking only `refundCents` (spec formula requires the original amount, which comes from this breakdown's `amount`/`fee`). The backlog's stated signature `(refundCents, originalFeeCents)` would be ambiguous without the amount; a static `feeReversal(long, long, long)` keeps the pure formula unit-testable. |
+| 2026-08-28 | S4 | `markFailed(reason)` gains a `when: Instant` parameter. The spec's `PaymentFailed` event carries `occurredAt` and "all time arrives as parameters — no `Instant.now()` inside the entity" is non-negotiable; the table's signature simply omitted the time. Implemented `markFailed(reason, when)`; the event carries `when` as `occurredAt`. |

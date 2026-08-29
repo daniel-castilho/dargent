@@ -7,7 +7,7 @@
 **Companions:** `payment-domain-e1-spec.md` · `payment-domain-e1-implementation-sequence.md` · `ai-software-engineer-prompt-payment-domain-e1.md`
 
 **Execution status:** opened 2026-08-28 after M0 closure (CI run #33217044326 green). Greenfield epic —
-S1–S3 ☑, S4+ still ☐. Test-first process is mandatory for S1–S3 (prompt rule 1).
+S1–S5 ☑, S6+ still ☐. Test-first process is mandatory for S1–S3 (prompt rule 1).
 
 ---
 
@@ -81,34 +81,36 @@ S11  Docs sync (design.md §5.1 description column, epics.md, acceptance matrix,
 ### Acceptance
 - [x] Properties green over generated inputs; documented rounding rule matches coding-standards §3 (down, merchant-favorable, documented)
 
-## S4 — Payment state machine ☐
+## S4 — Payment state machine ☑
 
 ### Work
-- [ ] `Payment` aggregate: factory `create(txid, merchantId, amount, description, expiresAt, now)` → `PENDING` + `PaymentCreated`
-- [ ] `confirm(endToEndId, FeeBreakdown, when)` — legal from `PENDING` and `EXPIRED`; from `EXPIRED` forces
+- [x] `Payment` aggregate: factory `create(txid, merchantId, amount, description, expiresAt, now)` → `PENDING` + `PaymentCreated`
+- [x] `confirm(endToEndId, FeeBreakdown, when)` — legal from `PENDING` and `EXPIRED`; from `EXPIRED` forces
       `lateConfirmation=true`; sets fee/net/endToEndId/`confirmedAt`; raises `PaymentConfirmed`
-- [ ] `expire(when)` — legal from `PENDING`, guarded `when > expiresAt`; raises `PaymentExpired`
-- [ ] `markFailed(reason)` — legal from `PENDING`; raises `PaymentFailed`
-- [ ] `refund(refundAmount, feeReversal)` — legal from `CONFIRMED`/`PARTIALLY_REFUNDED`; validates
+- [x] `expire(when)` — legal from `PENDING`, guarded `when > expiresAt`; raises `PaymentExpired`
+- [x] `markFailed(reason, when)` — legal from `PENDING`; raises `PaymentFailed` (deviation: gains a `when`
+      param — see sequence-file deviation log; no `Instant.now()` inside the entity is non-negotiable)
+- [x] `refund(refundAmount, feeReversal, when)` — legal from `CONFIRMED`/`PARTIALLY_REFUNDED`; validates
       `refundAmount ≤ remaining`; `refundAmount == remaining` → `REFUNDED` else `PARTIALLY_REFUNDED`; raises `RefundCreated`
-- [ ] `domainEvents()` collector (drain semantics), `version` field carried for the seam
-- [ ] Table-driven unit suite: every cell of spec §5 asserted (legal: state+version+event; illegal: exception type)
+- [x] `domainEvents()` collector (drain semantics), `version` field carried for the seam; `restore(...)`
+      adapter-only factory (rebuild without events, preserves version)
+- [x] Table-driven unit suite: every cell of spec §5 asserted (legal: state+version+event; illegal: exception type)
 
 ### Acceptance
-- [ ] Every legal transition green; every illegal transition throws `InvalidTransitionException`
-- [ ] `REFUNDED`/`FAILED` reject everything (terminal); second `confirm` on `CONFIRMED` throws (idempotent
+- [x] Every legal transition green; every illegal transition throws `InvalidTransitionException`
+- [x] `REFUNDED`/`FAILED` reject everything (terminal); second `confirm` on `CONFIRMED` throws (idempotent
       replay handling is the use case's job in E4)
-- [ ] Resurrection covered: `EXPIRED → CONFIRMED` with `late=true` preserved in event payload
+- [x] Resurrection covered: `EXPIRED → CONFIRMED` with `late=true` preserved in event payload
 
-## S5 — Typed domain errors ☐
+## S5 — Typed domain errors ☑
 
 ### Work
-- [ ] `InvalidTransitionException` (from,to,txid context), `RefundExceedsRemainingException` extending a
+- [x] `InvalidTransitionException` (from,to,txid context), `RefundExceedsRemainingException` extending a
       small `PaymentDomainException` base (HTTP mapping happens in E3, not here)
-- [ ] Unit assertions on exception context fields
+- [x] Unit assertions on exception context fields (asserted inline in the PaymentTest illegal cells)
 
 ### Acceptance
-- [ ] Exceptions carry enough context for the future 409 mapping (from, to, txid / remaining, requested)
+- [x] Exceptions carry enough context for the future 409 mapping (from, to, txid / remaining, requested)
 
 ## S6 — PaymentRepository port + in-memory fake ☐
 
