@@ -7,7 +7,7 @@
 **Companions:** `payment-domain-e1-spec.md` · `payment-domain-e1-implementation-sequence.md` · `ai-software-engineer-prompt-payment-domain-e1.md`
 
 **Execution status:** opened 2026-08-28 after M0 closure (CI run #33217044326 green). Greenfield epic —
-S1 ☑, others still ☐. Test-first process is mandatory for S1–S3 (prompt rule 1).
+S1–S2 ☑, S3+ still ☐. Test-first process is mandatory for S1–S3 (prompt rule 1).
 
 ---
 
@@ -58,14 +58,14 @@ S11  Docs sync (design.md §5.1 description column, epics.md, acceptance matrix,
 - [x] All tests green; construction with any of: 24 chars, 26 chars, `-`, empty → `IllegalArgumentException`
 - [x] Generated txids always pass `Txid` validation (property over 100 samples)
 
-## S2 — EndToEndId value object ☐
+## S2 — EndToEndId value object ☑
 
 ### Work
-- [ ] `EndToEndId` record validating `^E[A-Za-z0-9]{31}$` (32 chars total); composition internals are PSP-owned — shape only
-- [ ] Unit tests first: valid 32-char, 31/33 chars rejected, missing `E` prefix rejected
+- [x] `EndToEndId` record validating `^E[A-Za-z0-9]{31}$` (32 chars total); composition internals are PSP-owned — shape only
+- [x] Unit tests first: valid 32-char, 31/33 chars rejected, missing `E` prefix rejected
 
 ### Acceptance
-- [ ] All tests green; PSP-style sample (`E904038…` 32 chars) accepted
+- [x] All tests green; PSP-style sample (`E904038…` 32 chars) accepted
 
 ## S3 — BpsRate + FeeBreakdown (fee math) ☐
 
