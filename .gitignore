@@ -30,3 +30,4 @@ perf/results/
 # Conversation debris / internal notes (never committed)
 uploads/
 internal-notes/
+**/*:Zone.Identifier
