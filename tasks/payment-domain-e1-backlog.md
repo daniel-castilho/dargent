@@ -7,7 +7,7 @@
 **Companions:** `payment-domain-e1-spec.md` · `payment-domain-e1-implementation-sequence.md` · `ai-software-engineer-prompt-payment-domain-e1.md`
 
 **Execution status:** opened 2026-08-28 after M0 closure (CI run #33217044326 green). Greenfield epic —
-all stories start ☐. Test-first process is mandatory for S1–S3 (prompt rule 1).
+S1 ☑, others still ☐. Test-first process is mandatory for S1–S3 (prompt rule 1).
 
 ---
 
@@ -47,16 +47,16 @@ S11  Docs sync (design.md §5.1 description column, epics.md, acceptance matrix,
 
 ---
 
-## S1 — Txid value object + secure generator ☐
+## S1 — Txid value object + secure generator ☑
 
 ### Work
-- [ ] `Txid` record validating `^[A-Z0-9]{25}$` after uppercasing input; rejects null/wrong length/non-alnum
-- [ ] `TxidGenerator` interface + default `SecureRandom` impl over `[A-Z0-9]`; produces valid `Txid`
-- [ ] Unit tests first: valid round-trip, lowercase normalization, each rejection class, generator output validity
+- [x] `Txid` record validating `^[A-Z0-9]{25}$` after uppercasing input; rejects null/wrong length/non-alnum
+- [x] `TxidGenerator` interface + default `SecureRandom` impl over `[A-Z0-9]`; produces valid `Txid`
+- [x] Unit tests first: valid round-trip, lowercase normalization, each rejection class, generator output validity
 
 ### Acceptance
-- [ ] All tests green; construction with any of: 24 chars, 26 chars, `-`, empty → `IllegalArgumentException`
-- [ ] Generated txids always pass `Txid` validation (property over 100 samples)
+- [x] All tests green; construction with any of: 24 chars, 26 chars, `-`, empty → `IllegalArgumentException`
+- [x] Generated txids always pass `Txid` validation (property over 100 samples)
 
 ## S2 — EndToEndId value object ☐
 
