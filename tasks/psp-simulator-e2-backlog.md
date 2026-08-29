@@ -7,7 +7,9 @@
 **Companions:** `psp-simulator-e2-spec.md` · `psp-simulator-e2-implementation-sequence.md` · `ai-software-engineer-prompt-psp-simulator-e2.md`
 
 **Execution status:** opened 2026-08-29 after E1 closure (CI run #33225043138 green). Greenfield epic inside
-`apps/psp-simulator` — all stories start ☐. TDD mandatory for S2 and S5 (prompt rule 1).
+`apps/psp-simulator` — S1 ☑, S2–S8 ☐. TDD mandatory for S2 and S5 (prompt rule 1).
+**Decisions:** S1 resolved the spec-vs-M0 config path mismatch by following spec §3.2 — chaos properties
+moved to `dargent.psp.chaos.*` (env names `CHAOS_*` unchanged, M0 contract intact).
 
 ---
 
@@ -57,16 +59,16 @@ S8   Docs sync, acceptance matrix, ledger, CHANGELOG, lessons
 ### Acceptance
 - [ ] Local `mvn -B -pl apps/psp-simulator -am test` green; no open spec questions
 
-## S1 — PSP profile config, Clock, chaos bindings ☐
+## S1 — PSP profile config, Clock, chaos bindings ☑
 
 ### Work
-- [ ] `PspProfile` config props: `pixKey`, `receiverName`, `receiverCity` (env-overridable; compose-safe defaults)
-- [ ] `Clock` bean + `WebhookSecret` property (`PSP_WEBHOOK_SECRET`, default `dev-only-secret`)
-- [ ] `ChaosProperties` bound to the five knobs (names per spec §3.2) + seedable `Random` (`CHAOS_SEED`)
-- [ ] Config-binding unit test (defaults + override)
+- [x] `PspProfile` config props: `pixKey`, `receiverName`, `receiverCity` (env-overridable; compose-safe defaults)
+- [x] `Clock` bean + `WebhookSecret` property (`PSP_WEBHOOK_SECRET`, default `dev-only-secret`)
+- [x] `ChaosProperties` bound to the five knobs (names per spec §3.2) + seedable `Random` (`CHAOS_SEED`)
+- [x] Config-binding unit test (defaults + override)
 
 ### Acceptance
-- [ ] All knobs resolvable from environment with M0-compatible names; no `Instant.now()` outside the Clock bean
+- [x] All knobs resolvable from environment with M0-compatible names; no `Instant.now()` outside the Clock bean
 
 ## S2 — Charge model + store + ids ☐ (tests first)
 

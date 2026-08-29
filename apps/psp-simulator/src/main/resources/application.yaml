@@ -14,9 +14,16 @@ management:
 dargent:
   psp:
     webhook-secret: ${PSP_WEBHOOK_SECRET:dev-only-secret}
-  chaos:
-    # All chaos OFF by default; the tests and demos turn them up (design.md §12).
-    webhook-duplicate: ${CHAOS_WEBHOOK_DUPLICATE:false}
-    webhook-delay-ms: ${CHAOS_WEBHOOK_DELAY_MS:0}
-    webhook-drop-rate: ${CHAOS_WEBHOOK_DROP_RATE:0.0}
-    psp-error-rate: ${CHAOS_PSP_ERROR_RATE:0.0}
+    profile:
+      pix-key: ${PSP_PIX_KEY:dargent-dev-receber@example.com}
+      receiver-name: ${PSP_RECEIVER_NAME:Dargent Dev LTDA}
+      receiver-city: ${PSP_RECEIVER_CITY:SAO PAULO}
+    chaos:
+      # All chaos OFF by default; tests and demos turn them up (design.md §12). Env names are
+      # the M0 contract; the property tree nests under dargent.psp.chaos per the E2 spec §3.2.
+      webhook-duplicate: ${CHAOS_WEBHOOK_DUPLICATE:false}
+      webhook-delay-ms: ${CHAOS_WEBHOOK_DELAY_MS:0}
+      webhook-drop-rate: ${CHAOS_WEBHOOK_DROP_RATE:0.0}
+      psp-error-rate: ${CHAOS_PSP_ERROR_RATE:0.0}
+      psp-latency-ms: ${CHAOS_PSP_LATENCY_MS:0}
+      seed: ${CHAOS_SEED:}
