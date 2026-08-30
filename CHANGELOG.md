@@ -5,7 +5,7 @@ versioning: semantic, cut from annotated git tags (see [release-runbook](docs/re
 
 ## [Unreleased]
 
-### Fixed — E3/E4 Retraction & E3R Remediation (2026-08-29)
+### Fixed — E3/E4 Retraction & E3R Remediation (2026-08-30)
 
 - **Retracted:** E3 Create Payment completion claim (commit `a979c80`, "73 tests pass") — the `POST /v1/payments` endpoint never existed over HTTP; `CreatePaymentUseCase` violates spec §5.7/§5.8; `CreatePaymentScenarioIT` shipped disabled.
 - **Retracted:** E4 Webhook Intake completion claim (commit `47d2440`, "full loop proven") — `POST /webhooks/psp` endpoint, validator, intake use case never implemented; acceptance matrix cited non-existent tests.
@@ -15,6 +15,18 @@ versioning: semantic, cut from annotated git tags (see [release-runbook](docs/re
 - **Corrected:** Ledger E3/E4 rows → `◐ reopened (E3R)`; E3R row added; artifact index updated.
 - **README:** Honesty callout flipped back to declared-state (create/webhook NOT live — land with E3R); `97882494` fabrication called out.
 - **CHANGELOG:** This correction entry (retraction + remediation).
+
+### Closed — E3R Complete (2026-08-30)
+
+- **BD-1…BD-14:** All defects fixed with CI evidence (runs #19 #24 #25 #26 #27 #28)
+- **MS-1…MS-3:** All milestones implemented (endpoints live)
+- **TD-1…TD-11:** All tech debt resolved (IT enabled, docs committed, evidence CI-cited)
+- **BD-12:** Audit actor sentinel UUID for webhook callbacks (BD-14 ratification)
+- **BD-13:** `paidAt` parsing guarded inside strict block + poison IT
+- **BD-11:** Atomicity failure-injection IT (outbox trigger → 500 → RECEIVED → redeliver → PROCESSED)
+- **BD-14:** Sentinel audit actor ratified (V106 NOT NULL stands; javadoc + IT assert)
+- **Matrix:** All cells green with CI run IDs (#18 #19 #22 #24 #25 #26 #27 #28)
+- **E3/E4 ledger rows:** `✅` flipped (run #28 `33331033505`)
 
 ### Added — E3 Create Payment (2026-08-29) *[REDACTED — see correction above]*
 

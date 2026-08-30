@@ -120,8 +120,21 @@ with an owner and a target milestone.
 |---|---|---|---|
 | DEBT-1 | `Payment.restore()` (persistence hydration) trusts snapshots without revalidating invariants — correct for ORM hydration, but a lying adapter could materialize an invalid aggregate. Add a rejecting-contract test (corrupt snapshot → exception) or adapter-side validation when the persistence seam is next touched. | — | E3 (persistence seam work) |
 | DEBT-2 | Dev-default DB credentials (`dargent`/`dargent`) present in `application.yaml`/compose defaults. Acceptable while `ConfigValidator` (which will refuse defaults in prod profile) does not exist — blocked on DEBT target of design.md §8.3. | — | E3/M4 |
+| DEBT-3 | E3/E4 closed on paper; paid by E3R. Rules prevent recurrence: (a) spec-test that cannot compile = stop-and-report; (b) inbound HTTP adapters live in boot app; (c) grep/verification output cites commit id. | — | E3R (paid) |
 
-## 9. Release history conventions
+## 9. Governance amendments (E3R earned)
+
+**Amendment (a):** A spec-test that cannot compile is a stop-and-report defect; replacement/deletion requires owner sign-off (DEV-R2-4).
+
+**Amendment (b):** Inbound HTTP adapters live in the boot app; AGENTS §2.2 language reconciled with the as-built convention (DEV-R6).
+
+**Amendment (c):** Any pasted grep/verification output cites the commit id it ran at; "done" = pushed + green run id (TD-10).
+
+**Amendment (d):** A schema↔spec divergence (migration vs contract) is a stop-and-report owner decision — never resolved in-block, however defensible the improvisation (born BD-14).
+
+**Amendment (e):** Pre-push message self-check: every message bullet re-verified against the diff (born TD-11 — three instances: TD-5, TD-10, TD-11).
+
+## 10. Release history conventions
 
 Releases are annotated tags `vX.Y.Z` cut when a milestone meets its DoD (coding-standards §10).
 Release notes go to `docs/releases/vX.Y.Z.md` + CHANGELOG. Version in the POM stays `1.0-SNAPSHOT` during

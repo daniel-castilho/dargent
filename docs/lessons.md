@@ -10,6 +10,30 @@ When a lesson repeats three times, promote it to [coding-standards.md](coding-st
 
 ---
 
+## 14. Green CI ≠ right tests ≠ code exists — the first act of remediation is enabling the disabled spec and watching it fail; audit beats attestation (2026-08-30)
+
+The E3R epic began with a repo that claimed "E3 complete: 73 tests pass" (commit `a979c80`) and "E4 complete: full loop proven" (commit `47d2440`). Both claims were false — the `POST /v1/payments` endpoint never existed over HTTP, `CreatePaymentUseCase` violated spec §5.7/§5.8, `CreatePaymentScenarioIT` was `.disabled`, `POST /webhooks/psp` never existed, and the E4 acceptance matrix cited test classes that never existed. CI was green (113 tests) because it ran a suite that exercised nothing the spec required.
+
+The remediation (E3R) did not start by fixing code. It started by **enabling the disabled spec** (`CreatePaymentScenarioIT` was `.disabled`; enabling it produced a red run #18 `33282800600` designed red). That red run was the *first honest signal* — it proved the spec was not implemented and gave a baseline to fix against. Every subsequent fix was traced to a specific register item (BD-1…BD-14) and closed by a test that runs in CI with a cited run id.
+
+**Golden rules:**
+
+1. **Green CI ≠ right tests.** A green CI only proves the current test suite passes. It does *not* prove the test suite exercises the spec. The test suite itself must be proven against the spec (register traceability).
+2. **Green CI ≠ right tests ≠ code exists.** The E3R repo had green CI, 113 passing tests, and *zero* of the required endpoints implemented over HTTP. Green CI + missing code = the tests are not the right tests.
+3. **The first act of remediation is enabling the disabled spec and watching it fail.** A spec test that cannot compile or is disabled is a stop-and-report defect (AGENTS amendment a). Enabling it produces the first honest signal — red is the color of truth.
+4. **Audit beats attestation.** The audit trail (commit chains, run tables, register traceability, run ids) is the only thing that proves completion. A claim without a cited run id is not evidence; it is noise.
+5. **Every closure claim must survive an independent API audit.** The E3R handoff was audited via GitHub API (compare commits, runs list, test classnames, file lists). The report was accepted only because the API confirmed: commits exist, runs are green, tests match the register, matrices cite test names + run ids.
+
+**Golden rules:**
+
+1. **Never trust a green CI to mean "done".** Ask: does this test suite exercise the spec? Trace every register item to a test name + run id.
+2. **The first act of remediation is enabling the disabled spec.** A red run that maps to the register is worth more than a green run that doesn't.
+3. **Every closure claim must cite run ids.** A claim without a run id is not evidence — it is noise.
+4. **Audit > attestation.** The audit trail (commits, runs, register traceability) is the only thing that proves completion. A claim without a cited run id is not evidence; it is noise.
+5. **Every handoff message must be self-checked against the diff.** Before handoff: `git log -1 --format=%B`, then `git show`, verify every bullet matches a real hunk. A claim the diff doesn't carry = fix the message or the code before handoff (AGENTS amendment e).
+
+---
+
 ## 14. Explicit PSP seam beats `TransactionSynchronization.afterCommit` for long-running side effects (2026-08-29)
 
 First design used `TransactionSynchronizationManager.registerSynchronization(afterCommit)` to fire the PSP

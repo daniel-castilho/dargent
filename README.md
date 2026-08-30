@@ -110,7 +110,7 @@ POST /v1/payments/{txid}/refunds → partial/total, fee returned proportionally,
 
 Prerequisites: JDK 25 (Temurin), Docker with Compose, GNU make (optional).
 
-> **⚠️ Honesty note:** `POST /v1/payments` + `GET /v1/payments` + `GET /v1/payments/{txid}` are **live (E3)**. The webhook → `CONFIRMED` leg lands with **E4**; until then, paying at the simulator leaves the payment `PENDING` by design — that is the declared state, not a bug.
+> **⚠️ Honesty note:** `POST /v1/payments` + `GET /v1/payments` + `GET /v1/payments/{txid}` are **live (E3)**. The webhook → `CONFIRMED` leg lands with **E4 (complete as of E3R)** — `POST /webhooks/psp` is **live** with fail-closed HMAC, anti-replay, dedupe, and conditional confirmation. All scenario proofs (6, 7, 8, 10, ignored×3, full-loop) run in CI (runs #24 #25 #26 #27 #28).
 
 ```bash
 # 1. Start the backing services (Postgres, LocalStack, psp-simulator)
@@ -161,13 +161,14 @@ shipped image. Deployment is **blue-green by immutable tag** with a 10%/30s cana
 
 ## Current state
 
-**M0 — Skeleton: code in place, CI green** (foundation documents complete, boundary gates passing).
+**E3R complete — E3 + E4 live on `main` (run #28 `33331033505` green).**
 
 | Milestone | Scope | Status |
 |---|---|---|
 | M0 — Skeleton | Maven multi-module, ArchUnit gates, compose, CI, Flyway per schema, queue provisioning | ✅ |
-| M1 — Happy path | Create cob → PENDING → webhook → CONFIRMED; idempotency; API keys; canonical errors | ✅ |
-| M2 — Events | Outbox + relay + SNS/SQS; ledger journaling; balance projection; notifications | ☐ |
+| M1 (E3) — Create path | Create cob → PENDING → webhook → CONFIRMED; idempotency; API keys; canonical errors | ✅ |
+| M2 (E4) — Webhook intake | `POST /webhooks/psp` fail-closed HMAC, anti-replay, dedupe, conditional confirm | ✅ |
+| M2 (E4) — Events | Outbox + relay + SNS/SQS; ledger journaling; balance projection; notifications | ☐ |
 | M3 — Suffering | Refunds, expiration, resurrection, reconciler, settlement, DLQ/backoff/EXHAUSTED/requeue | ☐ |
 | M4 — Finish | Metrics, blue-green deploy, runtime smoke in CI, tag releases + SBOM, restore drill | ☐ |
 | M5 — Stretch | Card as second Strategy, k6 as hard gate, Redis read cache, webhook reprocessing | ☐ |
