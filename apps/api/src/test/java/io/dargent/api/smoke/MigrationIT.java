@@ -60,19 +60,16 @@ class MigrationIT {
 
         @Bean
         @Primary
-        PaymentQueryPort paymentQueryPort() {
+        PaymentQueryPort mockedPaymentQueryPort() {
             return mock(PaymentQueryPort.class);
         }
 
         @Bean
         @Primary
-        ApiKeyAuthenticationFilter apiKeyAuthenticationFilter() {
+        ApiKeyAuthenticationFilter mockedApiKeyAuthenticationFilter() {
             return mock(ApiKeyAuthenticationFilter.class);
         }
     }
-
-    @Autowired
-    PaymentQueryPort paymentQueryPort;
 
     @Test
     void flyway_creates_all_module_schemas() {

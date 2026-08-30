@@ -46,8 +46,8 @@ public class JdbcPaymentQueryPort implements PaymentQueryPort {
                     """;
             params = new Object[]{"merchant", merchantId, "limit", limit};
         } else {
-            // cursor = base64(txId|createdAtMicros)
-            String[] parts = decodeCursor(cursor);
+            // cursor = "txId|createdAtMicros" — already decoded once by the controller (BD-10)
+            String[] parts = cursor.split("\\|", 2);
             String afterTxid = parts[0];
             long afterMicros = Long.parseLong(parts[1]);
             sql = """
@@ -68,11 +68,6 @@ public class JdbcPaymentQueryPort implements PaymentQueryPort {
         return jdbc.sql(sql).params(params).query(PaymentEntity.class).list().stream()
                 .map(PaymentMapper::toDomain)
                 .toList();
-    }
-
-    private String[] decodeCursor(String cursor) {
-        String decoded = new String(Base64.getUrlDecoder().decode(cursor));
-        return decoded.split("\\|", 2);
     }
 
     static String encodeCursor(String txid, long createdAtMicros) {

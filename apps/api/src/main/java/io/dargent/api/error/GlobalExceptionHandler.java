@@ -1,5 +1,8 @@
 package io.dargent.api.error;
 
+import io.dargent.payments.application.IdempotencyKeyConflictException;
+import io.dargent.payments.application.IdempotencyKeyInFlightException;
+import io.dargent.payments.application.PspUnavailableException;
 import io.dargent.payments.domain.exception.InvalidTransitionException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -44,6 +47,12 @@ public class GlobalExceptionHandler {
                 Map.of("body", "unreadable"));
     }
 
+    @ExceptionHandler(RequestValidationException.class)
+    public void requestValidation(HttpServletRequest request, HttpServletResponse response,
+            RequestValidationException e) {
+        writer.write(request, response, ErrorCode.INVALID_REQUEST, "Validation failed", e.fields());
+    }
+
     @ExceptionHandler(InvalidTransitionException.class)
     public void invalidTransition(HttpServletRequest request, HttpServletResponse response,
             InvalidTransitionException e) {
@@ -53,6 +62,25 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(NoResourceFoundException.class)
     public void notFound(HttpServletRequest request, HttpServletResponse response, NoResourceFoundException e) {
         writer.write(request, response, ErrorCode.NOT_FOUND, "Unknown route");
+    }
+
+    @ExceptionHandler(IdempotencyKeyConflictException.class)
+    public void idempotencyConflict(HttpServletRequest request, HttpServletResponse response,
+            IdempotencyKeyConflictException e) {
+        writer.write(request, response, ErrorCode.IDEMPOTENCY_KEY_CONFLICT, e.getMessage());
+    }
+
+    @ExceptionHandler(IdempotencyKeyInFlightException.class)
+    public void idempotencyInFlight(HttpServletRequest request, HttpServletResponse response,
+            IdempotencyKeyInFlightException e) {
+        response.setHeader("Retry-After", "1");
+        writer.write(request, response, ErrorCode.IDEMPOTENCY_KEY_IN_FLIGHT, e.getMessage());
+    }
+
+    @ExceptionHandler(PspUnavailableException.class)
+    public void pspUnavailable(HttpServletRequest request, HttpServletResponse response,
+            PspUnavailableException e) {
+        writer.write(request, response, ErrorCode.PSP_UNAVAILABLE, "Payment provider unavailable", e);
     }
 
     @ExceptionHandler(Exception.class)

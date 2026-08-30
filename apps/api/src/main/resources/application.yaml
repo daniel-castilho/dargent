@@ -16,6 +16,18 @@ spring:
     # each module owns its schema; zero cross-schema FK/JOIN (design.md §5, D2).
     locations: classpath:db/migration/payments, classpath:db/migration/ledger, classpath:db/migration/notifications
 
+dargent:
+  psp:
+    base-url: ${PSP_BASE_URL:http://psp-simulator:8090}
+    callback-url: ${PSP_CALLBACK_URL:http://api-blue:8080/webhooks/psp}
+    create-max-attempts: ${PSP_CREATE_MAX_ATTEMPTS:3}
+    create-backoff-base-ms: ${PSP_CREATE_BACKOFF_BASE_MS:200}
+  pix:
+    profile:
+      pix-key: ${DARGENT_PIX_KEY:dargent-dev-receber@example.com}
+      receiver-name: ${DARGENT_RECEIVER_NAME:Dargent Dev LTDA}
+      receiver-city: ${DARGENT_RECEIVER_CITY:SAO PAULO}
+
 management:
   endpoints:
     web:

@@ -15,7 +15,8 @@ public interface PaymentQueryPort {
     /**
      * Lists payments for a merchant with cursor pagination.
      * Returns up to limit items, ordered by created_at DESC, txid DESC (stable under insertion).
-     * Cursor is opaque base64(txId|createdAtMicros).
+     * Cursor is the already-decoded keyset {@code "txid|createdAtMicros"} (the controller decodes the
+     * opaque base64 cursor once — BD-10). Null/blank means the first page.
      */
     List<Payment> findPage(UUID merchantId, String cursor, int limit);
 }
