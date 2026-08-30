@@ -29,7 +29,8 @@ import org.flywaydb.core.Flyway;
  */
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    classes = {DargentApiApplication.class, MigrationIT.FlywayTestConfig.class}
+    classes = {DargentApiApplication.class, MigrationIT.FlywayTestConfig.class},
+    properties = "dargent.psp.webhook-secret=dev-only-secret"
 )
 @Testcontainers
 class MigrationIT {

@@ -56,7 +56,8 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  */
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    classes = {DargentApiApplication.class, CreatePaymentIT.PspTestConfig.class}
+    classes = {DargentApiApplication.class, CreatePaymentIT.PspTestConfig.class},
+    properties = "dargent.psp.webhook-secret=dev-only-secret"
 )
 @Testcontainers
 class CreatePaymentIT {
@@ -505,6 +506,11 @@ class CreatePaymentIT {
         @Primary
         Clock fixedClock() {
             return FIXED_CLOCK;
+        }
+
+        @Bean
+        String webhookSecret() {
+            return "dev-only-secret";
         }
 
         @Bean
