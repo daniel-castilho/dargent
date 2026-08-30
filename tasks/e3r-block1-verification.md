@@ -166,3 +166,98 @@ replay-from-RECEIVED seeds the row and redelivers (scenario 10) ✓ · `CreatePa
 **Verdict: Block 2 functionally closed** (pipeline real, vectors byte-exact, scenarios 6/7/8/10 + ignored×3 +
 full loop + happy-path atomicity green in CI), **with BD-12/BD-13 and the atomicity guard carried as Block 3
 step 0** — small code closures before documentation truth, so the matrices cite final tests.
+
+---
+
+## Block 3 — Step 0 remainder verified real; closure handoff VOID (R7/R8 absent from main) — 2026-08-30, HEAD `1e9dec6`
+
+**Chain (all API-verified, exactly 3 commits since `f11cd2c`):** `0eeda42` (BD-14 ratification, 18:43Z; run #27
+`33328906357` ✅) → `7abee75` (BD-13 residual, 18:58Z; run #28 `33329581906` ✅) → `1e9dec6` (BD-11
+failure-injection IT, 19:29Z; run **#29** `33331033505` ✅) = main. Aggregate diff across all three: **2 files
+only** — `WebhookIntakeUseCase.java` (+19/−6) and `WebhookIntakeIT.java` (+72/−0).
+
+### Step 0 remainder — verified line-level, all three REAL this time
+
+- **BD-13 residual ✓ (message = diff):** `parsePayload` parses `paidAt` inside the strict block
+  (`DateTimeParseException` → IAE → row `IGNORED`); `ParsedPayload` now carries `paidAtText` + pre-parsed
+  `Instant`; `processFromPayload` uses `payload.paidAt()`. Poison IT
+  `malformed_paidAt_is_ignored_with_200_and_no_outbox` (signature-valid, `paidAt: "not-a-date"` → 200 ignored,
+  row `IGNORED`, payment `PENDING`, zero outbox).
+- **BD-11 guard ✓ (the real one):** `atomicity_failure_injection_outbox_failure_rolls_back_and_recovery_works` —
+  test-local trigger `fail_outbox_insert` on `payments.outbox` (BEFORE INSERT RAISE EXCEPTION; DDL in the
+  Testcontainer = test infrastructure, not Flyway) → valid webhook → **500**, row `RECEIVED`, payment
+  **`PENDING`**, zero outbox rows → drop trigger → redeliver same payload → `200 processed`, `CONFIRMED`,
+  exactly 1 outbox row, `PROCESSED`. Design property stated in the test: pass-through executor ⇒ payment
+  already committed ⇒ "payment NOT confirmed" assert goes red. This is the guard that catches the BD-11
+  regression class.
+- **BD-14 ✓:** javadoc on `WEBHOOK_AUDIT_ACTOR` ("Ratified system actor for PSP callbacks (owner decision
+  2026-08-30, E3R BD-14); zero UUID is intentional and greppable"); happy-path IT asserts
+  `audit_log.actor_key_id = 00000000-…` for `confirm_from_webhook`.
+
+### But the closure handoff is VOID as epic-closure evidence
+
+- Handoff claims "E3/E4/E3R all ✅ on main", "R7/R8 Complete", "Register zeroed", ledger flips citing
+  #19/22/28 (E3), #24–#28 (E4), #28 (E3R) — **none of it exists on main.** `docs/epics.md` at `1e9dec6` still
+  reads: E3 `◐ reopened (E3R)`, E4 `◐ reopened (E3R)`, E3R `◐ spec set published — blocks E5 and E6`.
+- No commits touch any matrix, README, CHANGELOG, `AGENTS.md`, `docs/lessons.md`, or the E4 spec — the
+  aggregate file list proves it for all three commits at once.
+- The `0eeda42` message claims "E4 §5.3 step 7 amended" — no docs file in any diff → **4th message≠diff
+  instance** → registered as part of **TD-12**.
+- Handoff cites "run #28 `33331033505`" — that id is **run #29** (verified in the run object). Even the cited
+  evidence is internally inconsistent.
+- Two possible causes, decided by `git log origin/main..main` in the local repo: (a) R7/R8 committed locally,
+  **not pushed** (push is the owner's action — same shape as Block 2's "all done" that outran the push);
+  (b) never written — then this is fabrication at epic-close severity, the exact disease E3R exists to cure.
+
+**Status: E3R remains OPEN.** Step 0 remainder is accepted (all three items verified real, green in CI);
+R7/R8 remain outstanding. **E6 is NOT commissioned.** Ledger flips stay forbidden until the docs land, the
+register is actually zeroed on main, and the flip changeset is the LAST commit with its own green run id
+cited at that HEAD.
+
+---
+
+## Block 3 — closure audit: substance REAL, citation layer defective → TD-13 — 2026-08-30, HEAD `3b60ba8`
+
+**(Supersedes the VOID ruling above: the missing R7/R8 landed. That ruling was correct at its HEAD; the
+`git log origin/main..main` outcome was (a) — local unpushed commits.)**
+
+**Chain (API-verified):** `1e9dec6` → **`3b60ba8`** (docs R7/R8, 20:28:11Z, parent verified) = main. Run
+**#30** (`33333739409`) = **success**, `head_sha = 3b60ba8` — the flip changeset is LAST with its own green
+run at that HEAD ✓. Landed (raw-verified this audit): `docs/epics.md` E3/E4/E3R **flipped ✅** with dates +
+run ids and an updated correction note ("E3R closed"); `tasks/e3r-acceptance-matrix.md` rebuilt. README,
+CHANGELOG, AGENTS.md, lessons #14, e3/e4 matrices landed per the commit message (spot-check next docs pass).
+
+**Run `33288538459` resolved:** run_number **#20**, head `c2809c1` ("restore golden spec assertions to
+create-path ITs (E3R A0)"), success — the handoff's "#17" and the matrix's "#15/#22" are label errors.
+
+### Verified run-id ↔ run-number table (source of truth for the TD-13 correction commit)
+
+| Run | Id | Head | Meaning |
+|---|---|---|---|
+| #17 | `33282406570` | `e415de0` | baseline |
+| #18 | `33282800600` | `b2b2b30` | designed red (R1) |
+| #19 | `33285295818` | `a678184` | create path green (R2–R4) |
+| **#20** | **`33288538459`** | **`c2809c1`** | A0 golden assertions restored |
+| #22 | `33289414922` | `f7cb484` | A0 7/7 + R5 validator + R6p1 |
+| #23 | `33290417383` | `db9d5b5` | R6p2 wiring |
+| #24 | `33318535724` | `a4213ab` | 8 webhook ITs |
+| #25 | `33321575303` | `ffc596c` | 9th IT (full loop set complete) |
+| #26 | `33326648770` | `f11cd2c` | BD-12/13 partial + sentinel |
+| #27 | `33328906357` | `0eeda42` | BD-14 ratification + audit-actor assert |
+| #28 | `33329581906` | `7abee75` | BD-13 residual paidAt guard + poison IT |
+| #29 | `33331033505` | `1e9dec6` | BD-11 failure-injection guard |
+| **#30** | **`33333739409`** | **`3b60ba8`** | docs R7/R8 + flips (final) |
+
+(#15/#16 predate this audit's verified window; verify locally before citing.)
+
+### Verdict
+
+- **Flips STAND** — verified TRUE: every register item carries a real fix + real CI test + green run,
+  verified line-level across Blocks 1–3. E3, E4, E3R are substantively complete.
+- **TD-13 registered** against the citation layer: the e3r matrix reintroduces TD-9's off-by-one misquote AND
+  the rejected-paraphrase R-structure; omits BD-10…BD-14/TD-7…TD-11 traceability rows; and mispairs
+  run numbers ↔ ids in the matrix, the ledger flip rows and the correction note (see register row for the
+  itemized list). Third consecutive handoff with wrong run labels.
+- **Required correction (docs-only, no code, no re-flip):** one commit fixing the matrix ids/structure,
+  traceability rows, artifact index, and every id↔number pair per the table above — rides as E6 block step 0.
+- **E6 authorized** (pending the usual 4-doc commissioning set); E5 follows sequentially.
