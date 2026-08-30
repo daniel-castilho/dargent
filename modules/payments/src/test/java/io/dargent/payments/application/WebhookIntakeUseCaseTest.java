@@ -14,6 +14,9 @@ import io.dargent.payments.domain.port.out.WebhookEventStore;
 import io.dargent.shared.money.Money;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -24,9 +27,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * TDD for WebhookIntakeUseCase (E4 spec §5.3).
@@ -78,25 +81,36 @@ class WebhookIntakeUseCaseTest {
 
     static class FakePaymentRepository implements PaymentRepository {
         final Map<Txid, Payment> store = new LinkedHashMap<>();
+        final Map<Txid, Integer> committedVersions = new LinkedHashMap<>();
 
         @Override
         public void save(Payment payment) {
             store.put(payment.txid(), payment);
+            committedVersions.put(payment.txid(), payment.version());
         }
 
         @Override
         public Optional<Payment> findByTxid(Txid txid) {
-            return Optional.ofNullable(store.get(txid));
+            Payment stored = store.get(txid);
+            if (stored == null) return Optional.empty();
+            // Return a copy so mutations don't affect the stored version
+            return Optional.of(Payment.restore(
+                    stored.id(), stored.txid(), stored.merchantId(), stored.amount(),
+                    stored.description(), stored.expiresAt(), stored.createdAt(),
+                    stored.status(), stored.version(), stored.endToEndId(),
+                    stored.fee(), stored.net(), stored.lateConfirmation(),
+                    stored.confirmedAt(), stored.refunded().cents()));
         }
 
         @Override
         public boolean updateIfVersionMatches(Payment payment, int expectedVersion) {
-            Payment existing = store.get(payment.txid());
-            if (existing == null || existing.version() != expectedVersion) {
+            Integer committed = committedVersions.get(payment.txid());
+            if (committed == null || committed != expectedVersion) {
                 return false;
             }
             payment.markPersistedVersion(expectedVersion + 1);
             store.put(payment.txid(), payment);
+            committedVersions.put(payment.txid(), expectedVersion + 1);
             return true;
         }
     }
@@ -123,10 +137,41 @@ class WebhookIntakeUseCaseTest {
         }
     }
 
-    // Simple transaction executor that runs the callback directly
-    @FunctionalInterface
-    interface TxExecutor {
-        <T> T execute(java.util.function.Supplier<T> action);
+    /**
+     * TransactionTemplate that runs the callback synchronously with no real
+     * transaction manager (unit-test friendly). Used to prove the use case
+     * actually executes its work inside a TransactionTemplate (BD-11 fix).
+     */
+    static class DirectTransactionTemplate extends TransactionTemplate {
+        @Override
+        public <T> T execute(TransactionCallback<T> action) {
+            return action.doInTransaction(null);
+        }
+    }
+
+    /**
+     * TransactionTemplate that rolls back all state changes when the callback
+     * throws, emulating Spring's rollback semantics for the atomicity test.
+     */
+    static class SnapshotRollbackTransactionTemplate extends TransactionTemplate {
+        private final Runnable capture;
+        private final Runnable restore;
+
+        SnapshotRollbackTransactionTemplate(Runnable capture, Runnable restore) {
+            this.capture = capture;
+            this.restore = restore;
+        }
+
+        @Override
+        public <T> T execute(TransactionCallback<T> action) {
+            capture.run();
+            try {
+                return action.doInTransaction(null);
+            } catch (RuntimeException e) {
+                restore.run();
+                throw e;
+            }
+        }
     }
 
     // ---- test fixture ----
@@ -136,13 +181,11 @@ class WebhookIntakeUseCaseTest {
     private FakeOutboxWriter outboxWriter;
     private FakeAuditWriter auditWriter;
     private WebhookSignatureValidator signatureValidator;
-    private TxExecutor txExecutor;
     private EventSerializer eventSerializer;
     private Clock clock;
 
     private WebhookIntakeUseCase useCase;
 
-    private static final String SECRET = "dev-only-secret";
     private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2026-08-29T12:00:00Z"), ZoneOffset.UTC);
     private static final UUID MERCHANT = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final Txid TXID = new Txid("8KD4Z9X2Q7W1M5T3R6Y0A1B2C");
@@ -151,7 +194,6 @@ class WebhookIntakeUseCaseTest {
     private static final String PSP_EVENT_ID = "psp-evt-test-001";
     private static final String TYPE = "payment.confirmed";
     private static final String PAYLOAD_RAW = "{\"eventId\":\"psp-evt-test-001\",\"type\":\"payment.confirmed\",\"txid\":\"8KD4Z9X2Q7W1M5T3R6Y0A1B2C\",\"endToEndId\":\"E9040381234567890123456789012345\",\"amount\":10000,\"paidAt\":\"2026-08-29T00:00:00Z\"}";
-    private static final String SIGNATURE = "549eabc4c6f862fdb9322861f43091039de9c75de8107a60945d464755549113";
 
     @BeforeEach
     void setUp() {
@@ -163,11 +205,8 @@ class WebhookIntakeUseCaseTest {
         eventSerializer = new EventSerializer();
         clock = FIXED_CLOCK;
 
-        // Simple transaction executor that runs synchronously
-        WebhookIntakeUseCase.TransactionExecutor txExecutor = Supplier::get;
-
         useCase = new WebhookIntakeUseCase(webhookStore, paymentRepo, outboxWriter, auditWriter,
-                signatureValidator, txExecutor, eventSerializer, clock);
+                signatureValidator, new DirectTransactionTemplate(), eventSerializer, clock);
     }
 
     // ---- helper to seed a PENDING payment ----
@@ -195,17 +234,14 @@ class WebhookIntakeUseCaseTest {
 
         assertThat(outcome).isInstanceOf(WebhookIntakeUseCase.Outcome.Processed.class);
 
-        // webhook event marked PROCESSED
         assertThat(webhookStore.store.get(PROVIDER_EVENT_ID).status()).isEqualTo("PROCESSED");
 
-        // payment confirmed with fee=100, net=9900
         Payment payment = paymentRepo.findByTxid(TXID).orElseThrow();
         assertThat(payment.status()).isEqualTo(PaymentStatus.CONFIRMED);
         assertThat(payment.endToEndId()).isEqualTo(END_TO_END_ID);
         assertThat(payment.fee().cents()).isEqualTo(100);
         assertThat(payment.net().cents()).isEqualTo(9900);
 
-        // outbox payment.confirmed with {amount, fee, net, late:false}
         assertThat(outboxWriter.entries).hasSize(1);
         assertThat(outboxWriter.entries.get(0).type()).isEqualTo("payment.confirmed");
         String payload = outboxWriter.entries.get(0).payload();
@@ -214,7 +250,6 @@ class WebhookIntakeUseCaseTest {
         assertThat(payload).contains("\"net\":9900");
         assertThat(payload).contains("\"late\":false");
 
-        // audit log
         assertThat(auditWriter.entries).hasSize(1);
         assertThat(auditWriter.entries.get(0).commandName()).isEqualTo("confirm_from_webhook");
         assertThat(auditWriter.entries.get(0).merchantId()).isEqualTo(MERCHANT);
@@ -225,13 +260,10 @@ class WebhookIntakeUseCaseTest {
     void duplicate_provider_event_id_marked_PROCESSED_returns_duplicate() {
         seedPayment(PaymentStatus.PENDING);
 
-        // First call
         useCase.execute(input());
-        // Second call with same provider_event_id
         var outcome2 = useCase.execute(input());
 
         assertThat(outcome2).isInstanceOf(WebhookIntakeUseCase.Outcome.Duplicate.class);
-        // Only one outbox entry, one audit entry
         assertThat(outboxWriter.entries).hasSize(1);
         assertThat(auditWriter.entries).hasSize(1);
     }
@@ -240,7 +272,6 @@ class WebhookIntakeUseCaseTest {
     void duplicate_RECEIVED_reprocesses_and_succeeds() {
         seedPayment(PaymentStatus.PENDING);
 
-        // Insert a RECEIVED row manually (simulating crash after insert, before processing)
         WebhookEventRecord received = new WebhookEventRecord(
                 UUID.randomUUID(), PROVIDER_EVENT_ID, PSP_EVENT_ID, TYPE, TXID.value(),
                 PAYLOAD_RAW, true, "RECEIVED", FIXED_CLOCK.instant(), null
@@ -271,7 +302,7 @@ class WebhookIntakeUseCaseTest {
 
     @Test
     void unknown_txid_marks_IGNORED_returns_ignored() {
-        String badTxid = "9KD4Z9X2Q7W1M5T3R6Y0A1B2D"; // different
+        String badTxid = "9KD4Z9X2Q7W1M5T3R6Y0A1B2D";
         String badProviderId = END_TO_END_ID.value() + "|" + TYPE;
         String badPayload = PAYLOAD_RAW.replace(TXID.value(), badTxid);
 
@@ -285,7 +316,6 @@ class WebhookIntakeUseCaseTest {
 
     @Test
     void amount_mismatch_marks_IGNORED_returns_ignored() {
-        // Payment is 10000, payload says 9999
         seedPayment(PaymentStatus.PENDING);
         String badPayload = PAYLOAD_RAW.replace("10000", "9999");
         String badProviderId = END_TO_END_ID.value() + "|" + TYPE;
@@ -301,11 +331,7 @@ class WebhookIntakeUseCaseTest {
     void confirm_lost_race_returns_duplicate() {
         seedPayment(PaymentStatus.PENDING);
 
-        // First call succeeds
         useCase.execute(input());
-
-        // Second call with same provider_event_id but different payload (simulating race)
-        // Actually the dedupe is on provider_event_id, so second call hits the duplicate path
         var outcome = useCase.execute(input());
 
         assertThat(outcome).isInstanceOf(WebhookIntakeUseCase.Outcome.Duplicate.class);
@@ -322,7 +348,7 @@ class WebhookIntakeUseCaseTest {
 
     @Test
     void invalid_txid_in_payload_returns_ignored() {
-        String badTxid = "not-a-valid-txid"; // fails Txid validation
+        String badTxid = "not-a-valid-txid";
         String badPayload = PAYLOAD_RAW.replace(TXID.value(), badTxid);
         String badProviderId = END_TO_END_ID.value() + "|" + TYPE;
 
@@ -338,10 +364,92 @@ class WebhookIntakeUseCaseTest {
 
         var outcome = useCase.execute(input());
 
-        // EXPIRED can be resurrected (late=true) - D6
         assertThat(outcome).isInstanceOf(WebhookIntakeUseCase.Outcome.Processed.class);
         Payment payment = paymentRepo.findByTxid(TXID).orElseThrow();
         assertThat(payment.status()).isEqualTo(PaymentStatus.CONFIRMED);
         assertThat(payment.lateConfirmation()).isTrue();
+    }
+
+    @Test
+    void outbox_failure_rolls_back_confirm_and_keeps_webhook_RECEIVED() {
+        // Atomicity test (BD-11): failure after confirm but before outbox insert must roll
+        // back the confirm + markProcessed and leave webhook event as RECEIVED (recovery point).
+        seedPayment(PaymentStatus.PENDING);
+
+        FakeOutboxWriter failingOutbox = new FakeOutboxWriter() {
+            @Override
+            public void append(String aggregateId, String type, int version, String payloadJson, String requestId) {
+                throw new RuntimeException("simulated outbox failure");
+            }
+        };
+
+        SnapshotRollbackTransactionTemplate rollbackTx = new SnapshotRollbackTransactionTemplate(
+                () -> rollbackSnapshot = snapshotState(),
+                () -> restoreFromSnapshot(rollbackSnapshot));
+
+        WebhookIntakeUseCase atomicUseCase = new WebhookIntakeUseCase(
+                webhookStore, paymentRepo, failingOutbox, auditWriter,
+                signatureValidator, rollbackTx, eventSerializer, clock);
+
+        assertThatThrownBy(() -> atomicUseCase.execute(input()))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("simulated outbox failure");
+
+        WebhookEventRecord event = webhookStore.store.get(PROVIDER_EVENT_ID);
+        assertThat(event).isNotNull();
+        assertThat(event.status()).isEqualTo("RECEIVED");
+
+        Payment payment = paymentRepo.findByTxid(TXID).orElseThrow();
+        assertThat(payment.status()).isEqualTo(PaymentStatus.PENDING);
+        assertThat(payment.endToEndId()).isNull();
+
+        assertThat(failingOutbox.entries).isEmpty();
+        assertThat(auditWriter.entries).isEmpty();
+    }
+
+    private Object rollbackSnapshot;
+
+    private Object snapshotState() {
+        Map<String, Object> snap = new LinkedHashMap<>();
+        snap.put("webhook", deepCopyWebhook(webhookStore.store));
+        snap.put("payments", deepCopyPayments(paymentRepo.store));
+        snap.put("outbox", new java.util.ArrayList<>(outboxWriter.entries));
+        snap.put("audit", new java.util.ArrayList<>(auditWriter.entries));
+        return snap;
+    }
+
+    private Map<String, WebhookEventRecord> deepCopyWebhook(Map<String, WebhookEventRecord> src) {
+        Map<String, WebhookEventRecord> copy = new LinkedHashMap<>();
+        for (WebhookEventRecord r : src.values()) {
+            copy.put(r.providerEventId(), new WebhookEventRecord(
+                    r.id(), r.providerEventId(), r.pspEventId(), r.type(), r.txid(),
+                    r.payloadRaw(), r.signatureValid(), r.status(), r.receivedAt(), r.processedAt()));
+        }
+        return copy;
+    }
+
+    private Map<Txid, Payment> deepCopyPayments(Map<Txid, Payment> src) {
+        Map<Txid, Payment> copy = new LinkedHashMap<>();
+        for (Payment p : src.values()) {
+            copy.put(p.txid(), Payment.restore(
+                    p.id(), p.txid(), p.merchantId(), p.amount(), p.description(),
+                    p.expiresAt(), p.createdAt(), p.status(), p.version(), p.endToEndId(),
+                    p.fee(), p.net(), p.lateConfirmation(), p.confirmedAt(),
+                    p.refunded() == null ? 0L : p.refunded().cents()));
+        }
+        return copy;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void restoreFromSnapshot(Object snapshot) {
+        Map<String, Object> snap = (Map<String, Object>) snapshot;
+        webhookStore.store.clear();
+        webhookStore.store.putAll((Map<String, WebhookEventRecord>) snap.get("webhook"));
+        paymentRepo.store.clear();
+        paymentRepo.store.putAll((Map<Txid, Payment>) snap.get("payments"));
+        outboxWriter.entries.clear();
+        outboxWriter.entries.addAll((List<FakeOutboxWriter.OutboxEntry>) snap.get("outbox"));
+        auditWriter.entries.clear();
+        auditWriter.entries.addAll((List<FakeAuditWriter.AuditEntry>) snap.get("audit"));
     }
 }

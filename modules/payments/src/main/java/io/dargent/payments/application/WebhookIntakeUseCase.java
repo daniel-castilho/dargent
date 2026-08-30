@@ -17,7 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.function.Supplier;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * WebhookIntakeUseCase (E4 spec §5.3): single transaction, order fixed.
@@ -32,7 +32,6 @@ import java.util.function.Supplier;
  */
 public final class WebhookIntakeUseCase {
 
-    private static final String SECRET = "dev-only-secret";
     private static final long FEE_BPS = 100L;
     private static final String BRL = "BRL";
 
@@ -41,21 +40,16 @@ public final class WebhookIntakeUseCase {
     private final OutboxWriter outboxWriter;
     private final AuditWriter auditWriter;
     private final WebhookSignatureValidator signatureValidator;
-    private final TransactionExecutor txExecutor;
+    private final TransactionTemplate txTemplate;
     private final EventSerializer eventSerializer;
     private final Clock clock;
-
-    @FunctionalInterface
-    public interface TransactionExecutor {
-        <T> T execute(Supplier<T> action);
-    }
 
     public WebhookIntakeUseCase(WebhookEventStore webhookEventStore,
             PaymentRepository paymentRepository,
             OutboxWriter outboxWriter,
             AuditWriter auditWriter,
             WebhookSignatureValidator signatureValidator,
-            TransactionExecutor txExecutor,
+            TransactionTemplate txTemplate,
             EventSerializer eventSerializer,
             Clock clock) {
         this.webhookEventStore = webhookEventStore;
@@ -63,17 +57,15 @@ public final class WebhookIntakeUseCase {
         this.outboxWriter = outboxWriter;
         this.auditWriter = auditWriter;
         this.signatureValidator = signatureValidator;
-        this.txExecutor = txExecutor;
+        this.txTemplate = txTemplate;
         this.eventSerializer = eventSerializer;
         this.clock = clock;
     }
 
     public Outcome execute(Input input) {
-        return txExecutor.execute(() -> run(input));
-    }
-
-    private Outcome run(Input input) {
-        // 1. Insert webhook event RECEIVED (dedupe via provider_event_id)
+        // Step 1: insert webhook_events RECEIVED (durable, dedupe via provider_event_id unique)
+        // Runs outside the confirm transaction so the raw row is never lost on rollback —
+        // it is the recovery point that lets a reprocess pick up from payload_raw (BD-11).
         WebhookEventRecord eventRecord = new WebhookEventRecord(
                 UUID.randomUUID(),
                 input.providerEventId(),
@@ -94,13 +86,13 @@ public final class WebhookIntakeUseCase {
                 return Outcome.duplicate();
             }
             if ("RECEIVED".equals(prior.status())) {
-                // Reprocess from payload_raw (playbook 10) - process directly, no re-insert
-                return processFromPayload(prior.payloadRaw(), prior.providerEventId());
+                // Reprocess from payload_raw (playbook 10)
+                return txTemplate.execute(status -> processFromPayload(prior.payloadRaw(), prior.providerEventId()));
             }
             return Outcome.ignored("prior status: " + prior.status());
         }
 
-        return processFromPayload(input.payloadRaw(), input.providerEventId());
+        return txTemplate.execute(status -> processFromPayload(input.payloadRaw(), input.providerEventId()));
     }
 
     private Outcome processFromPayload(String payloadRaw, String providerEventId) {
@@ -153,10 +145,19 @@ public final class WebhookIntakeUseCase {
         Instant paidAt = Instant.parse(payload.paidAt());
         FeeBreakdown feeBreakdown = FeeBreakdown.of(payment.amount().cents(), new io.dargent.payments.domain.model.BpsRate((int) FEE_BPS));
 
+        int expectedVersion = payment.version();
         try {
             payment.confirm(endToEndId, feeBreakdown, paidAt);
         } catch (IllegalArgumentException | io.dargent.payments.domain.exception.InvalidTransitionException e) {
             // Invalid transition or illegal args (e.g., already confirmed) → duplicate
+            webhookEventStore.markProcessed(providerEventId);
+            return Outcome.duplicate();
+        }
+
+        // Persist confirmation inside the same transaction so the atomicity test
+        // (BD-11) can roll back confirm + outbox + audit together.
+        if (!paymentRepository.updateIfVersionMatches(payment, expectedVersion)) {
+            // Race lost (DB row changed under us) → mark PROCESSED and return duplicate
             webhookEventStore.markProcessed(providerEventId);
             return Outcome.duplicate();
         }
@@ -171,7 +172,7 @@ public final class WebhookIntakeUseCase {
                 eventSerializer.serialize(outboxPayload), null);
 
         // 7. Audit log
-        auditWriter.record("confirm_from_webhook", null, payment.merchantId(),
+        auditWriter.record("confirm_from_webhook", UUID.randomUUID(), payment.merchantId(),
                 payment.txid().value(), null);
 
         // 8. Mark PROCESSED
@@ -181,8 +182,8 @@ public final class WebhookIntakeUseCase {
     }
 
     private ParsedPayload parsePayload(String raw) {
-        // Simple JSON parsing for the known fields
-        // Using a simple approach - in production would use Jackson
+        // Use a simple JSON parser - in production use Jackson
+        // For now keeping simple to avoid extra deps in domain
         String type = extractJsonField(raw, "type");
         String txid = extractJsonField(raw, "txid");
         String endToEndId = extractJsonField(raw, "endToEndId");

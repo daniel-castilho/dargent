@@ -111,11 +111,10 @@ public class PaymentsCompositionConfig {
     WebhookIntakeUseCase webhookIntakeUseCase(WebhookEventStore webhookEventStore,
             PaymentRepository paymentRepository, OutboxWriter outboxWriter,
             AuditWriter auditWriter, WebhookSignatureValidator webhookSignatureValidator,
+            TransactionTemplate transactionTemplate,
             EventSerializer eventSerializer, Clock clock) {
-        // Simple transaction executor that runs synchronously (no Spring TX manager needed for unit/IT)
-        WebhookIntakeUseCase.TransactionExecutor txExecutor = java.util.function.Supplier::get;
         return new WebhookIntakeUseCase(webhookEventStore, paymentRepository, outboxWriter, auditWriter,
-                webhookSignatureValidator, txExecutor, eventSerializer, clock);
+                webhookSignatureValidator, transactionTemplate, eventSerializer, clock);
     }
 
     @Bean
@@ -124,9 +123,10 @@ public class PaymentsCompositionConfig {
             WebhookEventStore webhookEventStore,
             ErrorResponseWriter errorWriter,
             ObjectMapper objectMapper,
+            Clock clock,
             @Value("${dargent.psp.webhook-secret}") String secret) {
         return new WebhookController(webhookIntakeUseCase, webhookSignatureValidator,
-                webhookEventStore, errorWriter, objectMapper, secret);
+                webhookEventStore, errorWriter, objectMapper, clock, secret);
     }
 
     @Bean

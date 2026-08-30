@@ -38,6 +38,11 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
             FilterChain filterChain) throws ServletException, IOException {
+        // Webhook intake is HMAC-authenticated (E4) — skip API-key auth.
+        if (request.getRequestURI().startsWith("/webhooks/psp")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
         String auth = request.getHeader(AUTH_HEADER);
         if (auth == null || !auth.startsWith(BEARER_PREFIX)) {
             errorWriter.write(request, response, ErrorCode.UNAUTHORIZED, "Missing or invalid Authorization header", (Map<String, String>) null);

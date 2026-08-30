@@ -26,8 +26,8 @@ public class JdbcWebhookEventStore implements WebhookEventStore {
         Optional<WebhookEventRecord> inserted = jdbc.sql("""
                 insert into payments.webhook_events (
                     id, provider_event_id, psp_event_id, type, txid, payload_raw, signature_valid, status
-                ) values (
-                    :id, :providerEventId, :pspEventId, :type, :txid, :payloadRaw::jsonb, :signatureValid, 'RECEIVED'
+                )                 values (
+                    :id, :providerEventId, :pspEventId, :type, :txid, :payloadRaw::jsonb, :signatureValid, :status
                 )
                 on conflict (provider_event_id) do nothing
                 returning id, provider_event_id, psp_event_id, type, txid, payload_raw, signature_valid, status, received_at, processed_at
@@ -39,6 +39,7 @@ public class JdbcWebhookEventStore implements WebhookEventStore {
                 .param("txid", record.txid())
                 .param("payloadRaw", record.payloadRaw())
                 .param("signatureValid", record.signatureValid())
+                .param("status", record.status())
                 .query(WebhookEventRecord.class)
                 .optional();
         if (inserted.isPresent()) {
