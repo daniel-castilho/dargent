@@ -95,6 +95,11 @@ public class PaymentsCompositionConfig {
         return Clock.systemUTC();
     }
 
+    @Bean
+    ObjectMapper objectMapper() {
+        return new tools.jackson.databind.json.JsonMapper();
+    }
+
     // --- webhook beans (E4 MS-3) ---
 
     @Bean
@@ -112,9 +117,10 @@ public class PaymentsCompositionConfig {
             PaymentRepository paymentRepository, OutboxWriter outboxWriter,
             AuditWriter auditWriter, WebhookSignatureValidator webhookSignatureValidator,
             TransactionTemplate transactionTemplate,
-            EventSerializer eventSerializer, Clock clock) {
+            EventSerializer eventSerializer, Clock clock,
+            ObjectMapper objectMapper) {
         return new WebhookIntakeUseCase(webhookEventStore, paymentRepository, outboxWriter, auditWriter,
-                webhookSignatureValidator, transactionTemplate, eventSerializer, clock);
+                webhookSignatureValidator, transactionTemplate, eventSerializer, clock, objectMapper);
     }
 
     @Bean

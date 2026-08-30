@@ -18,6 +18,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * WebhookIntakeUseCase (E4 spec §5.3): single transaction, order fixed.
@@ -34,6 +36,7 @@ public final class WebhookIntakeUseCase {
 
     private static final long FEE_BPS = 100L;
     private static final String BRL = "BRL";
+    private static final UUID WEBHOOK_AUDIT_ACTOR = UUID.fromString("00000000-0000-0000-0000-000000000000");
 
     private final WebhookEventStore webhookEventStore;
     private final PaymentRepository paymentRepository;
@@ -43,6 +46,7 @@ public final class WebhookIntakeUseCase {
     private final TransactionTemplate txTemplate;
     private final EventSerializer eventSerializer;
     private final Clock clock;
+    private final ObjectMapper objectMapper;
 
     public WebhookIntakeUseCase(WebhookEventStore webhookEventStore,
             PaymentRepository paymentRepository,
@@ -51,7 +55,8 @@ public final class WebhookIntakeUseCase {
             WebhookSignatureValidator signatureValidator,
             TransactionTemplate txTemplate,
             EventSerializer eventSerializer,
-            Clock clock) {
+            Clock clock,
+            ObjectMapper objectMapper) {
         this.webhookEventStore = webhookEventStore;
         this.paymentRepository = paymentRepository;
         this.outboxWriter = outboxWriter;
@@ -60,6 +65,7 @@ public final class WebhookIntakeUseCase {
         this.txTemplate = txTemplate;
         this.eventSerializer = eventSerializer;
         this.clock = clock;
+        this.objectMapper = objectMapper;
     }
 
     public Outcome execute(Input input) {
@@ -171,8 +177,8 @@ public final class WebhookIntakeUseCase {
         outboxWriter.append(payment.txid().value(), "payment.confirmed", 1,
                 eventSerializer.serialize(outboxPayload), null);
 
-        // 7. Audit log
-        auditWriter.record("confirm_from_webhook", UUID.randomUUID(), payment.merchantId(),
+        // 7. Audit log — webhook has no API key, use sentinel actor
+        auditWriter.record("confirm_from_webhook", WEBHOOK_AUDIT_ACTOR, payment.merchantId(),
                 payment.txid().value(), null);
 
         // 8. Mark PROCESSED
@@ -182,36 +188,30 @@ public final class WebhookIntakeUseCase {
     }
 
     private ParsedPayload parsePayload(String raw) {
-        // Use a simple JSON parser - in production use Jackson
-        // For now keeping simple to avoid extra deps in domain
-        String type = extractJsonField(raw, "type");
-        String txid = extractJsonField(raw, "txid");
-        String endToEndId = extractJsonField(raw, "endToEndId");
-        String amountStr = extractJsonField(raw, "amount");
-        String paidAt = extractJsonField(raw, "paidAt");
-        long amount = Long.parseLong(amountStr);
-        return new ParsedPayload(type, txid, endToEndId, amount, paidAt);
-    }
+        JsonNode node;
+        try {
+            node = objectMapper.readTree(raw);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("invalid JSON payload: " + e.getMessage(), e);
+        }
 
-    private String extractJsonField(String json, String field) {
-        String search = "\"" + field + "\":";
-        int idx = json.indexOf(search);
-        if (idx == -1) {
-            throw new IllegalArgumentException("missing field: " + field);
-        }
-        int start = idx + search.length();
-        // Skip whitespace
-        while (start < json.length() && Character.isWhitespace(json.charAt(start))) start++;
-        if (json.charAt(start) == '"') {
-            start++;
-            int end = json.indexOf('"', start);
-            return json.substring(start, end);
-        } else {
-            // Number
-            int end = start;
-            while (end < json.length() && (Character.isDigit(json.charAt(end)) || json.charAt(end) == '-')) end++;
-            return json.substring(start, end);
-        }
+        String type = node.path("type").asText(null);
+        String txid = node.path("txid").asText(null);
+        String endToEndId = node.path("endToEndId").asText(null);
+        JsonNode amountNode = node.path("amount");
+        JsonNode paidAtNode = node.path("paidAt");
+
+        if (type == null) throw new IllegalArgumentException("missing field: type");
+        if (txid == null) throw new IllegalArgumentException("missing field: txid");
+        if (endToEndId == null) throw new IllegalArgumentException("missing field: endToEndId");
+        if (amountNode.isMissingNode()) throw new IllegalArgumentException("missing field: amount");
+        if (!amountNode.isIntegralNumber()) throw new IllegalArgumentException("amount must be an integer");
+        if (paidAtNode.isMissingNode()) throw new IllegalArgumentException("missing field: paidAt");
+
+        long amount = amountNode.asLong();
+        String paidAt = paidAtNode.asText();
+
+        return new ParsedPayload(type, txid, endToEndId, amount, paidAt);
     }
 
     // ------------------------------------------------------------------ models

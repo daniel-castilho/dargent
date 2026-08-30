@@ -23,6 +23,8 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -204,9 +206,10 @@ class WebhookIntakeUseCaseTest {
         signatureValidator = new WebhookSignatureValidator(FIXED_CLOCK);
         eventSerializer = new EventSerializer();
         clock = FIXED_CLOCK;
+        ObjectMapper testMapper = new tools.jackson.databind.json.JsonMapper();
 
         useCase = new WebhookIntakeUseCase(webhookStore, paymentRepo, outboxWriter, auditWriter,
-                signatureValidator, new DirectTransactionTemplate(), eventSerializer, clock);
+                signatureValidator, new DirectTransactionTemplate(), eventSerializer, clock, testMapper);
     }
 
     // ---- helper to seed a PENDING payment ----
@@ -389,7 +392,7 @@ class WebhookIntakeUseCaseTest {
 
         WebhookIntakeUseCase atomicUseCase = new WebhookIntakeUseCase(
                 webhookStore, paymentRepo, failingOutbox, auditWriter,
-                signatureValidator, rollbackTx, eventSerializer, clock);
+                signatureValidator, rollbackTx, eventSerializer, clock, new tools.jackson.databind.json.JsonMapper());
 
         assertThatThrownBy(() -> atomicUseCase.execute(input()))
                 .isInstanceOf(RuntimeException.class)
