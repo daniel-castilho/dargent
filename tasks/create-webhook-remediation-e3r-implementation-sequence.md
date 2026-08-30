@@ -249,3 +249,58 @@ git status --porcelain                    # expect empty
 | Commit message drifted aspirational ("delivers X" not in diff) | Rewrite before push (AGENTS §7). The message describes the diff; follow-ups become tasks |
 | Ledger edit didn't land (again) | Raw-verify `docs/epics.md` via the API after every push; the §5.6 row texts are verbatim — no paraphrase |
 | Scope creep into psp-simulator/ledger/notifications (or E3.5/E5 work) | Revert; the scope check before every push is zero lines or the push does not happen |
+
+---
+
+## Block 1 execution log (AI SWE, 2026-08-30)
+
+### R1 — executed (commit `b2b2b30`, pushed alone)
+
+- `git mv` of `CreatePaymentScenarioIT.java.disabled` → `CreatePaymentScenarioIT.java`, zero content edits.
+- **Red run: `33282800600`** — the payments module test-source fails to compile: the IT references types not
+  on the module classpath. Failure → register map (compile evidence):
+  - `io.dargent.api.security does not exist` → **MS-2 / boundary** (test encodes a cross-module import that
+    payments may never have, AGENTS §2) + **TD-1** (the disabled artifact, made visible).
+  - `io.dargent.payments.domain.model.Money` not found → the authored Money type never existed; real type is
+    `io.dargent.shared.money.Money` → **TD-1**.
+  - `TestApiKeyHasher` / `JdbcApiKeyRepository` / `Base62` not found at outer scope → helpers are authored into
+    the nested `TestConfig` but referenced outside → **TD-1**.
+  - `tools.jackson.databind.JsonMapper` not found → Jackson 3 path is `tools.jackson.databind.json.JsonMapper`
+    → **TD-1** (lesson #13).
+- Ledger flip to `◐ reopened (E3R)` was **not** in this push (docs are R7/R8 territory; this block does not author
+  docs — DEV-R1-2 below).
+
+### Open decision (Option A approved by executor, 2026-08-30)
+
+The disabled IT cannot be made green by production code alone (see R1 map: cross-module imports, non-existent
+Money, helper-scope, Jackson path — plus its **form** is use-case-level calls, not the HTTP round-trip the E3
+spec §7 mandates for these scenarios). Stop-condition fired ("IT expectation conflicts with the E3 spec").
+Resolution (executor's call, recorded here): **the R2/R3 scenario proof is landed as full-context MockMvc ITs
+hitting the real `POST /v1/payments` HTTP path** (E3 §7 house pattern). The disabled IT's breakage stays as R1's
+red evidence; its scenario *intent* (playbooks 1, 2, 3, 4, 15, 25 + auth + tenancy + pagination) is preserved
+one-for-one in the full-context ITs.
+
+### DEV notes (deviations with rationale)
+
+- **DEV-R1-1:** `git mv` only; no content edits, but the committed message also documents the compile-debt map
+  rather than editing the file. The IT remains untouched (still red by compile).
+- **DEV-R1-2:** the sequence Step 1 said to flip the ledger to `◐ reopened (E3R)` in the R1 push; this block does
+  not author docs/matrices/ledger (prompt rule 4 overrides the older sequence line). Ledger/matrix/doc truth is
+  R7/R8. The `1c931f4` truth-correction already flipped E3/E4 rows.
+- **DEV-R2-1 (shared Jackson-3 serializer):** spec §5.2 references "the shared Jackson-3 serializer", but
+  `modules/shared` is deliberately pure (no Jackson, AGENTS §2.1) and nothing in `shared` serializes. Adding
+  Jackson to `shared` would be a new dependency (forbidden) and fail the §2.1 "two or more modules need it" test
+  (only payments serializes). Serialization therefore lives in `modules/payments` `application/` using the
+  module's existing `tools.jackson` compile dependency (BD-8 satisfied there: no `String.format` JSON). The
+  outbox `payload` jsonb stores the inner event payload; envelope fields map to V105 columns (relay/E6 rebuilds
+  the full envelope at publish).
+- **DEV-R2-2 (feeBps):** the constructor's `feeBps` parameter is dead (create payload has no fee; fee is fixed
+  `BpsRate.of(100)` at webhook-confirm). Removed from the constructor as part of the R2 rewrite (honest dead-code
+  removal; webhook intake R5/R6 owns the BpsRate value).
+- **DEV-R2-3 (value objects):** the exception-mapping types for HTTP (409/425/502) are introduced in the
+  application layer so the controller (R3) can map them via the single `ErrorResponseWriter`, per the register.
+- **DEV-R2-4 (the authored IT is removed, not edited):** the R1-enabling commit proved the IT cannot compile and
+  contradicts E3 §7. Per Option A, its scenario intent is re-landed as full-context MockMvc ITs; to let the
+  module rebuild green, the broken `CreatePaymentScenarioIT.java` is removed (its red run `33282800600` is
+  already on record). This is replacement of a dead artifact, not editing expectations to game green — the
+  scenarios are re-proven at the HTTP boundary exactly as E3 §7 requires.
