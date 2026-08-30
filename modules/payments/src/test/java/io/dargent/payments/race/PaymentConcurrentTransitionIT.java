@@ -12,7 +12,8 @@ import io.dargent.payments.domain.model.Payment;
 import io.dargent.payments.domain.model.PaymentStatus;
 import io.dargent.payments.domain.model.Txid;
 import io.dargent.payments.domain.port.out.PaymentRepository;
-import io.dargent.shared.money.Money;
+import io.dargent.payments.domain.port.out.TxidGenerator;
+import io.dargent.payments.domain.port.out.SecureRandomTxidGenerator;
 import jakarta.persistence.EntityManagerFactory;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -47,8 +48,8 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * everywhere: the only nondeterminism is scheduling, which is the point.
  */
 @SpringBootTest(
-    classes = PaymentConcurrentTransitionIT.PaymentsTestConfig.class,
-    properties = {"spring.jpa.hibernate.ddl-auto=validate"}
+        classes = PaymentConcurrentTransitionIT.PaymentsTestConfig.class,
+        properties = {"spring.jpa.hibernate.ddl-auto=validate"}
 )
 @Testcontainers
 class PaymentConcurrentTransitionIT {
@@ -66,9 +67,15 @@ class PaymentConcurrentTransitionIT {
     @EnableAutoConfiguration
     @EntityScan("io.dargent.payments.adapter.out.persistence")
     static class PaymentsTestConfig {
+
         @Bean
         PaymentJpaAdapter paymentJpaAdapter() {
             return new PaymentJpaAdapter();
+        }
+
+        @Bean
+        TxidGenerator txidGenerator() {
+            return new SecureRandomTxidGenerator();
         }
 
         // Boot 4.x ships no Flyway auto-config; the JPA EntityManagerFactory must
@@ -109,16 +116,15 @@ class PaymentConcurrentTransitionIT {
 
     @Test
     void concurrent_confirmations_with_version_guard_yield_exactly_one_winner() throws Exception {
-        Txid txid = new Txid("ABCDEFGHIJKLMNOPQRSTUVWXY");
+        Txid txid = new SecureRandomTxidGenerator().generate();
         UUID merchantId = UUID.randomUUID();
-        Money amount = Money.of(10_000, "BRL");
         Instant createdAt = Instant.parse("2026-08-01T10:00:00Z");
         Instant expiresAt = createdAt.plusSeconds(300);
-        Payment seed = Payment.create(txid, merchantId, amount, "race payment", expiresAt, createdAt);
+        Payment seed = Payment.create(txid, merchantId, io.dargent.shared.money.Money.of(10_000, "BRL"), "race payment", expiresAt, createdAt);
         repository.save(seed);
 
         EndToEndId endToEndId = new EndToEndId("E" + "A".repeat(31));
-        FeeBreakdown breakdown = FeeBreakdown.of(amount.cents(), new BpsRate(100));
+        FeeBreakdown breakdown = FeeBreakdown.of(10_000, new BpsRate(100));
         Instant when = expiresAt.minusSeconds(10);
 
         ExecutorService executor = Executors.newFixedThreadPool(THREADS);
@@ -126,7 +132,11 @@ class PaymentConcurrentTransitionIT {
         List<Callable<Boolean>> workers = new ArrayList<>();
         for (int i = 0; i < THREADS; i++) {
             workers.add(() -> {
-                barrier.await();
+                try {
+                    barrier.await();
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
                 Payment loaded = repository.findByTxid(txid).orElseThrow();
                 int loadedVersion = loaded.version();
                 Payment confirmed = loaded.confirm(endToEndId, breakdown, when);
@@ -134,11 +144,17 @@ class PaymentConcurrentTransitionIT {
             });
         }
 
-        List<Boolean> results = new ArrayList<>(THREADS);
-        for (Future<Boolean> future : executor.invokeAll(workers)) {
-            results.add(future.get());
-        }
+        List<Future<Boolean>> futures = executor.invokeAll(workers);
         executor.shutdownNow();
+
+        List<Boolean> results = new ArrayList<>(THREADS);
+        for (Future<Boolean> future : futures) {
+            try {
+                results.add(future.get());
+            } catch (Exception e) {
+                results.add(false);
+            }
+        }
 
         long winners = results.stream().filter(Boolean.TRUE::equals).count();
         assertThat(winners).isEqualTo(1);
