@@ -1,5 +1,6 @@
 package io.dargent.payments.adapter.out.persistence;
 
+import io.dargent.payments.domain.model.OutboxId;
 import io.dargent.payments.domain.port.out.OutboxWriter;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -17,10 +18,12 @@ public class JdbcOutboxWriter implements OutboxWriter {
 
     @Override
     public void append(String aggregateId, String type, int version, String payloadJson, String requestId) {
+        OutboxId id = OutboxId.generate(java.time.Clock.systemUTC());
         jdbc.sql("""
                 insert into payments.outbox (id, aggregate_id, type, version, payload, request_id)
-                values (gen_random_uuid(), :aggregate, :type, :version, :payload::jsonb, :requestId)
+                values (:id, :aggregate, :type, :version, :payload::jsonb, :requestId)
                 """)
+                .param("id", id.value())
                 .param("aggregate", aggregateId)
                 .param("type", type)
                 .param("version", version)
