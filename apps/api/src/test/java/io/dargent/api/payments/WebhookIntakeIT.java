@@ -209,6 +209,51 @@ class WebhookIntakeIT {
                 .param("p", endToEndId + "|" + TYPE).query(String.class).single()).isEqualTo("PROCESSED");
     }
 
+    @Test
+    void atomicity_failure_injection_outbox_failure_rolls_back_and_recovery_works() throws Exception {
+        // BD-11 regression guard: outbox failure after confirm rolls back confirm,
+        // leaves webhook row as RECEIVED (recovery point). Redelivery then succeeds.
+        // Design property: with a pass-through executor this would fail (payment already committed).
+        String txid = createPayment("webhook-atomic-fail-01");
+        String endToEndId = "E9ATOMICFAIL00000000000000000XXX";
+        String body = confirmedBody(txid, endToEndId, 10000);
+        String ts = String.valueOf(FIXED_NOW_SECS);
+
+        // 1. Create a trigger that fails on outbox INSERT (simulates outbox failure)
+        jdbc.sql("""
+            CREATE OR REPLACE FUNCTION fail_outbox_insert() RETURNS trigger AS $$
+            BEGIN
+                RAISE EXCEPTION 'simulated outbox failure';
+            END; $$ LANGUAGE plpgsql;
+            DROP TRIGGER IF EXISTS trg_fail_outbox_insert ON payments.outbox;
+            CREATE TRIGGER trg_fail_outbox_insert
+            BEFORE INSERT ON payments.outbox
+            FOR EACH ROW EXECUTE FUNCTION fail_outbox_insert();
+            """).update();
+
+        // 2. Send valid webhook — expect 500, row stays RECEIVED, payment NOT confirmed
+        var respFail = sendWebhook(String.valueOf(FIXED_NOW_SECS), body);
+        assertThat(respFail.statusCode()).isEqualTo(500);
+        assertThat(jdbc.sql("select status from payments.webhook_events where provider_event_id=:p")
+                .param("p", endToEndId + "|" + TYPE).query(String.class).single()).isEqualTo("RECEIVED");
+        assertThat(payment(txid)[0]).isEqualTo("PENDING");
+        assertThat(jdbc.sql("select count(*) from payments.outbox where aggregate_id=:t and type='payment.confirmed'")
+                .param("t", txid).query(Long.class).single()).isZero();
+
+        // 3. Drop the trigger (simulates fixing the outbox)
+        jdbc.sql("DROP TRIGGER IF EXISTS trg_fail_outbox_insert ON payments.outbox;").update();
+
+        // 4. Redeliver same payload — should now succeed
+        var respRetry = sendWebhook(String.valueOf(FIXED_NOW_SECS), body);
+        assertThat(respRetry.statusCode()).isEqualTo(200);
+        assertThat(parse(respRetry).at("/status").asText()).isEqualTo("processed");
+        assertThat(payment(txid)[0]).isEqualTo("CONFIRMED");
+        assertThat(jdbc.sql("select count(*) from payments.outbox where aggregate_id=:t and type='payment.confirmed'")
+                .param("t", txid).query(Long.class).single()).isEqualTo(1);
+        assertThat(jdbc.sql("select status from payments.webhook_events where provider_event_id=:p")
+                .param("p", endToEndId + "|" + TYPE).query(String.class).single()).isEqualTo("PROCESSED");
+    }
+
     // ------------------------------------------------------------------ fail-closed signatures
 
     @Test
