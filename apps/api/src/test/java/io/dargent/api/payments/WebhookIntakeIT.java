@@ -181,6 +181,28 @@ class WebhookIntakeIT {
         assertThat(payment(txid)[0]).isEqualTo("CONFIRMED");
     }
 
+    @Test
+    void atomicity_happy_path_payment_and_outbox_created_together() throws Exception {
+        // Verifies the real TransactionTemplate makes confirm + outbox atomic:
+        // on success, both payment confirmed AND outbox row appear;
+        // on failure (simulated in unit test with fakes), neither appears.
+        String txid = createPayment("webhook-atomic-01");
+        String endToEndId = "E9ATOMIC00000000000000000000XXXX";
+        String body = confirmedBody(txid, endToEndId, 10000);
+        String ts = String.valueOf(FIXED_NOW_SECS);
+
+        var resp = sendWebhook(ts, body);
+
+        assertThat(resp.statusCode()).isEqualTo(200);
+        assertThat(parse(resp).at("/status").asText()).isEqualTo("processed");
+        assertThat(payment(txid)[0]).isEqualTo("CONFIRMED");
+        // Atomicity: payment confirmed AND outbox row both present
+        assertThat(jdbc.sql("select count(*) from payments.outbox where aggregate_id=:t and type='payment.confirmed'")
+                .param("t", txid).query(Long.class).single()).isEqualTo(1);
+        assertThat(jdbc.sql("select status from payments.webhook_events where provider_event_id=:p")
+                .param("p", endToEndId + "|" + TYPE).query(String.class).single()).isEqualTo("PROCESSED");
+    }
+
     // ------------------------------------------------------------------ fail-closed signatures
 
     @Test
