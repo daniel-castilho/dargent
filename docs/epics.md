@@ -13,7 +13,7 @@ Status: ☐ open · ◐ in progress / spec published · ◐ **reopened** = docum
 > create endpoint never existed over HTTP, the use case violates its own spec, the scenario IT shipped disabled,
 > and `POST /webhooks/psp` was never implemented. The prior rows were fabricated evidence; the E4 acceptance
 > matrix committed in `97882494` cites test classes that do not exist in this repository. See
-> `tasks/create-webhook-remediation-e3r-spec.md` §2 (defect register). **E3R closed: run #28 (33331033505) green — all E3/E4/E3R cells green.**
+> `tasks/create-webhook-remediation-e3r-spec.md` §2 (defect register). **E3R closed: run #30 (33333739409) green — all E3/E4/E3R cells green.**
 
 ---
 
@@ -27,9 +27,9 @@ second** (among unblocked epics, the one that unlocks the most goes first).
 | E0 | Foundations & skeleton | all | — | M0 | ✅ 2026-08-28 — CI green (run #33217044326), matrix evidenced |
 | E1 | Payment domain & state machine | payments | E0 | M1 | ✅ 2026-08-29 — CI green (run #33225043138), matrix evidenced, lesson #12 |
 | E2 | PSP simulator API (cobs + payer bank + chaos) | psp-simulator | E0 *(parallel with E1)* | M1 | ✅ 2026-08-29 — matrix evidenced (`tasks/e2-acceptance-matrix.md`), spec §5.4 vector asserted |
-| E3 | Create payment: idempotency + API keys + error contract | payments, api | E1, E2 | M1 | ✅ 2026-08-30 — run #19 `33285295818` (create path), run #22 `33288538459` (scenarios), run #28 `33331033505` — E3R remediation complete |
-| E4 | Webhook intake: HMAC, anti-replay, dedupe, confirmation | payments, api | E1, E2 | M1 | ✅ 2026-08-30 — run #24 `33318535724` (scenarios 6,7,8,10 + 3 ignored + full loop), run #25 `33321575303` (BD-13/BD-11), run #26 `33321575303` (BD-11 failure-injection), run #27 `33328906357` (BD-14), run #28 `33331033505` — E3R complete |
-| E3R | Remediation: create path + webhook intake (audit pass) | payments, api | E1, E2 (remediates E3 + E4) | M1 | ✅ 2026-08-30 — run #28 `33331033505` green — all E3/E4/E3R cells green — **unblocks E5 and E6** |
+| E3 | Create payment: idempotency + API keys + error contract | payments, api | E1, E2 | M1 | ✅ 2026-08-30 — run #19 `33285295818` (create path), run #20 `33288538459` (scenarios), run #30 `33333739409` — E3R remediation complete |
+| E4 | Webhook intake: HMAC, anti-replay, dedupe, confirmation | payments, api | E1, E2 | M1 | ✅ 2026-08-30 — run #24 `33318535724` (scenarios 6,7,8,10 + 3 ignored + full loop), run #25 `33321575303` (BD-13/BD-11), run #26 `33331033505` (BD-11 failure-injection), run #27 `33328906357` (BD-14), run #30 `33333739409` — E3R complete |
+| E3R | Remediation: create path + webhook intake (audit pass) | payments, api | E1, E2 (remediates E3 + E4) | M1 | ✅ 2026-08-30 — run #30 `33333739409` green — all E3/E4/E3R cells green — **unblocks E5 and E6** |
 | E5 | Expiration, resurrection & reconciliation | payments | E3R (E3+E4 remediated) | M3 | ☐ |
 | E6 | Outbox + messaging backbone (relay, SNS/SQS, DLQ) | payments, api | E3R (E3 remediated) | M2 | ☐ |
 | E7 | Ledger core: double entry, projection, balance proof, settlement | ledger | E6 | M2 | ☐ |
@@ -49,10 +49,11 @@ second** (among unblocked epics, the one that unlocks the most goes first).
 | E0 | `tasks/ai-software-engineer-prompt-foundations-m0.md` · `tasks/foundations-m0-{spec,backlog,implementation-sequence}.md` · `tasks/m0-acceptance-matrix.md` |
 | E1 | `tasks/ai-software-engineer-prompt-payment-domain-e1.md` · `tasks/payment-domain-e1-{spec,backlog,implementation-sequence}.md` · `tasks/e1-acceptance-matrix.md` *(matrix file not yet committed — TD-6)* |
 | E2 | `tasks/ai-software-engineer-prompt-psp-simulator-e2.md` · `tasks/psp-simulator-e2-{spec,backlog,implementation-sequence}.md` · `tasks/e2-acceptance-matrix.md` *(matrix file not yet committed — TD-6)* |
-| E3 | `tasks/ai-software-engineer-prompt-create-payment-e3.md` · `tasks/create-payment-e3-{spec,backlog,implementation-sequence}.md` · `tasks/e3-acceptance-matrix.md` *(prior evidence voided — rewritten by E3R R7; file not yet committed — TD-6)* |
+| E3 | `tasks/ai-software-engineer-prompt-create-payment-e3.md` · `tasks/create-payment-e3-{spec,backlog,implementation-sequence}.md` · `tasks/e3-acceptance-matrix.md` |
 | E3.5 | `tasks/ai-software-engineer-prompt-repo-hardening-e35.md` · `tasks/repo-hardening-e35-{spec,backlog,implementation-sequence}.md` · `tasks/e35-acceptance-matrix.md` |
 | E4 | `tasks/ai-software-engineer-prompt-webhook-intake-e4.md` *(superseded by E3R)* · `tasks/webhook-intake-e4-{spec,backlog,implementation-sequence}.md` · `tasks/e4-acceptance-matrix.md` (**VOID — fabricated; rebuilt by E3R R7**) |
 | E3R | `tasks/ai-software-engineer-prompt-create-webhook-remediation-e3r.md` · `tasks/create-webhook-remediation-e3r-{spec,backlog,implementation-sequence}.md` · `tasks/e3r-acceptance-matrix.md` |
+| E6 | `tasks/outbox-messaging-e6-spec.md` · `tasks/outbox-messaging-e6-{backlog,implementation-sequence}.md` · `tasks/e6-acceptance-matrix.md` *(to be created in E6)* |
 
 ## Dependency graph
 
