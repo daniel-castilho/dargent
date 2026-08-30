@@ -8,6 +8,8 @@ import io.dargent.api.DargentApiApplication;
 import io.dargent.api.security.ApiKeyHasher;
 import io.dargent.api.web.RequestIdFilter;
 import io.dargent.payments.adapter.out.psp.SimulatorChargeAdapter;
+import io.dargent.payments.domain.br.BrCode;
+import io.dargent.payments.domain.model.Txid;
 import io.dargent.payments.domain.port.out.PspPort;
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -25,12 +27,15 @@ import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
@@ -80,6 +85,13 @@ class CreatePaymentIT {
     private final HttpClient http = HttpClient.newHttpClient();
     private final String rawKey = ApiKeyHasher.generateRawKey();
 
+    @Value("${dargent.pix.profile.pix-key}")
+    String pixKey;
+    @Value("${dargent.pix.profile.receiver-name}")
+    String receiverName;
+    @Value("${dargent.pix.profile.receiver-city}")
+    String receiverCity;
+
     @BeforeEach
     void setUp() throws Exception {
         baseUrl = "http://localhost:" + port;
@@ -118,18 +130,30 @@ class CreatePaymentIT {
         assertThat(json.at("/currency").asText()).isEqualTo("BRL");
         assertThat(json.at("/expiresAt").asText()).isEqualTo(PSP_EXPIRES_AT);
         assertThat(json.at("/expiresIn").asText()).isEqualTo("PT2M");
-        assertThat(json.at("/brcode").asText()).isNotBlank();
 
-        // payments.payments row: PENDING, canonical cents, optimistic version bumped to 1 after PSP
+        // A0: the brcode is the byte-exact golden EMV computation (E3 spec §5.5) recomputed for THIS txid
+        // at the configured PIX profile + amount — fixed 174-char length for a 25-char txid + $100;
+        // the CRC16 suffix varies with the txid, so exact equality is asserted against BrCode.of(...)
+        // (the golden 6304EDD2 only holds for the spec's fixed sample txid).
+        String brcode = json.at("/brcode").asText();
+        String expectedBrcode = BrCode.of(pixKey, receiverName, receiverCity, 10000, new Txid(txid));
+        assertThat(brcode).isEqualTo(expectedBrcode);
+        assertThat(brcode.length()).isEqualTo(174);
+        assertThat(brcode).startsWith("00020101021226530014BR.GOV.BCB.PIX");
+
+        // payments.payments row: PENDING, canonical cents, optimistic version bumped to 1 after PSP,
+        // and PSP-truth expires_at persisted to the DB (A0 stale-aggregate guard — the response body
+        // alone would hide a PSP truth that never reached the row).
         var pmt = jdbc.sql(
-                "select status, amount_cents, version, merchant_id from payments.payments where txid = :txid")
+                "select status, amount_cents, version, merchant_id, expires_at from payments.payments where txid = :txid")
                 .param("txid", txid)
-                .query((rs, i) -> new Object[]{rs.getString(1), rs.getLong(2), rs.getInt(3), rs.getObject(4, UUID.class)})
+                .query((rs, i) -> new Object[]{rs.getString(1), rs.getLong(2), rs.getInt(3), rs.getObject(4, UUID.class), rs.getTimestamp(5).toInstant()})
                 .single();
         assertThat(pmt[0]).isEqualTo("PENDING");
         assertThat(pmt[1]).isEqualTo(10000L);
         assertThat(pmt[2]).isEqualTo(1);
         assertThat(pmt[3]).isEqualTo(MERCHANT);
+        assertThat((Instant) pmt[4]).isEqualTo(Instant.parse(PSP_EXPIRES_AT));
 
         // idempotency COMPLETED with exact 201 snapshot
         var idem = jdbc.sql(
@@ -176,6 +200,8 @@ class CreatePaymentIT {
 
         assertThat(second.statusCode()).isEqualTo(201);
         assertThat(second.headers().firstValue("Idempotent-Replay")).contains("true");
+        // A0: replay is byte-equal to the original 201 body (E3 spec §5.1.3), not merely "same txid"
+        assertThat(second.body()).isEqualTo(first.body());
         var secondJson = parse(second);
         assertThat(secondJson.at("/txid").asText()).isEqualTo(firstTxid);
         assertThat(secondJson.at("/status").asText()).isEqualTo("PENDING");
@@ -273,7 +299,8 @@ class CreatePaymentIT {
         assertThat(resp.statusCode()).isEqualTo(502);
         assertThat(parse(resp).at("/code").asText()).isEqualTo("psp_unavailable");
 
-        // three POST attempts (D19: max attempts), with backoff sleeps between them (2 sleeps)
+        // three POST attempts (D19: max attempts), with backoff sleeps between them (2 sleeps).
+        // A0: the backoff is asserted on the RECORDED calls to the injected sleeper, never on wall-clock.
         assertThat(psp.chargeAttempts.get()).isEqualTo(3);
         assertThat(psp.recordedSleeps).hasSize(2); // backoff between attempts 1->2 and 2->3
         assertThat(psp.recordedSleeps).allMatch(v -> v >= 0L);
@@ -294,6 +321,22 @@ class CreatePaymentIT {
         List<String> outboxTypes = jdbc.sql("select type from payments.outbox where aggregate_id=:t")
                 .param("t", txid).query(String.class).list();
         assertThat(outboxTypes).contains("payment.failed");
+
+        // A0: the exhaustion failure reason is persisted (in the outbox payload, since the payments
+        // table has no failure_reason column and no migration is permitted in this block).
+        String failedReason = jdbc.sql(
+                "select payload ->> 'reason' from payments.outbox where aggregate_id=:t and type='payment.failed'")
+                .param("t", txid).query(String.class).single();
+        assertThat(failedReason).isEqualTo("psp_create_exhausted");
+
+        // A0: the idempotency key row was deleted (audit_log keeps the trail), so a retry with the
+        // SAME key starts a FRESH payment instead of replaying the exhausted one.
+        psp.mode = PspStub.Mode.SUCCESS;
+        var retry = post("/v1/payments", body("{\"amount\":5000}"), authHeaders(idemKey, "req-exhaust-02"));
+        assertThat(retry.statusCode()).isEqualTo(201);
+        assertThat(retry.headers().firstValue("Idempotent-Replay").orElse("")).isNotEqualTo("true");
+        assertThat(paymentCount()).isEqualTo(2);
+        assertThat(parse(retry).at("/txid").asText()).isNotEqualTo(txid);
     }
 
     // ------------------------------------------------------------------ read side (BD-10)
@@ -315,6 +358,78 @@ class CreatePaymentIT {
         assertThat(dj.at("/status").asText()).isEqualTo("PENDING");
         assertThat(dj.at("/amount").asLong()).isEqualTo(12345);
         assertThat(dj.at("/brcode").asText()).isNotBlank();
+    }
+
+    // ------------------------------------------------------------------ tenancy / concurrency (A0)
+
+    @Test
+    void cross_tenant_detail_is_404_from_the_query_never_403() throws Exception {
+        psp.mode = PspStub.Mode.SUCCESS;
+        // owner creates a payment
+        var created = post("/v1/payments", body("{\"amount\":7777}"), authHeaders("idem-xtenant-01", "req-xt-01"));
+        String txid = parse(created).at("/txid").asText();
+
+        // a DIFFERENT merchant queries that txid: must be 404 (AGENTS §3.7 — cross-merchant is 404, not 403)
+        // Revoke the owner key first so the other merchant's key can take the shared dev key_prefix
+        // (uq_api_keys_key_prefix_active is partial over non-revoked keys).
+        jdbc.sql("update payments.api_keys set revoked_at = now() where id = :id")
+                .param("id", KEY_ID).update();
+        UUID otherMerchant = UUID.fromString("33333333-3333-3333-3333-333333333333");
+        String otherRawKey = ApiKeyHasher.generateRawKey();
+        jdbc.sql(
+                "insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
+                        + "values (:id, :merchant, 'other-key', :prefix, :hash, now(), null)")
+                .param("id", UUID.fromString("44444444-4444-4444-4444-444444444444"))
+                .param("merchant", otherMerchant)
+                .param("prefix", ApiKeyHasher.prefix(otherRawKey))
+                .param("hash", ApiKeyHasher.hash(otherRawKey))
+                .update();
+
+        var detail = http.send(HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + "/v1/payments/" + txid))
+                .header("Authorization", "Bearer " + otherRawKey)
+                .GET().build(), HttpResponse.BodyHandlers.ofString());
+
+        assertThat(detail.statusCode()).isEqualTo(404);
+    }
+
+    @Test
+    void concurrent_same_key_requests_yield_one_201_three_425_and_one_payment() throws Exception {
+        // A0: scenario 15 as a real concurrency proof — 4 threads release on a barrier, identical
+        // Idempotency-Key + body. The PSP stub is slow for this test so the winner stays IN_FLIGHT
+        // while the losers arrive; the DB (idempotency_keys PK) arbitrates. Exactly one 201, three 425,
+        // exactly one payment row.
+        psp.mode = PspStub.Mode.SUCCESS;
+        psp.latencyMs = 600L; // slow external PSP (not a test synchronization sleep)
+        String idemKey = "idem-race-01";
+        String sharedBody = body("{\"amount\":4000}");
+        int n = 4;
+        CyclicBarrier barrier = new CyclicBarrier(n);
+        List<Integer> statuses = java.util.Collections.synchronizedList(new ArrayList<>());
+
+        List<Thread> threads = new ArrayList<>();
+        for (int i = 0; i < n; i++) {
+            String reqId = "req-race-0" + i;
+            Thread t = new Thread(() -> {
+                try {
+                    barrier.await(10, TimeUnit.SECONDS);
+                    var resp = post("/v1/payments", sharedBody, authHeaders(idemKey, reqId));
+                    statuses.add(resp.statusCode());
+                } catch (Exception e) {
+                    statuses.add(-1);
+                }
+            });
+            t.start();
+            threads.add(t);
+        }
+        for (Thread t : threads) {
+            t.join(20_000);
+        }
+
+        assertThat(statuses).hasSize(n);
+        assertThat(statuses).filteredOn(s -> s == 201).hasSize(1);
+        assertThat(statuses).filteredOn(s -> s == 425).hasSize(3);
+        assertThat(paymentCount()).isEqualTo(1);
     }
 
     // ------------------------------------------------------------------ helpers
@@ -418,6 +533,7 @@ class CreatePaymentIT {
         enum Mode { SUCCESS, FAIL }
 
         volatile Mode mode = Mode.SUCCESS;
+        volatile long latencyMs = 0L; // simulates a slow external PSP (not a test synchronization sleep)
         final AtomicInteger chargeAttempts = new AtomicInteger();
         final List<Long> recordedSleeps = new ArrayList<>();
 
@@ -428,11 +544,20 @@ class CreatePaymentIT {
 
         void reset() {
             mode = Mode.SUCCESS;
+            latencyMs = 0L;
             chargeAttempts.set(0);
             recordedSleeps.clear();
         }
 
         void handle(HttpExchange exchange) throws IOException {
+            if (latencyMs > 0) {
+                try {
+                    Thread.sleep(latencyMs);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException(e);
+                }
+            }
             String path = exchange.getRequestURI().getPath();
             String method = exchange.getRequestMethod();
             byte[] respBody;
