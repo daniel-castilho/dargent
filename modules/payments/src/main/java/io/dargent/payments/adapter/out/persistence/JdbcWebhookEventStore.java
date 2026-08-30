@@ -19,7 +19,11 @@ public class JdbcWebhookEventStore implements WebhookEventStore {
 
     @Override
     public Optional<WebhookEventRecord> insertIfAbsent(WebhookEventRecord record) {
-        return jdbc.sql("""
+        // On fresh insert, RETURNING yields the new row; on conflict, yields NO rows.
+        // Contract (WebhookIntakeUseCase): empty => we inserted (won the race); present =>
+        // a row already existed (duplicate webhook). So a row returned by the insert means
+        // "we inserted" => return empty; a conflict means "already there" => re-read and return it.
+        Optional<WebhookEventRecord> inserted = jdbc.sql("""
                 insert into payments.webhook_events (
                     id, provider_event_id, psp_event_id, type, txid, payload_raw, signature_valid, status
                 ) values (
@@ -35,6 +39,17 @@ public class JdbcWebhookEventStore implements WebhookEventStore {
                 .param("txid", record.txid())
                 .param("payloadRaw", record.payloadRaw())
                 .param("signatureValid", record.signatureValid())
+                .query(WebhookEventRecord.class)
+                .optional();
+        if (inserted.isPresent()) {
+            return Optional.empty(); // we own the newly inserted row
+        }
+        return jdbc.sql("""
+                select id, provider_event_id, psp_event_id, type, txid, payload_raw, signature_valid, status, received_at, processed_at
+                from payments.webhook_events
+                where provider_event_id = :providerEventId
+                """)
+                .param("providerEventId", record.providerEventId())
                 .query(WebhookEventRecord.class)
                 .optional();
     }
