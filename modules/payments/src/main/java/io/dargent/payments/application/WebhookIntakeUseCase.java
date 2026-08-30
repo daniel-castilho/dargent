@@ -153,7 +153,7 @@ public final class WebhookIntakeUseCase {
             return Outcome.ignored("invalid endToEndId: " + payload.endToEndId());
         }
 
-        Instant paidAt = Instant.parse(payload.paidAt());
+        Instant paidAt = payload.paidAt();
         FeeBreakdown feeBreakdown = FeeBreakdown.of(payment.amount().cents(), new io.dargent.payments.domain.model.BpsRate((int) FEE_BPS));
 
         int expectedVersion = payment.version();
@@ -213,10 +213,17 @@ public final class WebhookIntakeUseCase {
         if (!amountNode.isIntegralNumber()) throw new IllegalArgumentException("amount must be an integer");
         if (paidAtNode.isMissingNode()) throw new IllegalArgumentException("missing field: paidAt");
 
-        long amount = amountNode.asLong();
-        String paidAt = paidAtNode.asText();
+        String paidAtText = paidAtNode.asText();
+        Instant paidAt;
+        try {
+            paidAt = Instant.parse(paidAtText);
+        } catch (java.time.format.DateTimeParseException e) {
+            throw new IllegalArgumentException("invalid paidAt format: " + paidAtText, e);
+        }
 
-        return new ParsedPayload(type, txid, endToEndId, amount, paidAt);
+        long amount = node.path("amount").asLong();
+
+        return new ParsedPayload(type, txid, endToEndId, amount, paidAtText, paidAt);
     }
 
     // ------------------------------------------------------------------ models
@@ -235,7 +242,8 @@ public final class WebhookIntakeUseCase {
             String txid,
             String endToEndId,
             long amount,
-            String paidAt
+            String paidAtText,
+            Instant paidAt
     ) {}
 
     public sealed interface Outcome permits Outcome.Processed, Outcome.Duplicate, Outcome.Ignored {

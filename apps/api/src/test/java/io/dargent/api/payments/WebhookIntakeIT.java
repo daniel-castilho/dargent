@@ -302,6 +302,27 @@ class WebhookIntakeIT {
         assertThat(payment(txid)[0]).isEqualTo("PENDING");
     }
 
+    @Test
+    void malformed_paidAt_is_ignored_with_200_and_no_outbox() throws Exception {
+        // BD-13 residual: malformed paidAt must be caught in parse, row IGNORED, payment untouched
+        String txid = createPayment("webhook-bad-paidAt");
+        String endToEndId = "E9BADPAIDAT000000000000000000X";
+        String badPaidAt = "not-a-date";
+        String body = "{\"eventId\":\"psp-evt-1\",\"type\":\"" + TYPE
+                + "\",\"txid\":\"" + txid + "\",\"endToEndId\":\"" + endToEndId
+                + "\",\"amount\":10000,\"paidAt\":\"" + badPaidAt + "\"}";
+        String ts = String.valueOf(FIXED_NOW_SECS);
+
+        var resp = sendWebhook(ts, body);
+
+        assertThat(resp.statusCode()).isEqualTo(200);
+        assertThat(parse(resp).at("/status").asText()).isEqualTo("ignored");
+        assertThat(jdbc.sql("select count(*) from payments.outbox where type='payment.confirmed'").query(Long.class).single()).isZero();
+        assertThat(jdbc.sql("select status from payments.webhook_events where provider_event_id=:p")
+                .param("p", endToEndId + "|" + TYPE).query(String.class).single()).isEqualTo("IGNORED");
+        assertThat(payment(txid)[0]).isEqualTo("PENDING");
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private String createPayment(String idemKey) throws Exception {
