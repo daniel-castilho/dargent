@@ -36,6 +36,11 @@ public final class WebhookIntakeUseCase {
 
     private static final long FEE_BPS = 100L;
     private static final String BRL = "BRL";
+    /**
+     * Ratified system actor for PSP callbacks (owner decision 2026-08-30, E3R BD-14).
+     * Zero UUID is intentional and greppable — PSP callbacks have no API-key actor;
+     * V106's NOT NULL stands; a deterministic system actor keeps forensic queries simple.
+     */
     private static final UUID WEBHOOK_AUDIT_ACTOR = UUID.fromString("00000000-0000-0000-0000-000000000000");
 
     private final WebhookEventStore webhookEventStore;
@@ -177,7 +182,7 @@ public final class WebhookIntakeUseCase {
         outboxWriter.append(payment.txid().value(), "payment.confirmed", 1,
                 eventSerializer.serialize(outboxPayload), null);
 
-        // 7. Audit log — webhook has no API key, use sentinel actor
+        // 7. Audit log — webhook has no API key; use sentinel system actor (BD-14)
         auditWriter.record("confirm_from_webhook", WEBHOOK_AUDIT_ACTOR, payment.merchantId(),
                 payment.txid().value(), null);
 

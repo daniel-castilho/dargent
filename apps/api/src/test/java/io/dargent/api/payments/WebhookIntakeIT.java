@@ -138,6 +138,12 @@ class WebhookIntakeIT {
         assertThat(pj.at("/fee").asLong()).isEqualTo(100);
         assertThat(pj.at("/net").asLong()).isEqualTo(9900);
         assertThat(pj.at("/late").asBoolean()).isFalse();
+
+        // BD-14: audit row has sentinel actor_key_id (webhook has no API key; BD-14 ratified sentinel)
+        UUID auditActor = jdbc.sql(
+                "select actor_key_id from payments.audit_log where command_name='confirm_from_webhook' and aggregate_id=:t")
+                .param("t", txid).query(UUID.class).optional().orElseThrow();
+        assertThat(auditActor).isEqualTo(UUID.fromString("00000000-0000-0000-0000-000000000000"));
     }
 
     @Test
