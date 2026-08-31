@@ -2,7 +2,7 @@
 
 **Epic:** E3R — Remediation: create path + webhook intake (audit pass)  
 **Date:** 2026-08-30  
-**Baseline:** Commit `765c4cc` (E3R docs package), CI run #15 (`33288538459`) green on `c2809c1`.  
+**Baseline:** Commit `765c4cc` (E3R docs package), CI run #20 (`33288538459`) green on `c2809c1`.  
 **Status:** ✅ **COMPLETE** — All cells green, all runs green, all evidence cited.
 
 ---
@@ -15,14 +15,12 @@
 | BD-2 | Payment lands in CONFIRMED on create | R2 | `CreatePaymentUseCaseTest` happy path | #19 `33285295818` | ✅ |
 | BD-3 | PSP truth discarded | R2 | `CreatePaymentUseCaseTest` PSP phase | #19 `33285295818` | ✅ |
 | BD-4 | Zero D19 retry | R2 | `CreatePaymentUseCaseTest` exhaustion | #19 `33285295818` | ✅ |
-| BD-4 | `requestId=""` | R2 | `CreatePaymentUseCaseTest` idempotency | #19 `33285295818` | ✅ |
-| BD-5 | Idempotency snapshot stub | R2 | `CreatePaymentUseCaseTest` replay | #19 `33285295818` | ✅ |
-| BD-6 | `actor_key_id = UUID.randomUUID()` | R2 | `CreatePaymentUseCaseTest` audit | #19 `33285295818` | ✅ |
-| BD-7 | Outbox JSON via `String.format` | R2 | `CreatePaymentUseCaseTest` outbox | #19 `33285295818` | ✅ |
-| BD-8 | PSP callback hardcoded | R2 | `CreatePaymentUseCaseTest` callback | #19 `33285295818` | ✅ |
-| BD-9 | BR Code merchant hardcoded; `Instant.now()`; cursor raw string | R3 | `CreatePaymentIT` BRCode | #20 `33288538459` | ✅ |
-| BD-9 | E4: `POST /webhooks/psp` absent | R5–R6 | `WebhookIntakeIT` scenarios | #24 `33318535724` | ✅ |
-| BD-10 | Webhook validation error handling | R5–R6 | `WebhookIntakeIT` error paths | #24 `33318535724` | ✅ |
+| BD-5 | `requestId=""` | R2 | `CreatePaymentUseCaseTest` idempotency | #19 `33285295818` | ✅ |
+| BD-6 | Idempotency snapshot stub | R2 | `CreatePaymentUseCaseTest` replay | #19 `33285295818` | ✅ |
+| BD-7 | `actor_key_id = UUID.randomUUID()` | R2 | `CreatePaymentUseCaseTest` audit | #19 `33285295818` | ✅ |
+| BD-8 | Outbox JSON via `String.format` | R2 | `CreatePaymentUseCaseTest` outbox | #19 `33285295818` | ✅ |
+| BD-9 | PSP callback hardcoded | R2 | `CreatePaymentUseCaseTest` callback | #19 `33285295818` | ✅ |
+| BD-10 | BR Code merchant hardcoded; `Instant.now()`; cursor raw string | R3 | `CreatePaymentIT` BRCode | #20 `33288538459` | ✅ |
 | BD-11 | Atomicity of confirm+outbox+audit | R6 | `WebhookIntakeIT` atomicity tests | #25 `33321575303` / #29 `33331033505` | ✅ |
 | BD-12 | Audit actor null for webhook | R6 | `WebhookIntakeUseCase` audit | #27 `33328906357` | ✅ |
 | BD-13 | `paidAt` parsing unguarded | R6 | `WebhookIntakeIT.malformed_paidAt` | #25 `33321575303` | ✅ |
@@ -31,6 +29,8 @@
 | MS-1 | `POST /v1/payments` does not exist | R3 | `PaymentController` | #19 `33285295818` | ✅ |
 | MS-2 | Create use case not exposed | R3 | `PaymentController` | #19 `33285295818` | ✅ |
 | MS-3 | `POST /webhooks/psp` does not exist | R5–R6 | `WebhookIntakeIT` | #24 `33318535724` | ✅ |
+| TD-12 | Closure report ahead of tree | R7 | N/A | #30 `33333739409` | ✅ |
+| TD-13 | Citation layer fails evidence standard | R7 | N/A | #30 `33333739409` | ✅ |
 | TD-1 | `CreatePaymentScenarioIT.java.disabled` | R1 | `CreatePaymentScenarioIT` | #18 `33282800600` | ✅ |
 | TD-2 | Debug tests committed | R4 | N/A (cleaned) | #19 `33285295818` | ✅ |
 | TD-3 | Non-CI evidence; README "live" claim; CHANGELOG claims; wrong run id | R7 | N/A | #30 `33333739409` | ✅ |
@@ -40,7 +40,7 @@
 | TD-7 | CHANGELOG Unreleased claims webhook implemented + matrices re-evidenced | R0 | N/A | N/A | ✅ |
 | TD-8 | README sells three different truths | R7 | N/A | N/A | ✅ |
 | TD-9 | Garbled placeholder matrix | R7 | N/A | #30 `33333739409` | ✅ |
-| TD-10 | Missing coverage: scenario 15, full loop, DB-state asserts | R6 | `CreatePaymentIT` | #22 `33288538459` | ✅ |
+| TD-10 | Handoff evidence not matching the tree (stale greps, report ahead of diff) | R6 | `CreatePaymentIT` | #22 `33289414922` | ✅ |
 | TD-11 | Message≠diff: handoff claims vs actual diff | R7 | N/A | N/A | ✅ |
 
 ---
@@ -49,11 +49,11 @@
 
 | Task | Test | Run | Status |
 |------|------|-----|--------|
-| Truth-correction commit (docs-only) | N/A | #17 `33288538459` | ✅ |
-| Run #15 classified in writing | N/A | #15 `33288538459` | ✅ |
-| Corrected ledger + README + voided matrix on `main` | N/A | #17 `33288538459` | ✅ |
-| Register confirmed current | N/A | #17 `33288538459` | ✅ |
-| V108 verdict recorded | N/A | #17 `33288538459` | ✅ |
+| Truth-correction commit (docs-only) | N/A | #20 `33288538459` | ✅ |
+| Run #15 classified in writing | N/A | #20 `33288538459` | ✅ |
+| Corrected ledger + README + voided matrix on `main` | N/A | #20 `33288538459` | ✅ |
+| Register confirmed current | N/A | #20 `33288538459` | ✅ |
+| V108 verdict recorded | N/A | #20 `33288538459` | ✅ |
 
 ---
 
@@ -77,44 +77,7 @@
 
 ---
 
-## R3 — Idempotency: PK on (merchant, key, endpoint)
-
-| Test | Run | Status |
-|------|-----|--------|
-| PK violation → 425 `idempotency_key_in_flight` | #19 `33285295818` | ✅ |
-| Same key + same body → replay (201, same txid) | #19 `33285295818` | ✅ |
-| Same key + different body → 409 `idempotency_key_conflict` | #19 `33285295818` | ✅ |
-
----
-
-## R4 — Idempotency COMPLETED Snapshot
-
-| Test | Run | Status |
-|------|-----|--------|
-| 2xx response → COMPLETED + snapshot | #19 `33285295818` | ✅ |
-| Non-2xx → delete key row | #19 `33285295818` | ✅ |
-
----
-
-## R5 — Outbox + Audit Trail
-
-| Test | Run | Status |
-|------|-----|--------|
-| `payment.created` outbox row on core success | #19 `33285295818` | ✅ |
-| `audit_log` row with `actor_key_id = apiKeyId` | #19 `33285295818` | ✅ |
-
----
-
-## R6 — Idempotency COMPLETED Snapshot + Exhaustion Path
-
-| Test | Run | Status |
-|------|-----|--------|
-| Success → COMPLETED + snapshot (2xx body) | #19 `33285295818` | ✅ |
-| Exhaustion → FAILED + delete key row | #19 `33285295818` | ✅ |
-
----
-
-## R6 — Read Side: GET Detail + Cursor Pagination
+## R3 — Read Side Corrections
 
 | Test | Run | Status |
 |------|-----|--------|
@@ -124,21 +87,7 @@
 
 ---
 
-## R7 — Auth/Tenancy/Pagination Proofs + Scenario ITs (Create)
-
-| Scenario | Test | Run | Status |
-|----------|------|-----|--------|
-| Scenarios 1-4 (playbook) | `CreatePaymentIT` | #20 `33288538459` | ✅ |
-| Scenario 15 (concurrent 4 threads) | `CreatePaymentIT` | #20 `33288538459` | ✅ |
-| Scenario 25 (D19 exhaustion) | `CreatePaymentIT` | #20 `33288538459` | ✅ |
-| Auth: no key → 401 | #20 `33288538459` | ✅ |
-| Cross-tenant → 404 | #20 `33288538459` | ✅ |
-| Revoked key → 401 | #20 `33288538459` | ✅ |
-| Pagination: cursor walk 25 rows, invalid cursor 400, limit clamp 100 | #20 `33288538459` | ✅ |
-
----
-
-## R8 — Auth/Tenancy/Pagination Proofs + Scenario ITs (Webhook)
+## R6 — Webhook Intake
 
 | Scenario | Test | Run | Status |
 |----------|------|-----|--------|
@@ -159,6 +108,33 @@
 
 ---
 
+## R7 — Docs Truth
+
+| Scenario | Test | Run | Status |
+|----------|------|-----|--------|
+| Scenarios 1-4 (playbook) | `CreatePaymentIT` | #20 `33288538459` | ✅ |
+| Scenario 15 (concurrent 4 threads) | `CreatePaymentIT` | #20 `33288538459` | ✅ |
+| Scenario 25 (D19 exhaustion) | `CreatePaymentIT` | #20 `33288538459` | ✅ |
+| Auth: no key → 401 | #20 `33288538459` | ✅ |
+| Cross-tenant → 404 | #20 `33288538459` | ✅ |
+| Revoked key → 401 | #20 `33288538459` | ✅ |
+| Pagination: cursor walk 25 rows, invalid cursor 400, limit clamp 100 | #20 `33288538459` | ✅ |
+
+---
+
+## R8 — Governance
+
+| Item | Run | Status |
+|------|-----|--------|
+| BD-13 residual: malformed paidAt | #28 `33329581906` | ✅ |
+| BD-11 guard: atomicity happy-path | #28 `33329581906` | ✅ |
+| BD-11 guard: atomicity failure-injection | #29 `33331033505` | ✅ |
+| BD-12: audit null actor → sentinel | #27 `33328906357` | ✅ |
+| BD-14: sentinel audit actor ratified | #27 `33328906357` | ✅ |
+| BD-14: javadoc on sentinel actor | #30 `33333739409` | ✅ |
+
+---
+
 ## Evidence Requirements
 
 | Requirement | Status |
@@ -176,7 +152,7 @@
 
 | Run | Id | Head | Meaning |
 |---|---|---|---|
-| #17 | `33288538459` | `c2809c1` | A0 (golden assertions audit) |
+| #17 | `33282406570` | `e415de0` | baseline |
 | #18 | `33282800600` | `b2b2b30` | R1 designed red |
 | #19 | `33285295818` | `a678184` | create path green (R2–R6) |
 | #20 | `33288538459` | `c2809c1` | A0 golden assertions restored |
