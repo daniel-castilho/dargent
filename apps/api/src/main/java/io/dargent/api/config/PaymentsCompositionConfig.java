@@ -14,6 +14,7 @@ import io.dargent.payments.adapter.out.persistence.JdbcOutboxEventStore;
 import io.dargent.payments.adapter.out.persistence.PaymentJpaAdapter;
 import io.dargent.payments.adapter.out.psp.SimulatorChargeAdapter;
 import io.dargent.payments.application.CreatePaymentUseCase;
+import io.dargent.payments.application.EventEnvelopeFactory;
 import io.dargent.payments.application.EventSerializer;
 import io.dargent.payments.application.OutboxDeliveryUseCase;
 import io.dargent.payments.application.WebhookIntakeUseCase;
@@ -100,6 +101,11 @@ public class PaymentsCompositionConfig {
     }
 
     @Bean
+    EventEnvelopeFactory eventEnvelopeFactory(EventSerializer eventSerializer) {
+        return new EventEnvelopeFactory(eventSerializer);
+    }
+
+    @Bean
     Clock clock() {
         return Clock.systemUTC();
     }
@@ -126,10 +132,10 @@ public class PaymentsCompositionConfig {
             PaymentRepository paymentRepository, OutboxWriter outboxWriter,
             AuditWriter auditWriter, WebhookSignatureValidator webhookSignatureValidator,
             TransactionTemplate transactionTemplate,
-            EventSerializer eventSerializer, Clock clock,
+            EventEnvelopeFactory envelopeFactory, Clock clock,
             ObjectMapper objectMapper) {
         return new WebhookIntakeUseCase(webhookEventStore, paymentRepository, outboxWriter, auditWriter,
-                webhookSignatureValidator, transactionTemplate, eventSerializer, clock, objectMapper);
+                webhookSignatureValidator, transactionTemplate, envelopeFactory, clock, objectMapper);
     }
 
     @Bean
@@ -156,13 +162,13 @@ public class PaymentsCompositionConfig {
     CreatePaymentUseCase createPaymentUseCase(PaymentRepository paymentRepository,
             IdempotencyStore idempotencyStore, OutboxWriter outboxWriter, AuditWriter auditWriter,
             PspPort pspPort, TxidGenerator txidGenerator, TransactionTemplate transactionTemplate,
-            EventSerializer eventSerializer, Clock clock,
+            EventEnvelopeFactory envelopeFactory, Clock clock,
             @Value("${dargent.pix.profile.pix-key}") String pixKey,
             @Value("${dargent.pix.profile.receiver-name}") String receiverName,
             @Value("${dargent.pix.profile.receiver-city}") String receiverCity,
             @Value("${dargent.psp.callback-url}") String pspCallbackUrl) {
         return new CreatePaymentUseCase(paymentRepository, idempotencyStore, outboxWriter, auditWriter,
-                pspPort, txidGenerator, transactionTemplate, eventSerializer, pixKey, receiverName,
+                pspPort, txidGenerator, transactionTemplate, envelopeFactory, pixKey, receiverName,
                 receiverCity, pspCallbackUrl, clock);
     }
 

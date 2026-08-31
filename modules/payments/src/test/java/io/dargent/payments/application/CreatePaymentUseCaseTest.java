@@ -97,7 +97,7 @@ class CreatePaymentUseCaseTest {
         when(paymentRepo.findByTxid(any())).thenReturn(Optional.of(savedPayment(NOW.plus(EXPIRES_IN))));
         when(paymentRepo.updateIfVersionMatches(any(), anyInt())).thenReturn(true);
         useCase = new CreatePaymentUseCase(paymentRepo, idempotencyStore, outboxWriter, auditWriter,
-                pspPort, txidGenerator, txTemplate, new EventSerializer(mapper),
+                pspPort, txidGenerator, txTemplate, new EventEnvelopeFactory(new EventSerializer(mapper)),
                 PIX_KEY, RECEIVER_NAME, RECEIVER_CITY, CALLBACK_URL,
                 Clock.fixed(NOW, ZoneOffset.UTC));
     }
@@ -130,7 +130,7 @@ class CreatePaymentUseCaseTest {
     }
 
     @Test
-    void outbox_payload_is_serialized_json_and_carries_request_id() {
+    void outbox_column_carries_full_envelope_with_nested_payload_and_request_id() {
         when(idempotencyStore.insertIfAbsent(any(), any(), any(), any())).thenReturn(Optional.empty());
         when(pspPort.createCharge(any())).thenReturn(new ChargeResult(TXID, PSP_EXPIRES, "E2E-1", "br"));
 
@@ -140,11 +140,22 @@ class CreatePaymentUseCaseTest {
         verify(outboxWriter).append(eq(TXID.value()), eq("payment.created"), eq(1),
                 payload.capture(), eq(REQUEST_ID));
         Map<String, Object> parsed = mapper.readValue(payload.getValue(), new TypeReference<>() {});
-        assertThat(parsed).containsEntry("txid", TXID.value());
+        assertThat(parsed).containsEntry("type", "payment.created");
+        assertThat(parsed).containsEntry("version", 1);
+        assertThat(parsed).containsEntry("aggregateId", TXID.value());
         assertThat(parsed).containsEntry("merchantId", MERCHANT.toString());
-        assertThat(parsed).containsEntry("amount", 10_000);
-        assertThat(parsed).containsEntry("description", "Order #1");
-        assertThat(parsed).containsEntry("expiresAt", NOW.plus(EXPIRES_IN).toString());
+        assertThat(parsed).containsEntry("requestId", REQUEST_ID);
+        assertThat(parsed).containsEntry("occurredAt", NOW.toString());
+        assertThat(parsed.get("eventId")).isInstanceOf(String.class); // UUID v4 envelope eventId
+        UUID envelopeEventId = mapper.convertValue(parsed.get("eventId"), UUID.class);
+        assertThat(envelopeEventId.version()).isEqualTo(4);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> nested = (Map<String, Object>) parsed.get("payload");
+        assertThat(nested).containsEntry("txid", TXID.value());
+        assertThat(nested).containsEntry("merchantId", MERCHANT.toString());
+        assertThat(nested).containsEntry("amount", 10_000);
+        assertThat(nested).containsEntry("description", "Order #1");
+        assertThat(nested).containsEntry("expiresAt", NOW.plus(EXPIRES_IN).toString());
     }
 
     @Test

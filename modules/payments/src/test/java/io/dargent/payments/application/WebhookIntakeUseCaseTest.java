@@ -23,6 +23,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
+import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 import java.util.Map;
@@ -183,8 +184,9 @@ class WebhookIntakeUseCaseTest {
     private FakeOutboxWriter outboxWriter;
     private FakeAuditWriter auditWriter;
     private WebhookSignatureValidator signatureValidator;
-    private EventSerializer eventSerializer;
+    private EventEnvelopeFactory envelopeFactory;
     private Clock clock;
+    private ObjectMapper testMapper;
 
     private WebhookIntakeUseCase useCase;
 
@@ -204,12 +206,12 @@ class WebhookIntakeUseCaseTest {
         outboxWriter = new FakeOutboxWriter();
         auditWriter = new FakeAuditWriter();
         signatureValidator = new WebhookSignatureValidator(FIXED_CLOCK);
-        eventSerializer = new EventSerializer();
+        envelopeFactory = new EventEnvelopeFactory(new EventSerializer());
         clock = FIXED_CLOCK;
-        ObjectMapper testMapper = new tools.jackson.databind.json.JsonMapper();
+        testMapper = new JsonMapper();
 
         useCase = new WebhookIntakeUseCase(webhookStore, paymentRepo, outboxWriter, auditWriter,
-                signatureValidator, new DirectTransactionTemplate(), eventSerializer, clock, testMapper);
+                signatureValidator, new DirectTransactionTemplate(), envelopeFactory, clock, testMapper);
     }
 
     // ---- helper to seed a PENDING payment ----
@@ -248,10 +250,20 @@ class WebhookIntakeUseCaseTest {
         assertThat(outboxWriter.entries).hasSize(1);
         assertThat(outboxWriter.entries.get(0).type()).isEqualTo("payment.confirmed");
         String payload = outboxWriter.entries.get(0).payload();
-        assertThat(payload).contains("\"amount\":10000");
-        assertThat(payload).contains("\"fee\":100");
-        assertThat(payload).contains("\"net\":9900");
-        assertThat(payload).contains("\"late\":false");
+        Map<String, Object> envelope = testMapper.readValue(payload, new TypeReference<>() {});
+        assertThat(envelope).containsEntry("type", "payment.confirmed");
+        assertThat(envelope).containsEntry("version", 1);
+        assertThat(envelope).containsEntry("aggregateId", TXID.value());
+        assertThat(envelope).containsEntry("merchantId", MERCHANT.toString());
+        assertThat(envelope).containsEntry("occurredAt", FIXED_CLOCK.instant().toString());
+        assertThat(envelope).containsEntry("requestId", null);
+        assertThat(envelope.get("eventId")).isInstanceOf(String.class);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> nested = (Map<String, Object>) envelope.get("payload");
+        assertThat(nested).containsEntry("amount", 10_000);
+        assertThat(nested).containsEntry("fee", 100);
+        assertThat(nested).containsEntry("net", 9900);
+        assertThat(nested).containsEntry("late", false);
 
         assertThat(auditWriter.entries).hasSize(1);
         assertThat(auditWriter.entries.get(0).commandName()).isEqualTo("confirm_from_webhook");
@@ -392,7 +404,7 @@ class WebhookIntakeUseCaseTest {
 
         WebhookIntakeUseCase atomicUseCase = new WebhookIntakeUseCase(
                 webhookStore, paymentRepo, failingOutbox, auditWriter,
-                signatureValidator, rollbackTx, eventSerializer, clock, new tools.jackson.databind.json.JsonMapper());
+                signatureValidator, rollbackTx, envelopeFactory, clock, new tools.jackson.databind.json.JsonMapper());
 
         assertThatThrownBy(() -> atomicUseCase.execute(input()))
                 .isInstanceOf(RuntimeException.class)

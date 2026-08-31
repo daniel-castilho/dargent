@@ -49,7 +49,7 @@ public final class WebhookIntakeUseCase {
     private final AuditWriter auditWriter;
     private final WebhookSignatureValidator signatureValidator;
     private final TransactionTemplate txTemplate;
-    private final EventSerializer eventSerializer;
+    private final EventEnvelopeFactory envelopeFactory;
     private final Clock clock;
     private final ObjectMapper objectMapper;
 
@@ -59,7 +59,7 @@ public final class WebhookIntakeUseCase {
             AuditWriter auditWriter,
             WebhookSignatureValidator signatureValidator,
             TransactionTemplate txTemplate,
-            EventSerializer eventSerializer,
+            EventEnvelopeFactory envelopeFactory,
             Clock clock,
             ObjectMapper objectMapper) {
         this.webhookEventStore = webhookEventStore;
@@ -68,7 +68,7 @@ public final class WebhookIntakeUseCase {
         this.auditWriter = auditWriter;
         this.signatureValidator = signatureValidator;
         this.txTemplate = txTemplate;
-        this.eventSerializer = eventSerializer;
+        this.envelopeFactory = envelopeFactory;
         this.clock = clock;
         this.objectMapper = objectMapper;
     }
@@ -173,14 +173,15 @@ public final class WebhookIntakeUseCase {
             return Outcome.duplicate();
         }
 
-        // 6. Append outbox payment.confirmed
+        // 6. Append outbox payment.confirmed (full E3 §5.6 envelope; requestId is null — PSP callback)
         Map<String, Object> outboxPayload = new LinkedHashMap<>();
         outboxPayload.put("amount", payment.amount().cents());
         outboxPayload.put("fee", payment.fee().cents());
         outboxPayload.put("net", payment.net().cents());
         outboxPayload.put("late", false);
-        outboxWriter.append(payment.txid().value(), "payment.confirmed", 1,
-                eventSerializer.serialize(outboxPayload), null);
+        String envelope = envelopeFactory.envelope("payment.confirmed", 1, payment.txid().value(),
+                payment.merchantId(), null, outboxPayload, clock.instant());
+        outboxWriter.append(payment.txid().value(), "payment.confirmed", 1, envelope, null);
 
         // 7. Audit log — webhook has no API key; use sentinel system actor (BD-14)
         auditWriter.record("confirm_from_webhook", WEBHOOK_AUDIT_ACTOR, payment.merchantId(),

@@ -35,7 +35,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  *   <li>BD-5 — the outbox envelope carries the validated {@code requestId}.</li>
  *   <li>BD-6 — idempotency {@code COMPLETED} carries the exact 201 snapshot body; replay is zero-side-effect.</li>
  *   <li>BD-7 — the audit {@code actor_key_id} is the authenticated key's id, never generated.</li>
- *   <li>BD-8 — outbox payloads are serialized once through {@link EventSerializer} (no {@code String.format}).</li>
+ *   <li>BD-8 — outbox payloads are serialized once through {@link EventSerializer} inside the envelope
+ *   factory (no {@code String.format}); the column carries the full E3 §5.6 envelope (E6 owner decision).</li>
  *   <li>BD-9 — the PSP callback URL comes from the injected config value, never a literal.</li>
  * </ul>
  */
@@ -51,7 +52,7 @@ public final class CreatePaymentUseCase {
     private final PspPort pspPort;
     private final TxidGenerator txidGenerator;
     private final TransactionTemplate txTemplate;
-    private final EventSerializer eventSerializer;
+    private final EventEnvelopeFactory envelopeFactory;
     private final String pixKey;
     private final String receiverName;
     private final String receiverCity;
@@ -60,7 +61,7 @@ public final class CreatePaymentUseCase {
 
     public CreatePaymentUseCase(PaymentRepository paymentRepo, IdempotencyStore idempotencyStore,
             OutboxWriter outboxWriter, AuditWriter auditWriter, PspPort pspPort,
-            TxidGenerator txidGenerator, TransactionTemplate txTemplate, EventSerializer eventSerializer,
+            TxidGenerator txidGenerator, TransactionTemplate txTemplate, EventEnvelopeFactory envelopeFactory,
             String pixKey, String receiverName, String receiverCity, String pspCallbackUrl, Clock clock) {
         this.paymentRepo = paymentRepo;
         this.idempotencyStore = idempotencyStore;
@@ -69,7 +70,7 @@ public final class CreatePaymentUseCase {
         this.pspPort = pspPort;
         this.txidGenerator = txidGenerator;
         this.txTemplate = txTemplate;
-        this.eventSerializer = eventSerializer;
+        this.envelopeFactory = envelopeFactory;
         this.pixKey = pixKey;
         this.receiverName = receiverName;
         this.receiverCity = receiverCity;
@@ -144,8 +145,9 @@ public final class CreatePaymentUseCase {
         payload.put("amount", payment.amount().cents());
         payload.put("description", payment.description());
         payload.put("expiresAt", payment.expiresAt().toString());
-        outboxWriter.append(payment.txid().value(), "payment.created", 1,
-                eventSerializer.serialize(payload), input.requestId());
+        String envelope = envelopeFactory.envelope("payment.created", 1, payment.txid().value(),
+                payment.merchantId(), input.requestId(), payload, now);
+        outboxWriter.append(payment.txid().value(), "payment.created", 1, envelope, input.requestId());
     }
 
     // ------------------------------------------------------------- idempotency
@@ -220,8 +222,9 @@ public final class CreatePaymentUseCase {
         payload.put("amount", payment.amount().cents());
         payload.put("reason", "psp_create_exhausted");
         payload.put("failedAt", now.toString());
-        outboxWriter.append(payment.txid().value(), "payment.failed", 1,
-                eventSerializer.serialize(payload), input.requestId());
+        String envelope = envelopeFactory.envelope("payment.failed", 1, payment.txid().value(),
+                payment.merchantId(), input.requestId(), payload, now);
+        outboxWriter.append(payment.txid().value(), "payment.failed", 1, envelope, input.requestId());
     }
 
     // ---------------------------------------------------------------- helpers
