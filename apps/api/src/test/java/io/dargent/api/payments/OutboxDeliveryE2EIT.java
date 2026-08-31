@@ -42,6 +42,8 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.sns.SnsClient;
 import software.amazon.awssdk.services.sqs.SqsClient;
@@ -342,10 +344,14 @@ class OutboxDeliveryE2EIT {
         sqs = SqsClient.builder()
                 .endpointOverride(localstack.getEndpointOverride(LocalStackContainer.Service.SQS))
                 .region(Region.of(REGION))
+                .credentialsProvider(StaticCredentialsProvider.create(
+                        AwsBasicCredentials.create("test", "test")))
                 .build();
         sns = SnsClient.builder()
                 .endpointOverride(localstack.getEndpointOverride(LocalStackContainer.Service.SNS))
                 .region(Region.of(REGION))
+                .credentialsProvider(StaticCredentialsProvider.create(
+                        AwsBasicCredentials.create("test", "test")))
                 .build();
         dlqArn = createFifoQueue(sqs, DLQ_NAME, null);
         String redrive = "{\"deadLetterTargetArn\":\"" + dlqArn + "\",\"maxReceiveCount\":\"5\"}";

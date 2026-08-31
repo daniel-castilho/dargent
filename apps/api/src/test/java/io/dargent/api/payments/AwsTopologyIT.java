@@ -9,6 +9,8 @@ import org.testcontainers.containers.localstack.LocalStackContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.sns.SnsClient;
 import software.amazon.awssdk.services.sqs.SqsClient;
@@ -51,10 +53,14 @@ class AwsTopologyIT {
         sqs = SqsClient.builder()
                 .endpointOverride(localstack.getEndpointOverride(LocalStackContainer.Service.SQS))
                 .region(Region.of(REGION))
+                .credentialsProvider(StaticCredentialsProvider.create(
+                        AwsBasicCredentials.create("test", "test")))
                 .build();
         sns = SnsClient.builder()
                 .endpointOverride(localstack.getEndpointOverride(LocalStackContainer.Service.SNS))
                 .region(Region.of(REGION))
+                .credentialsProvider(StaticCredentialsProvider.create(
+                        AwsBasicCredentials.create("test", "test")))
                 .build();
 
         dlqUrl = sqs.createQueue(r -> r.queueName(DLQ_NAME)
