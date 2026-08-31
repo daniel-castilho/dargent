@@ -20,14 +20,20 @@ services:
       retries: 10
 
   localstack:
-    image: localstack/localstack:4
+    image: localstack/localstack:3
     ports:
       - "4566:4566"
+    environment:
+      SERVICES: sns,sqs
+      DEBUG: 1
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:4566/_localstack/health | grep -q '\"sqs\": \"available\"'"]
+      test: ["CMD-SHELL", "H=$(curl -sf http://localhost:4566/_localstack/health) && echo \"$H\" | grep -q '\"sns\": \"running\"' && echo \"$H\" | grep -q '\"sqs\": \"running\"'"]
       interval: 10s
       timeout: 5s
       retries: 12
+      start_period: 30s
+    volumes:
+      - ./../deploy/localstack-init.sh:/etc/localstack/init/ready.d/localstack-init.sh:ro
     # Stateless by design: queues re-provision at app boot from M2 on (ADR-0015).
 
   api-blue:

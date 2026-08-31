@@ -1,0 +1,82 @@
+package io.dargent.payments.adapter.out.persistence;
+
+import io.dargent.payments.domain.model.OutboxId;
+import io.dargent.payments.domain.port.out.OutboxEventStore;
+import io.dargent.payments.domain.port.out.OutboxEventStore.OutboxRow;
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Repository;
+
+/** JdbcClient implementation of the webhook event store (E4 spec §5.4). */
+@Repository
+public class JdbcOutboxEventStore implements OutboxEventStore {
+
+    private final JdbcClient jdbc;
+
+    public JdbcOutboxEventStore(JdbcClient jdbc) {
+        this.jdbc = jdbc;
+    }
+
+    @Override
+    public List<OutboxRow> claimPending(int batch, Instant now) {
+        return jdbc.sql("""
+                select id, aggregate_id, type, version, payload, request_id, attempt_count
+                from payments.outbox
+                where status = 'PENDING' and next_attempt_at <= :now
+                order by next_attempt_at
+                for update skip locked
+                limit :batch
+                """)
+                .param("now", now)
+                .param("batch", batch)
+                .query(OutboxRow.class)
+                .list();
+    }
+
+    @Override
+    public boolean markSent(OutboxId id, int attemptCount, Instant publishedAt) {
+        int updated = jdbc.sql("""
+                update payments.outbox
+                set status = 'SENT', attempt_count = :attemptCount, published_at = :publishedAt
+                where id = :id and status = 'PENDING'
+                """)
+                .param("id", id.value())
+                .param("attemptCount", attemptCount)
+                .param("publishedAt", publishedAt)
+                .update();
+        return updated > 0;
+    }
+
+    @Override
+    public boolean markFailed(OutboxId id, int attemptCount, Instant nextAttemptAt) {
+        int updated = jdbc.sql("""
+                update payments.outbox
+                set attempt_count = :attemptCount, next_attempt_at = :nextAttemptAt
+                where id = :id and status = 'PENDING'
+                """)
+                .param("id", id.value())
+                .param("attemptCount", attemptCount)
+                .param("nextAttemptAt", nextAttemptAt)
+                .update();
+        return updated > 0;
+    }
+
+    @Override
+    public int purgeSent(Instant cutoff, int limit) {
+        return jdbc.sql("""
+                delete from payments.outbox
+                where id in (
+                    select id from payments.outbox
+                    where status = 'SENT' and published_at < :cutoff
+                    order by published_at
+                    limit :limit
+                )
+                """)
+                .param("cutoff", cutoff)
+                .param("limit", limit)
+                .update();
+    }
+}

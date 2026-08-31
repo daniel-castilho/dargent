@@ -57,7 +57,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     classes = {DargentApiApplication.class, CreatePaymentIT.PspTestConfig.class},
-    properties = "dargent.psp.webhook-secret=dev-only-secret"
+    properties = {"dargent.psp.webhook-secret=dev-only-secret", "dargent.relay.enabled=false"}
 )
 @Testcontainers
 class CreatePaymentIT {

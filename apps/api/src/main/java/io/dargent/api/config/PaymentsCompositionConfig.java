@@ -4,18 +4,22 @@ import io.dargent.api.controller.WebhookController;
 import io.dargent.api.error.ErrorResponseWriter;
 import io.dargent.api.security.ApiKeyAuthenticationFilter;
 import io.dargent.api.security.ApiKeyRepository;
+import io.dargent.payments.adapter.out.messaging.SnsEventPublisher;
 import io.dargent.payments.adapter.out.persistence.JdbcAuditWriter;
 import io.dargent.payments.adapter.out.persistence.JdbcIdempotencyStore;
 import io.dargent.payments.adapter.out.persistence.JdbcOutboxWriter;
 import io.dargent.payments.adapter.out.persistence.JdbcPaymentQueryPort;
 import io.dargent.payments.adapter.out.persistence.JdbcWebhookEventStore;
+import io.dargent.payments.adapter.out.persistence.JdbcOutboxEventStore;
 import io.dargent.payments.adapter.out.persistence.PaymentJpaAdapter;
 import io.dargent.payments.adapter.out.psp.SimulatorChargeAdapter;
 import io.dargent.payments.application.CreatePaymentUseCase;
 import io.dargent.payments.application.EventSerializer;
+import io.dargent.payments.application.OutboxDeliveryUseCase;
 import io.dargent.payments.application.WebhookIntakeUseCase;
 import io.dargent.payments.domain.model.WebhookSignatureValidator;
 import io.dargent.payments.domain.port.out.AuditWriter;
+import io.dargent.payments.domain.port.out.EventPublisher;
 import io.dargent.payments.domain.port.out.IdempotencyStore;
 import io.dargent.payments.domain.port.out.OutboxWriter;
 import io.dargent.payments.domain.port.out.PaymentQueryPort;
@@ -23,12 +27,17 @@ import io.dargent.payments.domain.port.out.PaymentRepository;
 import io.dargent.payments.domain.port.out.PspPort;
 import io.dargent.payments.domain.port.out.SecureRandomTxidGenerator;
 import io.dargent.payments.domain.port.out.TxidGenerator;
+import io.dargent.payments.domain.port.out.OutboxEventStore;
 import io.dargent.payments.domain.port.out.WebhookEventStore;
 import java.time.Clock;
 import java.time.Duration;
-import org.springframework.beans.factory.annotation.Value;
+import java.util.concurrent.TimeUnit;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.scheduling.TaskScheduler;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
@@ -155,5 +164,67 @@ public class PaymentsCompositionConfig {
         return new CreatePaymentUseCase(paymentRepository, idempotencyStore, outboxWriter, auditWriter,
                 pspPort, txidGenerator, transactionTemplate, eventSerializer, pixKey, receiverName,
                 receiverCity, pspCallbackUrl, clock);
+    }
+
+    // --- E6 outbox relay beans ---
+
+    @Bean
+    @ConditionalOnProperty(name = "dargent.relay.enabled", havingValue = "true", matchIfMissing = false)
+    OutboxEventStore outboxEventStore(JdbcClient jdbc) {
+        return new JdbcOutboxEventStore(jdbc);
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "dargent.relay.enabled", havingValue = "true", matchIfMissing = false)
+    EventPublisher snsEventPublisher(@Value("${DARGENT_EVENTS_TOPIC_ARN}") String topicArn,
+            @Value("${DARGENT_EVENTS_PUBLISH_TIMEOUT_MS}") long timeoutMs,
+            @Value("${AWS_REGION}") String region,
+            @Value("${AWS_ENDPOINT_URL}") String endpointUrl) {
+        return new SnsEventPublisher(topicArn, timeoutMs, region, endpointUrl);
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "dargent.relay.enabled", havingValue = "false", matchIfMissing = true)
+    EventPublisher noopEventPublisher() {
+        return new EventPublisher() {
+            @Override
+            public void publish(String type, String payload, String eventId, String aggregateId) {
+                // No-op for when the relay is disabled
+            }
+        };
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "dargent.relay.enabled", havingValue = "true", matchIfMissing = false)
+    OutboxDeliveryUseCase outboxDeliveryUseCase(OutboxEventStore store,
+            EventPublisher publisher, ObjectMapper mapper, Clock clock,
+            OutboxDeliveryUseCase.Policy policy,
+            TransactionTemplate transactionTemplate) {
+        return new OutboxDeliveryUseCase(store, publisher, mapper, clock, policy, transactionTemplate);
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "dargent.relay.enabled", havingValue = "true", matchIfMissing = false)
+    OutboxDeliveryUseCase.Policy outboxDeliveryPolicy(
+            @Value("${DARGENT_RELAY_BATCH}") int batch,
+            @Value("${DARGENT_RELAY_WORKERS}") int workers,
+            @Value("${DARGENT_RELAY_POLL_MS}") long pollMs) {
+        return new OutboxDeliveryUseCase.Policy(batch, workers, pollMs,
+                Integer.MAX_VALUE, Duration.ofSeconds(30), Duration.ofMinutes(5));
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "dargent.relay.enabled", havingValue = "true", matchIfMissing = false)
+    TaskScheduler relayScheduler(OutboxDeliveryUseCase useCase, OutboxDeliveryUseCase.Policy policy, Clock clock) {
+        ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
+        scheduler.setPoolSize(policy.workers());
+        scheduler.setThreadNamePrefix("outbox-relay-");
+        scheduler.initialize();
+        scheduler.scheduleAtFixedRate(
+                () -> useCase.runOnce(policy.batchSize()),
+                clock.instant(),
+                Duration.ofMillis(policy.pollMs())
+        );
+        return scheduler;
     }
 }

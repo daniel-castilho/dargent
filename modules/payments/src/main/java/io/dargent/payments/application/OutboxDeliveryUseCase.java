@@ -1,7 +1,6 @@
 package io.dargent.payments.application;
 
 import io.dargent.payments.domain.model.OutboxId;
-import io.dargent.payments.domain.model.OutboxId;
 import io.dargent.payments.domain.port.out.EventPublisher;
 import io.dargent.payments.domain.port.out.OutboxEventStore;
 import io.dargent.payments.domain.port.out.OutboxEventStore.OutboxRow;
@@ -9,12 +8,11 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ObjectNode;
 
 /**
  * OutboxDeliveryUseCase (E6 §5.1): relay cycle for the transactional outbox.
@@ -24,6 +22,8 @@ import tools.jackson.databind.node.ObjectNode;
  * (at-least-once semantics: crash after publish but before mark → duplicate, collapsed by FIFO dedup).
  */
 public final class OutboxDeliveryUseCase {
+
+    private static final Logger log = LoggerFactory.getLogger(OutboxDeliveryUseCase.class);
 
     private final OutboxEventStore store;
     private final EventPublisher publisher;
@@ -54,7 +54,7 @@ public final class OutboxDeliveryUseCase {
      */
     public int runOnce(int batch) {
         Instant now = clock.instant();
-        List<OutboxEventStore.OutboxRow> claimed = store.claimPending(policy.batchSize(), now);
+        List<OutboxEventStore.OutboxRow> claimed = store.claimPending(batch, now);
         if (claimed.isEmpty()) {
             return 0;
         }
@@ -66,7 +66,7 @@ public final class OutboxDeliveryUseCase {
                 eventId = extractEventId(row.payload());
             } catch (Exception e) {
                 // Writer bug: row has no eventId — leave row PENDING, log error, move on
-                logError("row without eventId", row.id(), e);
+                log.error("OUTBOX row without eventId id={} type={} error={}", row.id(), row.type(), e.getMessage());
                 continue;
             }
 
@@ -76,7 +76,7 @@ public final class OutboxDeliveryUseCase {
                 // Publish failed — increment attempt, schedule backoff, leave PENDING
                 Instant nextAttempt = clock.instant().plus(backoff(row.attemptCount() + 1));
                 store.markFailed(row.id(), row.attemptCount() + 1, nextAttempt);
-                logError("publish failed", row.id(), e);
+                log.error("OUTBOX publish failed id={} type={} error={}", row.id(), row.type(), e.getMessage());
                 continue;
             }
 
@@ -84,6 +84,7 @@ public final class OutboxDeliveryUseCase {
             if (!store.markSent(row.id(), row.attemptCount() + 1, clock.instant())) {
                 // Lost race: another worker marked it (or row was already processed)
                 // The duplicate will be collapsed by FIFO dedup (eventId) on the consumer side
+                log.warn("OUTBOX lost race marking SENT id={} type={}", row.id(), row.type());
                 continue;
             }
             published++;
@@ -92,17 +93,18 @@ public final class OutboxDeliveryUseCase {
     }
 
     private String extractEventId(String payload) {
+        // Strict Jackson parse using the injected mapper; missing/blank eventId = writer bug
+        JsonNode node;
         try {
-            // Strict Jackson parse; missing/blank eventId = writer bug
-            JsonNode node = new ObjectMapper().readTree(payload);
-            String eventId = node.path("eventId").asText(null);
-            if (eventId == null || eventId.isBlank()) {
-                throw new IllegalArgumentException("missing or blank eventId");
-            }
-            return eventId;
+            node = mapper.readTree(payload);
         } catch (Exception e) {
             throw new IllegalArgumentException("invalid payload JSON: " + e.getMessage(), e);
         }
+        String eventId = node.path("eventId").asText(null);
+        if (eventId == null || eventId.isBlank()) {
+            throw new IllegalArgumentException("missing or blank eventId");
+        }
+        return eventId;
     }
 
     private Duration backoff(int attempt) {
@@ -110,11 +112,6 @@ public final class OutboxDeliveryUseCase {
         if (attempt <= 1) return Duration.ofSeconds(30);
         if (attempt == 2) return Duration.ofMinutes(2);
         return Duration.ofMinutes(5);
-    }
-
-    private void logError(String context, OutboxId id, Exception e) {
-        // In production: structured log with correlation (request_id from row if available)
-        System.err.println("OUTBOX " + context + " id=" + id + " error=" + e.getMessage());
     }
 
     // ------------------------------------------------------------------ policy
