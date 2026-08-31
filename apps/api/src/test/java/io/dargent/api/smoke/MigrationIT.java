@@ -86,7 +86,8 @@ class MigrationIT {
     void module_schemas_hold_only_their_own_business_tables() {
         // payments gains its core table in E1 (V102) + api_keys in E3 (V103)
         // + idempotency_keys/outbox/audit_log in E3 (V104-V106);
-        // ledger/notifications stay schema-only until their milestone (expand/contract from day one)).
+        // ledger (E7): journal, events, postings, balances, settlements
+        // notifications: schema-only until its milestone
         List<String> paymentTables = jdbc
                 .sql("select table_name from information_schema.tables where table_schema = 'payments'")
                 .query(String.class)
@@ -101,7 +102,7 @@ class MigrationIT {
                 .list();
 
         assertThat(paymentTables).containsExactlyInAnyOrder("payments", "api_keys", "idempotency_keys", "outbox", "audit_log", "webhook_events");
-        assertThat(ledgerTables).isEmpty();
+        assertThat(ledgerTables).containsExactlyInAnyOrder("events", "journal_entries", "postings", "balances", "settlements");
         assertThat(notificationTables).isEmpty();
     }
 }
