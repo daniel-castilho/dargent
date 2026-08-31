@@ -82,7 +82,7 @@ consumer idempotency by `eventId` = E10's binding contract. Nobody in this repo 
 | Zero pending cells | ✅ |
 | `mvn -B verify` green on `main` | ✅ (run #43 `33354167958` at `b04b889`; #44 `33354450665` at `6330070`) |
 | Matrix zero pending | ✅ (this file) |
-| Ledger E6 flip is the LAST commit, final run id cited at that HEAD | ✅ (see below) |
+| Ledger E6 flip is the LAST commit, final run id cited at that HEAD | ✅ (flip `084bb3a`, run #47 `33355346290` green) |
 
 ## Run IDs Summary (canonical pairs from `tasks/e3r-block1-verification.md`)
 
@@ -101,6 +101,7 @@ consumer idempotency by `eventId` = E10's binding contract. Nobody in this repo 
 | #42 | `33353813310` | `d3d5590` | E6 S6 — **RED**: LocalStack ITs used ambient credentials chain |
 | #43 | `33354167958` | `b04b889` | E6 S6 fix: static test credentials — **GREEN** (S6 canonical pair) |
 | #44 | `33354450665` | `6330070` | docs: canonical table S6 pairs |
-| #45+ | *(recorded in canonical table)* | `b667857`+ | S7 closure runs |
+| #46 | `33355073316` | `0c7ab78` | E6 S7 closure docs (matrix + README/CHANGELOG) |
+| #47 | `33355346290` | `084bb3a` | **E6 ledger flip** — final run id at flip HEAD; epic closed |
 
 All cells green. All runs green. All evidence cited. E6 complete — **E5 unblocked; E7 (ledger) unblocked by E6.**
