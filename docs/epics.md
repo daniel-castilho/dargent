@@ -53,7 +53,7 @@ second** (among unblocked epics, the one that unlocks the most goes first).
 | E3.5 | `tasks/ai-software-engineer-prompt-repo-hardening-e35.md` · `tasks/repo-hardening-e35-{spec,backlog,implementation-sequence}.md` · `tasks/e35-acceptance-matrix.md` |
 | E4 | `tasks/ai-software-engineer-prompt-webhook-intake-e4.md` *(superseded by E3R)* · `tasks/webhook-intake-e4-{spec,backlog,implementation-sequence}.md` · `tasks/e4-acceptance-matrix.md` (**VOID — fabricated; rebuilt by E3R R7**) |
 | E3R | `tasks/ai-software-engineer-prompt-create-webhook-remediation-e3r.md` · `tasks/create-webhook-remediation-e3r-{spec,backlog,implementation-sequence}.md` · `tasks/e3r-acceptance-matrix.md` |
-| E6 | `tasks/outbox-messaging-e6-spec.md` · `tasks/outbox-messaging-e6-{backlog,implementation-sequence}.md` · `tasks/e6-acceptance-matrix.md` *(to be created in E6)* |
+| E6 | `tasks/outbox-messaging-e6-spec.md` · `tasks/outbox-messaging-e6-{backlog,implementation-sequence}.md` · `tasks/e6-acceptance-matrix.md` |
 
 ## Dependency graph
 

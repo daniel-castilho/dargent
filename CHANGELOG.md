@@ -5,6 +5,43 @@ versioning: semantic, cut from annotated git tags (see [release-runbook](docs/re
 
 ## [Unreleased]
 
+### Added — E6 Outbox & Messaging Backbone (2026-08-30)
+
+- **Relay engine** (`OutboxDeliveryUseCase.runOnce()`): claim via `FOR UPDATE SKIP LOCKED`, strict-Jackson
+  eventId parse, publish, conditional mark `SENT`; publish error → attempt bump + backoff (30s → 2min →
+  5min cap), rows stay `PENDING` (E9 owns `EXHAUSTED`). All cycles driven through `runOnce()` in tests —
+  zero sleeps, injected `Clock` (spec §5.1).
+- **`SnsEventPublisher`** (AWS SDK v2 direct, url-connection client): FIFO topic publish with
+  `MessageGroupId = aggregate_id` (txid), `MessageDeduplicationId = eventId`, `Subject = type`, body =
+  stored jsonb **verbatim**; per-call timeout override bounding SDK retry amplification (§4.1).
+- **Full E3 §5.6 envelope in writers** (owner decision): `EventEnvelopeFactory` builds
+  `{eventId(v4), type, version, aggregateId, merchantId, requestId, occurredAt, payload{…}}` in fixed key
+  order — the outbox `payload` column IS the wire format (§5.3); webhook envelope carries `requestId=null`.
+- **`OutboxId` UUIDv7** row ids (RFC 9562, injected clock) in all writers — V105's comment is no longer a
+  lie (§5.5).
+- **Retention purge** (§5.4): every Nth cycle deletes SENT rows older than `DARGENT_OUTBOX_RETENTION_DAYS`
+  (default 7, BoE-derived) in bounded batches; PENDING/FAILED/EXHAUSTED never purged by E6.
+- **Dev topology**: compose LocalStack + idempotent `deploy/localstack-init.sh` (FIFO topic, notify queue,
+  DLQ, redrive `maxReceiveCount=5`, subscription); `.env.example` carries all §4.1 rows.
+- **`docs/load-test-baseline.md`** BoE section (assumptions-arithmetic, honestly labeled): ~1.16 evt/s
+  avg / 23 evt/s peak vs relay ceiling 64 evt/s (workers 2 × batch 32 / poll 1s) — defaults derive from it.
+- **Tests**: relay ITs 1–4 on PG16+LocalStack (publish w/ byte-equal body + group/dedup ids, retry
+  deferral, two-thread SKIP LOCKED race, purge), **IT5 M2 anchor E2E** (`OutboxDeliveryE2EIT`: API create →
+  webhook confirm → `runOnce()` → `payment.confirmed` on the FIFO queue), IT6 topology attrs
+  (`AwsTopologyIT`); unit suite for claim/backoff/mark/purge/defect paths.
+- **Delivery guarantee (verbatim, §5.6)**: at-least-once, per-payment FIFO ordering, dedup by
+  `MessageDeduplicationId=eventId` (5-min window), consumer idempotency by `eventId` = E10's contract.
+  Nobody in this repo ever writes "exactly once".
+
+### Fixed — E6 (2026-08-30)
+
+- **`SimulatorChargeAdapter` proxy poisoning**: constructor set `System.setProperty("http.proxy*", "")`,
+  which broke the AWS `UrlConnectionHttpClient` built in the same JVM (SNS publish → "Connection refused").
+  Removed along with debug `System.out` cruft; the PSP client keeps its own NO_PROXY selector.
+- **LocalStack IT credentials**: `AwsTopologyIT`/`OutboxDeliveryE2EIT` built SQS/SNS clients on the default
+  credentials chain (locally satisfied by ambient env, absent on CI — run #42 red). Now pinned
+  `StaticCredentialsProvider(test,test)` like `OutboxRelayIT` (#43 green).
+
 ### Fixed — E3/E4 Retraction & E3R Remediation (2026-08-30)
 
 - **Retracted:** E3 Create Payment completion claim (commit `a979c80`, "73 tests pass") — the `POST /v1/payments` endpoint never existed over HTTP; `CreatePaymentUseCase` violates spec §5.7/§5.8; `CreatePaymentScenarioIT` shipped disabled.
