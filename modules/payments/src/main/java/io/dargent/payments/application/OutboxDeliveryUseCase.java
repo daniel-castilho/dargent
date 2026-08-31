@@ -20,10 +20,17 @@ import tools.jackson.databind.ObjectMapper;
  * One worker, one pass: claim → parse → publish → mark (conditional).
  * Runs inside a TransactionTemplate so claim+mark are atomic; publish runs inside the tx
  * (at-least-once semantics: crash after publish but before mark → duplicate, collapsed by FIFO dedup).
+ * Every {@link #PURGE_EVERY_CYCLES} cycles the SENT retention purge runs (spec §5.4) — the purge
+ * and the relay touch disjoint statuses, so they never contend.
  */
 public final class OutboxDeliveryUseCase {
 
     private static final Logger log = LoggerFactory.getLogger(OutboxDeliveryUseCase.class);
+
+    /** Purge cadence (spec §5.4): every 60th cycle ≈ 1 min at default 1 s poll. */
+    private static final int PURGE_EVERY_CYCLES = 60;
+    /** Purge batch size (spec §5.4: LIMIT 1000). */
+    private static final int PURGE_BATCH = 1000;
 
     private final OutboxEventStore store;
     private final EventPublisher publisher;
@@ -31,6 +38,7 @@ public final class OutboxDeliveryUseCase {
     private final Clock clock;
     private final Policy policy;
     private final TransactionTemplate txTemplate;
+    private int cyclesSincePurge;
 
     public OutboxDeliveryUseCase(OutboxEventStore store,
             EventPublisher publisher,
@@ -53,7 +61,28 @@ public final class OutboxDeliveryUseCase {
      * @return number of rows successfully published and marked SENT
      */
     public int runOnce(int batch) {
+        maybePurge();
         return txTemplate.execute(status -> cycle(batch));
+    }
+
+    /**
+     * Retention purge (spec §5.4): every {@code PURGE_EVERY_CYCLES} cycles, delete up to
+     * {@code PURGE_BATCH} SENT rows older than the retention horizon. PENDING / FAILED /
+     * EXHAUSTED rows are never purged by E6. One log line with rows deleted per run; a purge
+     * failure never blocks the delivery cycle (next cycle retries).
+     */
+    private void maybePurge() {
+        if (++cyclesSincePurge < PURGE_EVERY_CYCLES) {
+            return;
+        }
+        cyclesSincePurge = 0;
+        Instant cutoff = clock.instant().minus(Duration.ofDays(policy.retentionDays()));
+        try {
+            int deleted = store.purgeSent(cutoff, PURGE_BATCH);
+            log.info("OUTBOX purge deleted={} cutoff={}", deleted, cutoff);
+        } catch (Exception e) {
+            log.error("OUTBOX purge failed cutoff={} error={}", cutoff, e.getMessage());
+        }
     }
 
     private int cycle(int batch) {
@@ -129,11 +158,13 @@ public final class OutboxDeliveryUseCase {
             long pollMs,            // DARGENT_RELAY_POLL_MS (default 1000)
             int maxAttempts,        // unbounded in E6 (E9 owns EXHAUSTED)
             Duration baseBackoff,   // 30 s (1st retry)
-            Duration maxBackoff     // 5 min (cap)
+            Duration maxBackoff,    // 5 min (cap)
+            int retentionDays       // DARGENT_OUTBOX_RETENTION_DAYS (default 7)
     ) {
         public static Policy fromEnv() {
             // Defaults per §5.7 BoE
-            return new Policy(32, 2, 1000, Integer.MAX_VALUE, java.time.Duration.ofSeconds(30), java.time.Duration.ofMinutes(5));
+            return new Policy(32, 2, 1000, Integer.MAX_VALUE,
+                    java.time.Duration.ofSeconds(30), java.time.Duration.ofMinutes(5), 7);
         }
     }
 }

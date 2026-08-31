@@ -38,7 +38,7 @@ class OutboxDeliveryUseCaseTest {
         clock = FIXED_CLOCK;
 
         OutboxDeliveryUseCase.Policy policy = new OutboxDeliveryUseCase.Policy(
-                32, 2, 1000, Integer.MAX_VALUE, java.time.Duration.ofSeconds(30), java.time.Duration.ofMinutes(5)
+                32, 2, 1000, Integer.MAX_VALUE, java.time.Duration.ofSeconds(30), java.time.Duration.ofMinutes(5), 7
         );
         // Use real TransactionTemplate for unit tests (runs callback synchronously)
         var txTemplate = new org.springframework.transaction.support.TransactionTemplate(null) {
@@ -51,7 +51,7 @@ class OutboxDeliveryUseCaseTest {
         useCase = new OutboxDeliveryUseCase(
                 store, publisher, new tools.jackson.databind.json.JsonMapper(),
                 FIXED_CLOCK, new OutboxDeliveryUseCase.Policy(
-                        32, 2, 1000, Integer.MAX_VALUE, Duration.ofSeconds(30), Duration.ofMinutes(5)
+                        32, 2, 1000, Integer.MAX_VALUE, Duration.ofSeconds(30), Duration.ofMinutes(5), 7
                 ),
                 txTemplate
         );
@@ -108,9 +108,23 @@ class OutboxDeliveryUseCaseTest {
     }
 
     @Test
+    void purge_runs_every_60_cycles_with_clocked_cutoff() {
+        // Spec §5.4: purge cadence N = 60; cutoff = clock.instant() - retentionDays (7), injected Clock.
+        for (int i = 0; i < 59; i++) {
+            useCase.runOnce(1);
+        }
+        assertThat(store.purgeCutoffs).isEmpty();
+
+        useCase.runOnce(1); // 60th cycle triggers the purge
+
+        assertThat(store.purgeCutoffs).hasSize(1);
+        assertThat(store.purgeCutoffs.get(0)).isEqualTo(FIXED_NOW.minus(Duration.ofDays(7)));
+    }
+
+    @Test
     void backoff_schedule() {
         var uc = new OutboxDeliveryUseCase(null, null, null, FIXED_CLOCK,
-                new OutboxDeliveryUseCase.Policy(1, 1, 1, 3, java.time.Duration.ofSeconds(30), java.time.Duration.ofMinutes(5)),
+                new OutboxDeliveryUseCase.Policy(1, 1, 1, 3, java.time.Duration.ofSeconds(30), java.time.Duration.ofMinutes(5), 7),
                 null);
 
         assertThat(backoff(uc, 1)).isEqualTo(Duration.ofSeconds(30));
@@ -134,6 +148,7 @@ class OutboxDeliveryUseCaseTest {
 
     static class FakeOutboxEventStore implements OutboxEventStore {
         private final java.util.Map<OutboxId, Row> rows = new java.util.concurrent.ConcurrentHashMap<>();
+        final java.util.List<Instant> purgeCutoffs = new java.util.ArrayList<>();
 
         record Row(
                 OutboxId id,
@@ -188,6 +203,7 @@ class OutboxDeliveryUseCaseTest {
 
         @Override
         public int purgeSent(Instant cutoff, int limit) {
+            purgeCutoffs.add(cutoff);
             return 0;
         }
     }

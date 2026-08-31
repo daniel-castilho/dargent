@@ -210,9 +210,10 @@ public class PaymentsCompositionConfig {
     OutboxDeliveryUseCase.Policy outboxDeliveryPolicy(
             @Value("${DARGENT_RELAY_BATCH}") int batch,
             @Value("${DARGENT_RELAY_WORKERS}") int workers,
-            @Value("${DARGENT_RELAY_POLL_MS}") long pollMs) {
+            @Value("${DARGENT_RELAY_POLL_MS}") long pollMs,
+            @Value("${DARGENT_OUTBOX_RETENTION_DAYS}") int retentionDays) {
         return new OutboxDeliveryUseCase.Policy(batch, workers, pollMs,
-                Integer.MAX_VALUE, Duration.ofSeconds(30), Duration.ofMinutes(5));
+                Integer.MAX_VALUE, Duration.ofSeconds(30), Duration.ofMinutes(5), retentionDays);
     }
 
     @Bean

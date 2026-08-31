@@ -9,6 +9,28 @@ gate is a deliberate decision after 2–3 calibrated runs (see §5).
 
 ---
 
+## 0. Back-of-envelope sizing — assumptions, not measurements
+
+Engineering assumptions used to derive the E6 messaging defaults (spec §4.1) — **not measured capacity**.
+Every consequence here is arithmetic; nothing here has been load-tested yet. Re-anchor with real measurements
+before promoting any budget to a hard gate.
+
+| Premise (assumed, stated) | Value | Consequence |
+|---|---|---|
+| Steady payments/day | 50 000 | ×2 events ≈ 100 000 events/day ≈ **1.16 evt/s avg** |
+| Peak multiplier | 20× | ≈ **23 evt/s peak sustained** |
+| Envelope size | ~1 KB (jsonb + indexes ≈ 2–3×) | ~100 MB/day table growth ungoverned ≈ **3 GB/month** → purge is not optional |
+| Relay ceiling | workers 2 × batch 32 / poll 1 s | **64 evt/s** ≫ peak with 2.7× headroom (hence `POLL_MS=1000`, not 5000) |
+| Outage drain (RPO ≤ 15 min) | 1 h outage ≈ 4 200 events / 64 evt/s | **~66 s to drain** ✓ |
+| Steady table size | 7-day retention | ~700 MB rows + ~1.4 GB indexes — bounded ✓ |
+| SQS FIFO throughput | 300 TPS base | 23 evt/s peak: no high-throughput mode needed |
+
+Knob defaults cited from this table: `DARGENT_RELAY_WORKERS=2`, `DARGENT_RELAY_BATCH=32`,
+`DARGENT_RELAY_POLL_MS=1000`, `DARGENT_OUTBOX_RETENTION_DAYS=7`. Changing a default without re-deriving
+this table is a spec violation.
+
+---
+
 ## 1. Scenarios & budgets
 
 | Scenario | Script | Request | Budget (p95) | Notes |

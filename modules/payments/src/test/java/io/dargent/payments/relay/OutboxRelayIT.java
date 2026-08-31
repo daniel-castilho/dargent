@@ -110,7 +110,7 @@ class OutboxRelayIT {
         jdbc = JdbcClient.create(dataSource);
         OutboxDeliveryUseCase.Policy policy = new OutboxDeliveryUseCase.Policy(
                 32, 2, 1000, Integer.MAX_VALUE,
-                java.time.Duration.ofSeconds(30), java.time.Duration.ofMinutes(5));
+                java.time.Duration.ofSeconds(30), java.time.Duration.ofMinutes(5), 7);
         TransactionTemplate txTemplate =
                 new TransactionTemplate(new DataSourceTransactionManager(dataSource));
         useCase = new OutboxDeliveryUseCase(new JdbcOutboxEventStore(jdbc),
@@ -187,7 +187,7 @@ class OutboxRelayIT {
         OutboxDeliveryUseCase broken = new OutboxDeliveryUseCase(
                 new JdbcOutboxEventStore(jdbc), publisher(brokenArn), MAPPER, FIXED_CLOCK,
                 new OutboxDeliveryUseCase.Policy(32, 2, 1000, Integer.MAX_VALUE,
-                        java.time.Duration.ofSeconds(30), java.time.Duration.ofMinutes(5)),
+                        java.time.Duration.ofSeconds(30), java.time.Duration.ofMinutes(5), 7),
                 new TransactionTemplate(new DataSourceTransactionManager(dataSource)));
 
         int published = broken.runOnce(32);
@@ -257,6 +257,42 @@ class OutboxRelayIT {
         assertThat(sent).isEqualTo((long) n);
         Long pending = jdbc.sql("select count(*) from payments.outbox where status='PENDING'").query(Long.class).single();
         assertThat(pending).isZero();
+    }
+
+    // ------------------------------------------------------------------ IT4 purge
+
+    /**
+     * IT4 (E6 §7): after 60 relay cycles the retention purge runs (spec §5.4) — old SENT rows
+     * (published_at older than DARGENT_OUTBOX_RETENTION_DAYS horizon) are deleted; fresh SENT and
+     * any PENDING (not due) rows are kept. Purge vs relay touch disjoint statuses.
+     */
+    @Test
+    void purge_deletes_old_sent_keeps_fresh_sent_and_pending() {
+        String oldTx = txid(400);
+        UUID oldSent = UUID.randomUUID();
+        seedWithStatus(oldSent, oldTx, "payment.created",
+                envelope(UUID.randomUUID().toString(), oldTx, "payment.created"), "req-4-old",
+                "SENT", 1, "2026-08-29T09:59:00Z", "2026-08-20T00:00:00Z");
+        String freshTx = txid(401);
+        UUID freshSent = UUID.randomUUID();
+        seedWithStatus(freshSent, freshTx, "payment.created",
+                envelope(UUID.randomUUID().toString(), freshTx, "payment.created"), "req-4-fresh",
+                "SENT", 1, "2026-08-29T09:59:00Z", "2026-08-29T00:00:00Z");
+        String pendingTx = txid(402);
+        UUID pending = UUID.randomUUID();
+        // PENDING, not due — never claimed, never purged
+        seedWithStatus(pending, pendingTx, "payment.created",
+                envelope(UUID.randomUUID().toString(), pendingTx, "payment.created"), "req-4-pending",
+                "PENDING", 0, "2099-01-01T00:00:00Z", null);
+
+        for (int i = 0; i < 60; i++) {
+            useCase.runOnce(32);
+        }
+
+        assertThat(count(oldSent)).isZero(); // beyond 7-day retention => deleted
+        assertThat(count(freshSent)).isEqualTo(1); // within retention => kept
+        assertThat(count(pending)).isEqualTo(1); // PENDING never purged by E6
+        assertThat(status(pending)).isEqualTo("PENDING");
     }
 
     // ------------------------------------------------------------------ helpers
@@ -363,6 +399,35 @@ class OutboxRelayIT {
                 .param("payload", payloadJson)
                 .param("req", requestId)
                 .update();
+    }
+
+    /** Seeds a row with explicit status, attempt count, next_attempt_at and published_at (IT4). */
+    private static void seedWithStatus(UUID id, String txid, String type, String payloadJson, String requestId,
+            String status, int attemptCount, String nextAttemptAt, String publishedAt) {
+        jdbc.sql("""
+                insert into payments.outbox (id, aggregate_id, type, version, payload, request_id, status, attempt_count, next_attempt_at, published_at)
+                values (:id, :agg, :type, 1, :payload::jsonb, :req, :status, :attempts, :next::timestamptz, :published::timestamptz)
+                """)
+                .param("id", id)
+                .param("agg", txid)
+                .param("type", type)
+                .param("payload", payloadJson)
+                .param("req", requestId)
+                .param("status", status)
+                .param("attempts", attemptCount)
+                .param("next", nextAttemptAt)
+                .param("published", publishedAt)
+                .update();
+    }
+
+    private static long count(UUID id) {
+        return jdbc.sql("select count(*) from payments.outbox where id = :id")
+                .param("id", id).query(Long.class).single();
+    }
+
+    private static String status(UUID id) {
+        return jdbc.sql("select status from payments.outbox where id = :id")
+                .param("id", id).query(String.class).single();
     }
 
     /** Full E3 §5.6 envelope payload with eventId, deterministic key order via Jackson. */
