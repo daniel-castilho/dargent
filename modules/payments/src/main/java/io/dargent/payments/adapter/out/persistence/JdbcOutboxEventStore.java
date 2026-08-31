@@ -3,6 +3,7 @@ package io.dargent.payments.adapter.out.persistence;
 import io.dargent.payments.domain.model.OutboxId;
 import io.dargent.payments.domain.port.out.OutboxEventStore;
 import io.dargent.payments.domain.port.out.OutboxEventStore.OutboxRow;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -30,9 +31,20 @@ public class JdbcOutboxEventStore implements OutboxEventStore {
                 for update skip locked
                 limit :batch
                 """)
-                .param("now", now)
+                .param("now", Timestamp.from(now))
                 .param("batch", batch)
-                .query(OutboxRow.class)
+                .query((rs, rowNum) -> {
+                    OutboxId id = new OutboxId(rs.getObject("id", UUID.class));
+                    return new OutboxRow(
+                            id,
+                            rs.getString("aggregate_id"),
+                            rs.getString("type"),
+                            rs.getInt("version"),
+                            rs.getString("payload"),
+                            rs.getString("request_id"),
+                            rs.getInt("attempt_count")
+                    );
+                })
                 .list();
     }
 
@@ -45,7 +57,7 @@ public class JdbcOutboxEventStore implements OutboxEventStore {
                 """)
                 .param("id", id.value())
                 .param("attemptCount", attemptCount)
-                .param("publishedAt", publishedAt)
+                .param("publishedAt", Timestamp.from(publishedAt))
                 .update();
         return updated > 0;
     }
@@ -59,7 +71,7 @@ public class JdbcOutboxEventStore implements OutboxEventStore {
                 """)
                 .param("id", id.value())
                 .param("attemptCount", attemptCount)
-                .param("nextAttemptAt", nextAttemptAt)
+                .param("nextAttemptAt", Timestamp.from(nextAttemptAt))
                 .update();
         return updated > 0;
     }
@@ -75,7 +87,7 @@ public class JdbcOutboxEventStore implements OutboxEventStore {
                     limit :limit
                 )
                 """)
-                .param("cutoff", cutoff)
+                .param("cutoff", Timestamp.from(cutoff))
                 .param("limit", limit)
                 .update();
     }

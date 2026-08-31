@@ -179,8 +179,10 @@ public class PaymentsCompositionConfig {
     EventPublisher snsEventPublisher(@Value("${DARGENT_EVENTS_TOPIC_ARN}") String topicArn,
             @Value("${DARGENT_EVENTS_PUBLISH_TIMEOUT_MS}") long timeoutMs,
             @Value("${AWS_REGION}") String region,
-            @Value("${AWS_ENDPOINT_URL}") String endpointUrl) {
-        return new SnsEventPublisher(topicArn, timeoutMs, region, endpointUrl);
+            @Value("${AWS_ENDPOINT_URL}") String endpointUrl,
+            @Value("${AWS_ACCESS_KEY_ID:test}") String accessKey,
+            @Value("${AWS_SECRET_ACCESS_KEY:test}") String secretKey) {
+        return new SnsEventPublisher(topicArn, timeoutMs, region, endpointUrl, accessKey, secretKey);
     }
 
     @Bean

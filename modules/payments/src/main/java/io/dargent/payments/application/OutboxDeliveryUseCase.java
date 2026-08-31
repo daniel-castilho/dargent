@@ -53,6 +53,10 @@ public final class OutboxDeliveryUseCase {
      * @return number of rows successfully published and marked SENT
      */
     public int runOnce(int batch) {
+        return txTemplate.execute(status -> cycle(batch));
+    }
+
+    private int cycle(int batch) {
         Instant now = clock.instant();
         List<OutboxEventStore.OutboxRow> claimed = store.claimPending(batch, now);
         if (claimed.isEmpty()) {
