@@ -9,10 +9,10 @@ AWS_ENDPOINT=${AWS_ENDPOINT_URL:-http://localhost:4566}
 AWS_REGION=${AWS_REGION:-us-east-1}
 
 echo "Waiting for LocalStack to be ready..."
-until curl -sf "${AWS_ENDPOINT}/_localstack/health" | grep -q '"sns".*"running"'; do
+until curl -sf "${AWS_ENDPOINT}/_localstack/health" | grep -Eq '"sns".*"(available|running)"'; do
     sleep 2
 done
-until curl -sf "${AWS_ENDPOINT}/_localstack/health" | grep -q '"sqs".*"running"'; do
+until curl -sf "${AWS_ENDPOINT}/_localstack/health" | grep -Eq '"sqs".*"(available|running)"'; do
     sleep 2
 done
 echo "LocalStack is ready."
@@ -44,7 +44,11 @@ awslocal sqs create-queue \
 QUEUE_URL=$(awslocal sqs get-queue-url --queue-name "${QUEUE_NAME}" \
     --region "${AWS_REGION}" --endpoint-url "${AWS_ENDPOINT}" \
     --query "QueueUrl" --output text)
+QUEUE_ARN=$(awslocal sqs get-queue-attributes --queue-url "${QUEUE_URL}" \
+    --attribute-names QueueArn --region "${AWS_REGION}" --endpoint-url "${AWS_ENDPOINT}" \
+    --query "Attributes.QueueArn" --output text)
 echo "Queue URL: ${QUEUE_URL}"
+echo "Queue ARN: ${QUEUE_ARN}"
 
 # Create DLQ
 echo "Creating DLQ: ${DLQ_NAME}"
@@ -63,21 +67,29 @@ DLQ_ARN=$(awslocal sqs get-queue-attributes --queue-url "${DLQ_URL}" \
 echo "DLQ URL: ${DLQ_URL}"
 echo "DLQ ARN: ${DLQ_ARN}"
 
-# Configure redrive policy (maxReceiveCount=5)
+# Configure redrive policy (maxReceiveCount=5) — value is a JSON string containing JSON per AWS CLI v2 contract
 echo "Configuring redrive policy on ${QUEUE_NAME} -> ${DLQ_NAME}"
 awslocal sqs set-queue-attributes \
     --queue-url "${QUEUE_URL}" \
-    --attributes "RedrivePolicy={\"deadLetterTargetArn\":\"${DLQ_ARN}\",\"maxReceiveCount\":\"5\"}" \
+    --attributes "{\"RedrivePolicy\":\"{\\\"deadLetterTargetArn\\\":\\\"${DLQ_ARN}\\\",\\\"maxReceiveCount\\\":\\\"5\\\"}\"}" \
     --region "${AWS_REGION}" \
     --endpoint-url "${AWS_ENDPOINT}"
 
-# Subscribe queue to topic
+# Subscribe queue to topic (SQS ARN is the notification endpoint); idempotent — skip if subscribed
 echo "Subscribing ${QUEUE_NAME} to ${TOPIC_NAME}"
-awslocal sns subscribe \
-    --topic-arn "${TOPIC_ARN}" \
-    --protocol sqs \
-    --notification-endpoint "${QUEUE_URL}" \
-    --region "${AWS_REGION}" \
-    --endpoint-url "${AWS_ENDPOINT}" >/dev/null
+EXISTING_SUB=$(awslocal sns list-subscriptions-by-topic --topic-arn "${TOPIC_ARN}" \
+    --region "${AWS_REGION}" --endpoint-url "${AWS_ENDPOINT}" \
+    --query "Subscriptions[?Endpoint=='${QUEUE_ARN}'].SubscriptionArn" --output text)
+if [ -z "${EXISTING_SUB}" ]; then
+    awslocal sns subscribe \
+        --topic-arn "${TOPIC_ARN}" \
+        --protocol sqs \
+        --notification-endpoint "${QUEUE_ARN}" \
+        --region "${AWS_REGION}" \
+        --endpoint-url "${AWS_ENDPOINT}" >/dev/null
+    echo "Subscription created."
+else
+    echo "Subscription already exists (${EXISTING_SUB})."
+fi
 
 echo "LocalStack initialization complete."
