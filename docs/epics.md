@@ -31,7 +31,7 @@ second** (among unblocked epics, the one that unlocks the most goes first).
 | E4 | Webhook intake: HMAC, anti-replay, dedupe, confirmation | payments, api | E1, E2 | M1 | ✅ 2026-08-30 — run #24 `33318535724` (scenarios 6,7,8,10 + 3 ignored + full loop), run #25 `33321575303` (BD-13/BD-11), run #26 `33331033505` (BD-11 failure-injection), run #27 `33328906357` (BD-14), run #30 `33333739409` — E3R complete |
 | E3R | Remediation: create path + webhook intake (audit pass) | payments, api | E1, E2 (remediates E3 + E4) | M1 | ✅ 2026-08-30 — run #30 `33333739409` green — all E3/E4/E3R cells green — **unblocks E5 and E6** |
 | E5 | Expiration, resurrection & reconciliation | payments | E3R (E3+E4 remediated) | M3 | ☐ |
-| E6 | Outbox + messaging backbone (relay, SNS/SQS, DLQ) | payments, api | E3R (E3 remediated) | M2 | ☐ |
+| E6 | Outbox + messaging backbone (relay, SNS/SQS, DLQ) | payments, api | E3R (E3 remediated) | M2 | ✅ 2026-08-30 — run #43 `33354167958` (S6 canonical: envelope + IT5 M2 anchor + IT6) → #46 `33355073316` (closure docs green) — matrix evidenced (`tasks/e6-acceptance-matrix.md`) — **unblocks E5, E7, E10** |
 | E7 | Ledger core: double entry, projection, balance proof, settlement | ledger | E6 | M2 | ☐ |
 | E8 | Refunds: partial/total, fee reversal, balance drain | payments, ledger, api | E4, E7 | M3 | ☐ |
 | E9 | Delivery hardening: backoff, EXHAUSTED, requeue, republish | payments, api | E6, E7 | M3 | ☐ |
