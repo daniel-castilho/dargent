@@ -259,6 +259,8 @@ create-path ITs (E3R A0)"), success — the handoff's "#17" and the matrix's "#1
 | #36 | `33345869248` | `b819acc` | E6 S3 fix |
 | #37 | `33346145132` | `2caf603` | E6 S3 docs |
 | #38 | `33348323823` | `1d1e237` | E6 S4 fix+test (relay corrections + relay ITs, 3/3 green) |
+| #39 | `33348582429` | `c199da6` | docs: canonical table S4 pair |
+| #40 | `33349152979` | `4264cd0` | E6 S5 (retention purge + BoE, RelayIT 4/4 green) |
 
 (#15/#16 predate this audit's verified window; verify locally before citing.)
 
