@@ -38,41 +38,32 @@ public final class SimulatorChargeAdapter implements PspPort {
         this.maxAttempts = maxAttempts;
         this.baseBackoff = baseBackoff;
         this.sleeperMillis = sleeperMillis;
-        // Disable proxy via system properties before creating HttpClient
-        System.setProperty("http.proxyHost", "");
-        System.setProperty("http.proxyPort", "");
-        System.setProperty("https.proxyHost", "");
-        System.setProperty("https.proxyPort", "");
-        // Create HttpClient with NO_PROXY
-ProxySelector noProxySelector = new ProxySelector() {
+        // NO_PROXY selector: the PSP host is reached directly (no corporate proxy hop); a plain
+        // HttpClient.newBuilder() default would consult the JVM ProxySelector, and any ambient
+        // http.proxy* system property could silently reroute PSP traffic through a broken proxy.
+        ProxySelector noProxySelector = new ProxySelector() {
             @Override
             public List<Proxy> select(URI uri) {
-                System.out.println("PROXY SELECTOR CALLED for: " + uri);
                 return List.of(Proxy.NO_PROXY);
             }
+
             @Override
             public void connectFailed(URI uri, SocketAddress sa, IOException ioe) {
-                System.err.println("Proxy connect failed: " + uri);
+                // no-op: connection failures surface through the retry policy
             }
         };
-        System.out.println("Creating HttpClient with custom ProxySelector");
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(2))
                 .proxy(noProxySelector)
                 .build();
         this.objectMapper = JsonMapper.builder().build();
-        System.out.println("Creating SimulatorChargeAdapter with baseUrl: " + baseUrl);
     }
 
     @Override
     public ChargeResult createCharge(CreateChargeInput input) {
-        var requestBody = new ChargeRequest(input.txid().value(), input.amountCents(),
-                input.expiresAt().toString(), input.callbackUrl(), input.description());
-
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
                 String url = baseUrl + "/cobs";
-                System.out.println("CREATE CHARGE attempting: " + url + " (attempt " + attempt + ")");
                 String json = objectMapper.writeValueAsString(new ChargeRequest(input.txid().value(), input.amountCents(),
                         input.expiresAt().toString(), input.callbackUrl(), input.description()));
                 var request = HttpRequest.newBuilder()
@@ -81,7 +72,6 @@ ProxySelector noProxySelector = new ProxySelector() {
                         .header("Content-Type", "application/json")
                         .POST(HttpRequest.BodyPublishers.ofString(json))
                         .build();
-                System.out.println("REQUEST URI: " + request.uri());
                 var response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
                 int statusCode = response.statusCode();
                 if (statusCode == 200 || statusCode == 201) {
@@ -108,13 +98,11 @@ ProxySelector noProxySelector = new ProxySelector() {
     private ChargeResult readBackCharge(Txid txid) {
         try {
             String url = baseUrl + "/cobs/" + txid.value();
-            System.out.println("READBACK requesting: " + url);
             var request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .timeout(Duration.ofSeconds(5))
                     .GET()
                     .build();
-            System.out.println("READBACK REQUEST URI: " + request.uri());
             var response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() == 200) {
                 var responseBody = objectMapper.readValue(response.body(), ChargeResponse.class);
@@ -123,7 +111,6 @@ ProxySelector noProxySelector = new ProxySelector() {
             }
             throw new PspException("PSP read-back failed with status " + response.statusCode() + " for txid " + txid.value());
         } catch (IOException | InterruptedException e) {
-            System.err.println("READBACK error: " + e.getMessage());
             throw new PspException("PSP read-back failed for txid " + txid.value(), e);
         }
     }

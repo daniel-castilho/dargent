@@ -83,6 +83,25 @@
       <artifactId>testcontainers-postgresql</artifactId>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers-localstack</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- AWS SDK v2 (SNS/SQS) for E6 IT5 (end-to-end delivery) and IT6 (topology asserts) —
+         spec §4 authorizes sns + sqs; test scope only, matching modules/payments relay ITs. -->
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>sns</artifactId>
+      <version>2.25.17</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>sqs</artifactId>
+      <version>2.25.17</version>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>

@@ -134,10 +134,10 @@ class WebhookIntakeIT {
         String payload = jdbc.sql("select payload::text from payments.outbox where aggregate_id=:t and type='payment.confirmed'")
                 .param("t", txid).query(String.class).single();
         var pj = new tools.jackson.databind.json.JsonMapper().readTree(payload);
-        assertThat(pj.at("/amount").asLong()).isEqualTo(10000);
-        assertThat(pj.at("/fee").asLong()).isEqualTo(100);
-        assertThat(pj.at("/net").asLong()).isEqualTo(9900);
-        assertThat(pj.at("/late").asBoolean()).isFalse();
+        assertThat(pj.at("/payload/amount").asLong()).isEqualTo(10000);
+        assertThat(pj.at("/payload/fee").asLong()).isEqualTo(100);
+        assertThat(pj.at("/payload/net").asLong()).isEqualTo(9900);
+        assertThat(pj.at("/payload/late").asBoolean()).isFalse();
 
         // BD-14: audit row has sentinel actor_key_id (webhook has no API key; BD-14 ratified sentinel)
         UUID auditActor = jdbc.sql(

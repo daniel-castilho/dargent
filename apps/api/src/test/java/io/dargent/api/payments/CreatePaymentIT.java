@@ -326,7 +326,7 @@ class CreatePaymentIT {
         // A0: the exhaustion failure reason is persisted (in the outbox payload, since the payments
         // table has no failure_reason column and no migration is permitted in this block).
         String failedReason = jdbc.sql(
-                "select payload ->> 'reason' from payments.outbox where aggregate_id=:t and type='payment.failed'")
+                "select payload -> 'payload' ->> 'reason' from payments.outbox where aggregate_id=:t and type='payment.failed'")
                 .param("t", txid).query(String.class).single();
         assertThat(failedReason).isEqualTo("psp_create_exhausted");
 
