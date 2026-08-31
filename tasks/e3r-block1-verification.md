@@ -267,6 +267,11 @@ create-path ITs (E3R A0)"), success — the handoff's "#17" and the matrix's "#1
 | #44 | `33354450665` | `6330070` | docs: canonical table S6 pairs |
 | #46 | `33355073316` | `0c7ab78` | E6 S7 closure docs (matrix + README/CHANGELOG) |
 | #47 | `33355346290` | `084bb3a` | E6 ledger flip — final run id at flip HEAD; epic closed |
+| #48 | `33355665328` | `e6d8751` | E6 S7 closure docs (matrix + README/CHANGELOG) |
+| #49 | `33434327159` | `f27b2e7` | E7 S1 — ledger schema (V202/V203/V204 + LedgerMigrationIT) |
+| #50 | `33434327159` | `f27b2e7` | E7 S1 fix (MigrationIT update) — RED |
+| #51 | `33435518950` | `a1e5cf5` | E7 S1 fix (MigrationIT update) — GREEN (S1 canonical) |
+| #52 | `33434327159` | `f27b2e7` | E7 S1 — ledger schema (V202/V203/V204 + LedgerMigrationIT) |
 
 (#15/#16 predate this audit's verified window; verify locally before citing.)
 

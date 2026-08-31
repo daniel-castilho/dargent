@@ -45,16 +45,43 @@ class MigrationIT {
     @Configuration
     static class FlywayTestConfig {
         @Bean
-        Flyway flyway(DataSource dataSource) {
+        Flyway paymentsFlyway(DataSource dataSource) {
             Flyway flyway = Flyway.configure()
                     .dataSource(dataSource)
-                    .locations(
-                            "classpath:db/migration/payments",
-                            "classpath:db/migration/ledger",
-                            "classpath:db/migration/notifications"
-                    )
+                    .locations("classpath:db/migration/payments")
+                    .schemas("payments")
                     .baselineOnMigrate(true)
+                    .cleanDisabled(false)
                     .load();
+            flyway.clean(); // Clean before migrate to handle container reuse
+            flyway.migrate();
+            return flyway;
+        }
+
+        @Bean
+        Flyway ledgerFlyway(DataSource dataSource) {
+            Flyway flyway = Flyway.configure()
+                    .dataSource(dataSource)
+                    .locations("classpath:db/migration/ledger")
+                    .schemas("ledger")
+                    .baselineOnMigrate(true)
+                    .cleanDisabled(false)
+                    .load();
+            flyway.clean(); // Clean before migrate to handle container reuse
+            flyway.migrate();
+            return flyway;
+        }
+
+        @Bean
+        Flyway notificationsFlyway(DataSource dataSource) {
+            Flyway flyway = Flyway.configure()
+                    .dataSource(dataSource)
+                    .locations("classpath:db/migration/notifications")
+                    .schemas("notifications")
+                    .baselineOnMigrate(true)
+                    .cleanDisabled(false)
+                    .load();
+            flyway.clean(); // Clean before migrate to handle container reuse
             flyway.migrate();
             return flyway;
         }
@@ -101,8 +128,8 @@ class MigrationIT {
                 .query(String.class)
                 .list();
 
-        assertThat(paymentTables).containsExactlyInAnyOrder("payments", "api_keys", "idempotency_keys", "outbox", "audit_log", "webhook_events");
-        assertThat(ledgerTables).containsExactlyInAnyOrder("events", "journal_entries", "postings", "balances", "settlements");
-        assertThat(notificationTables).isEmpty();
+        assertThat(paymentTables).containsExactlyInAnyOrder("payments", "api_keys", "idempotency_keys", "outbox", "audit_log", "webhook_events", "flyway_schema_history");
+        assertThat(ledgerTables).containsExactlyInAnyOrder("events", "journal_entries", "postings", "balances", "settlements", "flyway_schema_history");
+        assertThat(notificationTables).containsExactlyInAnyOrder("flyway_schema_history");
     }
 }
