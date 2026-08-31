@@ -248,6 +248,18 @@ create-path ITs (E3R A0)"), success — the handoff's "#17" and the matrix's "#1
 | #29 | `33331033505` | `1e9dec6` | BD-11 failure-injection guard |
 | **#30** | **`33333739409`** | **`3b60ba8`** | docs R7/R8 + flips (final) |
 
+### E6 run-pair addendum (post-E3R, appends to the same canonical table)
+
+| Run | Id | Head | Meaning |
+|---|---|---|---|
+| #31 | `33336657975` | `63e10cb` | E6 S0 |
+| #32 | `33339118122` | `4fcd51f` | E6 S1 |
+| #33 | `33340707434` | `6a04323` | E6 S2 |
+| #35 | `33344724604` | `1193f36` | E6 S3 |
+| #36 | `33345869248` | `b819acc` | E6 S3 fix |
+| #37 | `33346145132` | `2caf603` | E6 S3 docs |
+| #38 | `33348323823` | `1d1e237` | E6 S4 fix+test (relay corrections + relay ITs, 3/3 green) |
+
 (#15/#16 predate this audit's verified window; verify locally before citing.)
 
 ### Verdict
