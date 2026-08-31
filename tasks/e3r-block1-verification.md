@@ -264,6 +264,7 @@ create-path ITs (E3R A0)"), success — the handoff's "#17" and the matrix's "#1
 | #41 | `33349330604` | `9c84de7` | docs: canonical table S5 pair |
 | #42 | `33353813310` | `d3d5590` | E6 S6 (envelope switch + IT5 OutboxDeliveryE2EIT M2 anchor + IT6 AwsTopologyIT green; adapter proxy fix) — **RED**: LocalStack ITs used ambient credentials chain, failed on CI |
 | #43 | `33354167958` | `b04b889` | E6 S6 fix: static test credentials in LocalStack ITs — **GREEN** (S6 canonical pair) |
+| #44 | `33354450665` | `6330070` | docs: canonical table S6 pairs |
 
 (#15/#16 predate this audit's verified window; verify locally before citing.)
 
