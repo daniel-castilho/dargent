@@ -11,6 +11,10 @@ import java.time.Duration;
 /**
  * SNS event publisher (E6 §5.2): publishes outbox events to SNS FIFO topic.
  * <p>
+ * Delivery guarantee (E6 §5.6): <b>at-least-once</b>, per-payment FIFO ordering,
+ * dedup by {@code MessageDeduplicationId = eventId} (5-min FIFO window), consumer
+ * idempotency by {@code eventId} is E10's binding contract. Never "exactly once".
+ * <p>
  * Message attributes:
  * <ul>
  *   <li>MessageGroupId = aggregateId (per-payment FIFO ordering)</li>
