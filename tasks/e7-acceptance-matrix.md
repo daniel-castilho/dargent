@@ -90,6 +90,6 @@ not depend on it (idempotent math). Nobody writes "exactly once".
 | #59 | `33462467004` | `685aa3b` | E7 S5 — ITs IT1–IT6 + wire-format/contract + prod fixes green |
 | #62 | `33464758612` | `c176af6` | E7 S6 — BoE addendum + README/CHANGELOG green |
 | #65 | `33465919415` | `8f09091` | E7 S7 hygiene — drop redundant @Component from SqsEventConsumer green |
-| #<FLIP> | `<FLIP-ID>` | `<FLIP-HEAD>` | **E7 ledger flip** — final run id at flip HEAD; epic closed (cited by the single post-flip citation commit) |
+| #66 | `33466333101` | `f4b4ff4` | **E7 ledger flip** — acceptance matrix + epics E7 ✅; final run id at flip HEAD; epic closed |
 
 All cells green. All runs green. All evidence cited. E7 complete — **M2 stays ◐ until E10 (notifications).**
