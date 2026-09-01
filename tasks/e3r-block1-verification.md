@@ -279,6 +279,7 @@ create-path ITs (E3R A0)"), success — the handoff's "#17" and the matrix's "#1
 | #60 | `33464168975` | `20b5c68` | docs: canonical table S5 pair |
 | #61 | `33464499966` | `e7a1383` | docs: record S5 docs pair (#60) in canonical table |
 | #62 | `33464758612` | `c176af6` | E7 S6 — BoE ledger-growth addendum + README/CHANGELOG sync green (S6 canonical pair) |
+| #63 | `33465117885` | `ed686cd` | docs: canonical table S6 pair |
 
 (#15/#16 predate this audit's verified window; verify locally before citing.)
 
