@@ -4,8 +4,6 @@ import io.dargent.ledger.application.EventIngestionUseCase;
 import io.dargent.shared.events.EventEnvelope;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
 import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.DeleteMessageBatchRequest;
 import software.amazon.awssdk.services.sqs.model.DeleteMessageBatchRequestEntry;
@@ -19,8 +17,9 @@ import java.util.stream.Collectors;
  * SQS consumer for the ledger fan-out queue (spec §5.1, §5.3).
  * Polls the ledger FIFO queue, delegates to {@link EventIngestionUseCase},
  * acks only committed work; never acks poison messages (they redrive to DLQ after 5 receives).
+ * A plain POJO wired explicitly by the boot app's composition root (no component scan — the
+ * module owns no Spring annotation coupling; AGENTS §2.2, E7 spec §7 hygiene).
  */
-@Component
 public class SqsEventConsumer {
 
     private static final Logger log = LoggerFactory.getLogger(SqsEventConsumer.class);
