@@ -55,6 +55,30 @@ versioning: semantic, cut from annotated git tags (see [release-runbook](docs/re
   `MessageDeduplicationId=eventId` (5-min window), consumer idempotency by `eventId` = E10's contract.
   Nobody in this repo ever writes "exactly once".
 
+### Fixed — E7 S5 Ledger integration tests (2026-08-31)
+
+- **Six integration tests added** (`apps/api/src/test/java/io/dargent/api/ledger/`): IT1–IT4
+  `LedgerMoneyLoopIT` (M2 full loop: HTTP create → webhook → relay → ledger consumer → balanced
+  journal + proof; idempotent redelivery; cross-merchant 404; hostile/IGNORED event), IT5/IT5b
+  `LedgerSettlementIT` (settle full available balance + concurrent idempotent replay), IT6
+  `LedgerPoisonDlqIT` (poison payload → no ack → redrive-to-DLQ). Green on PG16 + LocalStack.
+- **Wire-format contract aligned to design.md §7.1 (owner-approved, AGENTS §9d)**: shared `EventEnvelope`
+  field `payloadJson` → `payload`; payments `EventEnvelopeFactory` already emitted `"payload":{object}`.
+  Ledger `EventEnvelopeReader.read()` now binds via manual `JsonNode` extraction instead of
+  `mapper.readValue(raw, EventEnvelope.class)`, which Jackson could not bind (object ↔ String) and had
+  been silently nacking the relayed confirmed envelope. Shared stays Jackson-free.
+- **Postgres `timestamptz`→`Instant`**: `JdbcLedgerStore` read via `getObject(..., OffsetDateTime.class)`
+  `.toInstant()` (4 sites) — direct `getObject(..., Instant.class)` is unsupported by pgjdbc.
+- **`Timestamp` SQL-type binds**: `JdbcLedgerStore` journal/postings/settle inserter used
+  `Timestamp.from(...)` for `Instant` args (fixes "Can't infer the SQL type … java.time.Instant").
+- **Postings/journal FK fix**: `EventIngestionUseCase` now uses `entryId` as the journal `id`, honoring
+  `postings_entry_id_fkey`; previously a separate `UUID.randomUUID()` violated the FK.
+- **Single-statement idempotent ingestion**: `processMessage` inserts once after deciding the terminal
+  status (non-confirmed → IGNORED, invalid confirmed → REJECTED, valid confirmed → RECEIVED then POSTED
+  in-tx), removing the silent `ON CONFLICT DO NOTHING` no-op freeze in RECEIVED.
+- **Strict payload boundary**: `EventEnvelopeReader.extractPaymentPayload` rejects non-object payloads
+  (true boundary validation).
+
 ### Fixed — E6 (2026-08-30)
 
 - **`SimulatorChargeAdapter` proxy poisoning**: constructor set `System.setProperty("http.proxy*", "")`,

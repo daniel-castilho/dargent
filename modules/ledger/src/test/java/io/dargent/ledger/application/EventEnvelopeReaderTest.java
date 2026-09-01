@@ -1,7 +1,6 @@
 package io.dargent.ledger.application;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.dargent.shared.events.EventEnvelope;
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -11,21 +10,21 @@ import java.util.UUID;
 class EventEnvelopeReaderTest {
 
     private final EventEnvelopeReader reader = new EventEnvelopeReader();
-    private final ObjectMapper mapper = new ObjectMapper().registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
 
     @Test
-    void reads_valid_envelope() throws Exception {
-        var envelope = new EventEnvelope(
-                UUID.fromString("123e4567-e89b-12d3-a456-426614174000"),
-                "payment.confirmed",
-                1,
-                "txid-123",
-                UUID.fromString("11111111-1111-1111-1111-111111111111"),
-                "req-123",
-                java.time.Instant.parse("2026-08-30T12:00:00Z"),
-                "{\"txid\":\"txid-123\",\"merchantId\":\"11111111-1111-1111-1111-111111111111\",\"amount\":10000,\"description\":\"Test\",\"expiresAt\":\"2026-08-30T12:30:00Z\"}"
-        );
-        String raw = new ObjectMapper().registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule()).writeValueAsString(envelope);
+    void reads_valid_envelope() {
+        String raw = """
+                {
+                  "eventId": "123e4567-e89b-12d3-a456-426614174000",
+                  "type": "payment.confirmed",
+                  "version": 1,
+                  "aggregateId": "txid-123",
+                  "merchantId": "11111111-1111-1111-1111-111111111111",
+                  "requestId": "req-123",
+                  "occurredAt": "2026-08-30T12:00:00Z",
+                  "payload": { "txid": "txid-123", "amount": 10000 }
+                }
+                """;
 
         var envelopeParsed = reader.read(raw);
 
@@ -39,18 +38,18 @@ class EventEnvelopeReaderTest {
     }
 
     @Test
-    void reads_envelope_with_null_requestId() throws Exception {
-        var envelope = new io.dargent.shared.events.EventEnvelope(
-                UUID.fromString("123e4567-e89b-12d3-a456-426614174000"),
-                "payment.confirmed",
-                1,
-                "txid-123",
-                UUID.fromString("11111111-1111-1111-1111-111111111111"),
-                null,
-                java.time.Instant.parse("2026-08-30T12:00:00Z"),
-                "{}"
-        );
-        String raw = new ObjectMapper().registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule()).writeValueAsString(envelope);
+    void reads_envelope_with_null_requestId() {
+        String raw = """
+                {
+                  "eventId": "123e4567-e89b-12d3-a456-426614174000",
+                  "type": "payment.confirmed",
+                  "version": 1,
+                  "aggregateId": "txid-123",
+                  "merchantId": "11111111-1111-1111-1111-111111111111",
+                  "occurredAt": "2026-08-30T12:00:00Z",
+                  "payload": {}
+                }
+                """;
 
         var envelopeParsed = reader.read(raw);
 

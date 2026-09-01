@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import io.dargent.shared.events.EventEnvelope;
+import java.time.Instant;
 import java.util.UUID;
 
 /**
@@ -24,15 +25,40 @@ public final class EventEnvelopeReader {
     }
 
     /**
-     * Parses the raw JSON body into an EventEnvelope.
-     * Throws on any parsing error — caller must treat as poison.
+     * Parses the raw JSON body into an EventEnvelope per design.md §7.1 wire contract: {@code payload}
+     * is an object whose JSON text becomes {@link EventEnvelope#payload()}. Binding is done here at the
+     * boundary (Jackson belongs to adapters, AGENTS §2.2) so shared stays Jackson-free.
+     * Throws on any parsing error or missing required field — caller must treat as poison.
      */
     public EventEnvelope read(String rawJson) {
+        JsonNode node;
         try {
-            return mapper.readValue(rawJson, EventEnvelope.class);
+            node = mapper.readTree(rawJson);
         } catch (JsonProcessingException e) {
             throw new IllegalArgumentException("Invalid envelope JSON: " + e.getMessage(), e);
         }
+        try {
+            return new EventEnvelope(
+                    UUID.fromString(required(node, "eventId").asText()),
+                    required(node, "type").asText(),
+                    required(node, "version").asInt(),
+                    required(node, "aggregateId").asText(),
+                    UUID.fromString(required(node, "merchantId").asText()),
+                    node.path("requestId").asText(null),
+                    Instant.parse(required(node, "occurredAt").asText()),
+                    required(node, "payload").toString()
+            );
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid envelope: " + e.getMessage(), e);
+        }
+    }
+
+    private static JsonNode required(JsonNode node, String field) {
+        JsonNode value = node.get(field);
+        if (value == null || value.isMissingNode() || value.isNull()) {
+            throw new IllegalArgumentException("missing required field '" + field + "'");
+        }
+        return value;
     }
 
     /**
@@ -45,9 +71,12 @@ public final class EventEnvelopeReader {
         }
         JsonNode p;
         try {
-            p = new ObjectMapper().readTree(envelope.payloadJson());
+            p = new ObjectMapper().readTree(envelope.payload());
         } catch (JsonProcessingException e) {
             throw new IllegalArgumentException("Invalid payload JSON: " + e.getMessage(), e);
+        }
+        if (!p.isObject()) {
+            throw new IllegalArgumentException("Payment payload must be a JSON object");
         }
 
         long amount = p.path("amount").asLong();
@@ -65,7 +94,7 @@ public final class EventEnvelopeReader {
                 amount,
                 fee,
                 net,
-                p.path("late").asBoolean()
+                late
         );
     }
 

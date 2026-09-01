@@ -1,6 +1,5 @@
 package io.dargent.ledger.application;
 
-import io.dargent.ledger.domain.model.Account;
 import io.dargent.ledger.domain.model.EntryDirection;
 import io.dargent.ledger.domain.model.JournalEntry;
 import io.dargent.ledger.domain.model.Posting;
@@ -38,6 +37,12 @@ public final class EventIngestionUseCase {
     /**
      * Processes one SQS message (runOnce semantics).
      * Returns true if message was processed (ack), false if poison (nack).
+     *
+     * <p>The terminal status is decided before the single idempotent insert so the event row carries
+     * its true state from birth: non-confirmed types are IGNORED, invalid confirmed payloads are
+     * REJECTED (validated at the boundary), and valid confirmed events are RECEIVED and then
+     * transitioned to POSTED with the journal. A single insert avoids the silent ON CONFLICT no-op
+     * that would otherwise freeze the row in RECEIVED (§5.3, §5.7).
      */
     public boolean processMessage(String rawBody) {
         EventEnvelope envelope;
@@ -48,48 +53,43 @@ public final class EventIngestionUseCase {
             return false;
         }
 
-        // 1) Dedupe: insert event if absent (ON CONFLICT DO NOTHING)
+        String status;
+        String note;
+        EventEnvelopeReader.PaymentPayload payload = null;
+        if (!"payment.confirmed".equals(envelope.type())) {
+            // Non-posting event: terminal state is IGNORED from birth.
+            status = "IGNORED";
+            note = "Non-confirmed type: " + envelope.type();
+        } else {
+            try {
+                payload = reader.extractPaymentPayload(envelope);
+                status = "RECEIVED";
+                note = "Initial receipt";
+            } catch (IllegalArgumentException e) {
+                // Invariant violation — REJECTED at the boundary, no postings.
+                status = "REJECTED";
+                note = e.getMessage();
+            }
+        }
+
+        // Single idempotent insert; a duplicate (event_id already present) is an at-least-once retry.
         boolean inserted = store.insertEventIfAbsent(
-                envelope.eventId(),
-                envelope.type(),
-                envelope.aggregateId(),
-                envelope.merchantId(),
-                envelope.payloadJson(),
-                "RECEIVED",
-                "Initial receipt"
-        );
+                envelope.eventId(), envelope.type(), envelope.aggregateId(),
+                envelope.merchantId(), envelope.payload(), status, note);
 
         if (!inserted) {
             // Duplicate delivery — ack + skip
             return true;
         }
 
-        // 2) Non-confirmed events: IGNORED, no postings
-        if (!"payment.confirmed".equals(envelope.type())) {
-            store.insertEventIfAbsent(
-                    envelope.eventId(), envelope.type(), envelope.aggregateId(),
-                    envelope.merchantId(), envelope.payloadJson(),
-                    "IGNORED", "Non-confirmed type: " + envelope.type()
-            );
+        final EventEnvelopeReader.PaymentPayload postedPayload = payload;
+        if (postedPayload == null) {
+            // IGNORED or REJECTED — no postings.
             return true;
         }
 
-        // 3) Parse payment payload with validation
-        EventEnvelopeReader.PaymentPayload payload;
-        try {
-            payload = reader.extractPaymentPayload(envelope);
-        } catch (IllegalArgumentException e) {
-            // Invariant violation — REJECTED, no postings
-            store.insertEventIfAbsent(
-                    envelope.eventId(), envelope.type(), envelope.aggregateId(),
-                    envelope.merchantId(), envelope.payloadJson(),
-                    "REJECTED", e.getMessage()
-            );
-            return true;
-        }
-
-        // 4) Single transaction: update event status, journal + postings + balances
-        return txTemplate.execute(status -> {
+        // Single transaction: update event status, journal + postings + balances
+        return txTemplate.execute(txStatus -> {
             // Update event to POSTED
             jdbc.sql("""
                     UPDATE ledger.events
@@ -100,24 +100,23 @@ public final class EventIngestionUseCase {
                     .update();
 
             // Build postings (spec §5.3)
-            Instant now = clock.instant();
             UUID entryId = UUID.randomUUID();
             var postings = List.of(
                     new Posting(UUID.randomUUID(), entryId, "payments:processing",
-                            EntryDirection.DEBIT, payload.amountCents(), clock.instant()),
+                            EntryDirection.DEBIT, postedPayload.amountCents(), clock.instant()),
                     new Posting(UUID.randomUUID(), entryId, "fees:revenue",
-                            EntryDirection.CREDIT, payload.feeCents(), clock.instant()),
+                            EntryDirection.CREDIT, postedPayload.feeCents(), clock.instant()),
                     new Posting(UUID.randomUUID(), entryId,
-                            "merchant:" + payload.merchantId() + ":available",
-                            EntryDirection.CREDIT, payload.netCents(), clock.instant())
+                            "merchant:" + postedPayload.merchantId() + ":available",
+                            EntryDirection.CREDIT, postedPayload.netCents(), clock.instant())
             );
 
             var entry = new JournalEntry(
-                    UUID.randomUUID(),
+                    entryId,
                     envelope.eventId(),
-                    payload.txid(),
-                    UUID.fromString(payload.merchantId()),
-                    "Payment confirmed: " + payload.txid(),
+                    postedPayload.txid(),
+                    UUID.fromString(postedPayload.merchantId()),
+                    "Payment confirmed: " + postedPayload.txid(),
                     envelope.occurredAt(),
                     postings
             );

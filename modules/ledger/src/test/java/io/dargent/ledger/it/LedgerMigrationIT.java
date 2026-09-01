@@ -10,7 +10,7 @@ import java.sql.*;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Proves ledger migrations (V202–V206) apply cleanly on PostgreSQL 16.
+ * Proves ledger migrations (V202–V207) apply cleanly on PostgreSQL 16.
  * Uses flyway-database-postgresql extension for PostgreSQL 16+ support.
  */
 @Testcontainers
@@ -73,6 +73,15 @@ class LedgerMigrationIT {
             assertForeignKeyExists(conn, "journal_entries", "event_id", "events", "event_id");
             assertForeignKeyExists(conn, "postings", "entry_id", "journal_entries", "id");
             assertForeignKeyExists(conn, "settlements", "entry_id", "journal_entries", "id");
+
+            // 5) V207: the events.status CHECK admits the ingestion RECEIVED state (spec §5.3)
+            try (var ps = conn.prepareStatement("""
+                    INSERT INTO ledger.events (event_id, type, txid, merchant_id, payload, status, note)
+                    VALUES (?, 'payment.confirmed', 'mig-it-v207', '11111111-1111-1111-1111-111111111111',
+                            '{}'::jsonb, 'RECEIVED', 'V207 probe')""")) {
+                ps.setObject(1, java.util.UUID.randomUUID());
+                assertThat(ps.executeUpdate()).as("V207 admits RECEIVED status").isEqualTo(1);
+            }
         }
     }
 

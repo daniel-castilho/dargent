@@ -8,7 +8,8 @@ import io.dargent.ledger.domain.port.out.LedgerStore;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import java.time.Instant;
+import java.sql.Timestamp;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -49,7 +50,7 @@ public final class JdbcLedgerStore implements LedgerStore {
                     VALUES (?, ?, ?, ?, ?, ?)
                     """)
                     .params(entry.id(), entry.eventId(), entry.txid(), entry.merchantId(),
-                            entry.description(), entry.createdAt())
+                            entry.description(), Timestamp.from(entry.createdAt()))
                     .update();
 
             // 2) Postings
@@ -58,7 +59,8 @@ public final class JdbcLedgerStore implements LedgerStore {
                         INSERT INTO ledger.postings (id, entry_id, account, direction, amount_cents, created_at)
                         VALUES (?, ?, ?, ?::text, ?, ?)
                         """)
-                        .params(p.id(), p.entryId(), p.account(), p.direction().name(), p.amountCents(), p.createdAt())
+                        .params(p.id(), p.entryId(), p.account(), p.direction().name(), p.amountCents(),
+                                Timestamp.from(p.createdAt()))
                         .update();
             }
 
@@ -74,7 +76,7 @@ public final class JdbcLedgerStore implements LedgerStore {
                             updated_at = EXCLUDED.updated_at,
                             last_event_id = EXCLUDED.last_event_id
                         """)
-                        .params(p.account(), delta, entry.createdAt(), entry.eventId())
+                        .params(p.account(), delta, Timestamp.from(entry.createdAt()), entry.eventId())
                         .update();
             }
             return null;
@@ -106,7 +108,7 @@ public final class JdbcLedgerStore implements LedgerStore {
                 .query((rs, rowNum) -> new Account(
                         rs.getString("account"),
                         rs.getLong("balance_cents"),
-                        rs.getObject("updated_at", Instant.class),
+                        rs.getObject("updated_at", OffsetDateTime.class).toInstant(),
                         (UUID) rs.getObject("last_event_id")
                 ))
                 .optional();
@@ -131,7 +133,7 @@ public final class JdbcLedgerStore implements LedgerStore {
                 .query((rs, rowNum) -> new Account(
                         rs.getString("account"),
                         rs.getLong("balance_cents"),
-                        rs.getObject("updated_at", Instant.class),
+                        rs.getObject("updated_at", OffsetDateTime.class).toInstant(),
                         (UUID) rs.getObject("last_event_id")
                 ))
                 .optional();
@@ -151,7 +153,7 @@ public final class JdbcLedgerStore implements LedgerStore {
                         rs.getString("idempotency_key"),
                         rs.getLong("amount_cents"),
                         rs.getObject("entry_id", UUID.class),
-                        rs.getObject("settled_at", Instant.class)
+                        rs.getObject("settled_at", OffsetDateTime.class).toInstant()
                 ))
                 .optional();
     }
@@ -183,7 +185,7 @@ public final class JdbcLedgerStore implements LedgerStore {
                 ON CONFLICT (idempotency_key) DO NOTHING
                 """)
                 .params(settlement.id(), settlement.merchantId(), settlement.idempotencyKey(),
-                        settlement.amountCents(), settlement.entryId(), settlement.settledAt())
+                        settlement.amountCents(), settlement.entryId(), Timestamp.from(settlement.settledAt()))
                 .update();
         if (rows > 0) {
             return Optional.of(settlement);
@@ -201,7 +203,7 @@ public final class JdbcLedgerStore implements LedgerStore {
                         rs.getString("idempotency_key"),
                         rs.getLong("amount_cents"),
                         rs.getObject("entry_id", UUID.class),
-                        rs.getObject("settled_at", Instant.class)
+                        rs.getObject("settled_at", OffsetDateTime.class).toInstant()
                 ))
                 .optional();
     }

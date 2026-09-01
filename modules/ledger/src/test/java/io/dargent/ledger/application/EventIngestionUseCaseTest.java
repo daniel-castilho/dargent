@@ -5,7 +5,6 @@ import io.dargent.ledger.domain.model.EntryDirection;
 import io.dargent.ledger.domain.model.JournalEntry;
 import io.dargent.ledger.domain.model.Posting;
 import io.dargent.ledger.domain.port.out.LedgerStore;
-import io.dargent.shared.events.EventEnvelope;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -52,20 +51,9 @@ class EventIngestionUseCaseTest {
     }
 
     @Test
-    void processes_confirmed_payment_and_acks() throws Exception {
-        var envelope = new io.dargent.shared.events.EventEnvelope(
-                java.util.UUID.randomUUID(),
-                "payment.confirmed",
-                1,
-                "txid-123",
-                java.util.UUID.fromString("11111111-1111-1111-1111-111111111111"),
-                "req-123",
-                java.time.Instant.parse("2026-08-30T12:00:00Z"),
-                "{\"txid\":\"txid-123\",\"merchantId\":\"11111111-1111-1111-1111-111111111111\",\"amount\":10000,\"fee\":100,\"net\":9900,\"late\":false}"
-        );
-        String raw = new com.fasterxml.jackson.databind.ObjectMapper()
-                .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())
-                .writeValueAsString(envelope);
+    void processes_confirmed_payment_and_acks() {
+        String raw = rawEnvelope("payment.confirmed",
+                "{\"txid\":\"txid-123\",\"merchantId\":\"11111111-1111-1111-1111-111111111111\",\"amount\":10000,\"fee\":100,\"net\":9900,\"late\":false}");
 
         boolean ack = useCase.processMessage(raw);
 
@@ -76,20 +64,9 @@ class EventIngestionUseCaseTest {
     }
 
     @Test
-    void duplicate_event_is_acked_and_skipped() throws Exception {
-        var envelope = new io.dargent.shared.events.EventEnvelope(
-                java.util.UUID.randomUUID(),
-                "payment.confirmed",
-                1,
-                "txid-123",
-                java.util.UUID.fromString("11111111-1111-1111-1111-111111111111"),
-                "req-123",
-                java.time.Instant.parse("2026-08-30T12:00:00Z"),
-                "{\"txid\":\"txid-123\",\"merchantId\":\"11111111-1111-1111-1111-111111111111\",\"amount\":10000,\"fee\":100,\"net\":9900,\"late\":false}"
-        );
-        String raw = new com.fasterxml.jackson.databind.ObjectMapper()
-                .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())
-                .writeValueAsString(envelope);
+    void duplicate_event_is_acked_and_skipped() {
+        String raw = rawEnvelope("payment.confirmed",
+                "{\"txid\":\"txid-123\",\"merchantId\":\"11111111-1111-1111-1111-111111111111\",\"amount\":10000,\"fee\":100,\"net\":9900,\"late\":false}");
 
         boolean ack1 = useCase.processMessage(raw);
         boolean ack2 = useCase.processMessage(raw);
@@ -100,20 +77,8 @@ class EventIngestionUseCaseTest {
     }
 
     @Test
-    void non_confirmed_event_is_ignored() throws Exception {
-        var envelope = new io.dargent.shared.events.EventEnvelope(
-                java.util.UUID.randomUUID(),
-                "payment.created",
-                1,
-                "txid-123",
-                java.util.UUID.fromString("11111111-1111-1111-1111-111111111111"),
-                "req-123",
-                java.time.Instant.parse("2026-08-30T12:00:00Z"),
-                "{}"
-        );
-        String raw = new com.fasterxml.jackson.databind.ObjectMapper()
-                .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())
-                .writeValueAsString(envelope);
+    void non_confirmed_event_is_ignored() {
+        String raw = rawEnvelope("payment.created", "{}");
 
         boolean ack = useCase.processMessage(raw);
 
@@ -125,20 +90,8 @@ class EventIngestionUseCaseTest {
     }
 
     @Test
-    void malformed_payload_rejected() throws Exception {
-        var envelope = new io.dargent.shared.events.EventEnvelope(
-                java.util.UUID.randomUUID(),
-                "payment.confirmed",
-                1,
-                "txid-123",
-                java.util.UUID.fromString("11111111-1111-1111-1111-111111111111"),
-                "req-123",
-                java.time.Instant.parse("2026-08-30T12:00:00Z"),
-                "not valid json"
-        );
-        String raw = new com.fasterxml.jackson.databind.ObjectMapper()
-                .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())
-                .writeValueAsString(envelope);
+    void malformed_payload_rejected() {
+        String raw = rawEnvelope("payment.confirmed", "\"not valid json\"");
 
         boolean ack = useCase.processMessage(raw);
 
@@ -149,20 +102,9 @@ class EventIngestionUseCaseTest {
     }
 
     @Test
-    void fee_plus_net_must_equal_amount() throws Exception {
-        var envelope = new io.dargent.shared.events.EventEnvelope(
-                java.util.UUID.randomUUID(),
-                "payment.confirmed",
-                1,
-                "txid-123",
-                java.util.UUID.fromString("11111111-1111-1111-1111-111111111111"),
-                "req-123",
-                java.time.Instant.parse("2026-08-30T12:00:00Z"),
-                "{\"txid\":\"txid-123\",\"merchantId\":\"11111111-1111-1111-1111-111111111111\",\"amount\":10000,\"fee\":200,\"net\":9900,\"late\":false}"
-        );
-        String raw = new com.fasterxml.jackson.databind.ObjectMapper()
-                .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())
-                .writeValueAsString(envelope);
+    void fee_plus_net_must_equal_amount() {
+        String raw = rawEnvelope("payment.confirmed",
+                "{\"txid\":\"txid-123\",\"merchantId\":\"11111111-1111-1111-1111-111111111111\",\"amount\":10000,\"fee\":200,\"net\":9900,\"late\":false}");
 
         boolean ack = useCase.processMessage(raw);
 
@@ -172,20 +114,9 @@ class EventIngestionUseCaseTest {
     }
 
     @Test
-    void postings_balanced_debit_credit() throws Exception {
-        var envelope = new io.dargent.shared.events.EventEnvelope(
-                java.util.UUID.randomUUID(),
-                "payment.confirmed",
-                1,
-                "txid-123",
-                java.util.UUID.fromString("11111111-1111-1111-1111-111111111111"),
-                "req-123",
-                java.time.Instant.parse("2026-08-30T12:00:00Z"),
-                "{\"txid\":\"txid-123\",\"merchantId\":\"11111111-1111-1111-1111-111111111111\",\"amount\":10000,\"fee\":100,\"net\":9900,\"late\":false}"
-        );
-        String raw = new com.fasterxml.jackson.databind.ObjectMapper()
-                .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())
-                .writeValueAsString(envelope);
+    void postings_balanced_debit_credit() {
+        String raw = rawEnvelope("payment.confirmed",
+                "{\"txid\":\"txid-123\",\"merchantId\":\"11111111-1111-1111-1111-111111111111\",\"amount\":10000,\"fee\":100,\"net\":9900,\"late\":false}");
 
         useCase.processMessage(raw);
 
@@ -200,6 +131,15 @@ class EventIngestionUseCaseTest {
                 .sum();
 
         assertThat(totalDebit).isEqualTo(totalCredit);
+    }
+
+    private static String rawEnvelope(String type, String payloadJson) {
+        return "{\"eventId\":\"" + java.util.UUID.randomUUID()
+                + "\",\"type\":\"" + type
+                + "\",\"version\":1,\"aggregateId\":\"txid-123\""
+                + ",\"merchantId\":\"11111111-1111-1111-1111-111111111111\""
+                + ",\"requestId\":\"req-123\",\"occurredAt\":\"2026-08-30T12:00:00Z\""
+                + ",\"payload\":" + payloadJson + "}";
     }
 
     // Fake LedgerStore for testing
