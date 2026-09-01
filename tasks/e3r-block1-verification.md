@@ -286,6 +286,8 @@ create-path ITs (E3R A0)"), success — the handoff's "#17" and the matrix's "#1
 | #68 | `33468368797` | `8e775cb` | TD-14 — honest e7 S0 row + ledger E4 pair + register |
 | #69 | `33468667301` | `4877c71` | docs: TD-14 correction run pair (#68) |
 | #70 | `33536856542` | `b6678ac` | TD-13/14 leftover id→number mislabels closed (#28→#29/#30) |
+| #71 | `33537318509` | `6897d1d` | TD-14/TD-13 residual run pairs (#68/#69/#70) in canonical table |
+| #72 | `33555099220` | `3ae463e` | **BD-15** — resume-on-RECEIVED (duplicate branch resume, guard IT, consumer test) |
 
 (#15/#16 predate this audit's verified window; verify locally before citing.)
 

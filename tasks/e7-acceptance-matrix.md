@@ -41,6 +41,12 @@
 | Migration forward-only, expand-only (V202–V207) | `LedgerMigrationIT` | #53 `33443733757` | ✅ |
 | Architecture: module isolation + AWS confinement | `LedgerArchitectureTest` (2 tests, ArchUnit) | #54 `33448005815` / #59 | ✅ |
 
+## Post-closure Remediation (BD-15 / BD-16)
+
+| Item | Deliverable | Test / Evidence | CI Run | Status |
+|---|---|---|---|---|
+| BD-15 | Resume-on-RECEIVED: duplicate branch re-reads status; RECEIVED → conditional claim + journal/postings in 1 tx; 0 rows → ack-skip; journal UNIQUE belt-and-suspenders | Unit: `EventIngestionUseCaseTest` duplicate-branch matrix (5 tests); Guard IT: `redelivery_after_posting_failure_resumes_and_posts_exactly_once`; Consumer: `SqsEventConsumerTest` false→nack | #59 `33462467004` / #72 `33555099220` `3ae463e` | ✅ |
+
 ## Concurrency & Race Proofs (spec §6)
 
 | Race | Proof | Run pair | Status |
@@ -48,7 +54,7 @@
 | Duplicate delivery (SQS at-least-once) | IT2 — same message twice → one entry, second ack-skips (`ON CONFLICT (event_id) DO NOTHING`) | #59 `33462467004` | ✅ |
 | Two consumers / redelivery while processing | SQS visibility timeout + DB dedupe as backstop (IT2/IT3 conflict path) | #59 `33462467004` | ✅ |
 | Settlement vs confirm racing on the same merchant balance | IT5b — concurrent settle + confirm land, proof stays green, no lost update (`SELECT … FOR UPDATE` on balances) | #59 `33462467004` | ✅ |
-| Consumer crash between receive and ack | Message re-delivered → dedupe skip (IT2 variant) | #59 `33462467004` | ✅ |
+| Consumer crash between receive and ack | Redelivery resumes from RECEIVED via conditional claim + belt-and-suspenders journal UNIQUE (BD-15 guard IT) | #59 `33462467004` / <BD-15 guard IT run> | ✅ |
 | Rebuild vs consumer writing | `FOR UPDATE` on balances during rebuild; consumer txs serialize on same rows (IT4 runOnce determinism) | #59 `33462467004` | ✅ |
 
 ## Delivery Guarantee Statement (spec §5.7 — verbatim)
