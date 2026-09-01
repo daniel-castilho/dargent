@@ -283,6 +283,9 @@ create-path ITs (E3R A0)"), success — the handoff's "#17" and the matrix's "#1
 | #64 | `33465386491` | `09d0e7e` | docs: record S6 docs pair (#63) in canonical table |
 | #65 | `33465919415` | `8f09091` | E7 S7 hygiene — drop redundant @Component from SqsEventConsumer green (S7 canonical) |
 | #66 | `33466333101` | `f4b4ff4` | **E7 ledger flip** — acceptance matrix + epics E7 ✅; final run id at flip HEAD; epic closed |
+| #68 | `33468368797` | `8e775cb` | TD-14 — honest e7 S0 row + ledger E4 pair + register |
+| #69 | `33468667301` | `4877c71` | docs: TD-14 correction run pair (#68) |
+| #70 | `33536856542` | `b6678ac` | TD-13/14 leftover id→number mislabels closed (#28→#29/#30) |
 
 (#15/#16 predate this audit's verified window; verify locally before citing.)
 
