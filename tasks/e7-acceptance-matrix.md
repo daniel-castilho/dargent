@@ -46,7 +46,7 @@
 | Item | Deliverable | Test / Evidence | CI Run | Status |
 |---|---|---|---|---|
 | BD-15 | Resume-on-RECEIVED: duplicate branch re-reads status; RECEIVED → conditional claim + journal/postings in 1 tx; 0 rows → ack-skip; journal UNIQUE belt-and-suspenders | Unit: `EventIngestionUseCaseTest` duplicate-branch matrix (5 tests); Guard IT: `redelivery_after_posting_failure_resumes_and_posts_exactly_once`; Consumer: `SqsEventConsumerTest` false→nack | #59 `33462467004` / #72 `33555099220` `3ae463e` | ✅ |
-| BD-16 | Jackson 3 reader: single `tools.jackson` mapper, normalized parse failures (`DateTimeException` → `IllegalArgumentException`), `occurredAt: "not-a-date"` → poison by contract | Unit: `EventEnvelopeReaderTest.malformed_occurredAt_is_poison_by_contract`; Hygiene grep: `grep -rn "com.fasterxml" modules/ledger/src/main` = 0 hits (commit `<BD-16 commit>`) | #59 `33462467004` / <BD-16 run> | ✅ |
+| BD-16 | Jackson 3 reader: single `tools.jackson` mapper, normalized parse failures (`DateTimeException` → `IllegalArgumentException`), `occurredAt: "not-a-date"` → poison by contract | Unit: `EventEnvelopeReaderTest.malformed_occurredAt_is_poison_by_contract`; Hygiene grep: `grep -rn "com.fasterxml" modules/ledger/src/main` = 0 hits (commit `e946a15`) | #59 `33462467004` / #74 `33559514160` `e946a15` | ✅ |
 
 ## Concurrency & Race Proofs (spec §6)
 

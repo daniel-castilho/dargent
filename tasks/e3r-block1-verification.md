@@ -288,6 +288,7 @@ create-path ITs (E3R A0)"), success — the handoff's "#17" and the matrix's "#1
 | #70 | `33536856542` | `b6678ac` | TD-13/14 leftover id→number mislabels closed (#28→#29/#30) |
 | #71 | `33537318509` | `6897d1d` | TD-14/TD-13 residual run pairs (#68/#69/#70) in canonical table |
 | #72 | `33555099220` | `3ae463e` | **BD-15** — resume-on-RECEIVED (duplicate branch resume, guard IT, consumer test) |
+| #74 | `33559514160` | `e946a15` | **BD-16** — Jackson 3 reader, normalized parse failures, hygiene grep 0 hits |
 
 (#15/#16 predate this audit's verified window; verify locally before citing.)
 
