@@ -29,6 +29,21 @@ Knob defaults cited from this table: `DARGENT_RELAY_WORKERS=2`, `DARGENT_RELAY_B
 `DARGENT_RELAY_POLL_MS=1000`, `DARGENT_OUTBOX_RETENTION_DAYS=7`. Changing a default without re-deriving
 this table is a spec violation.
 
+### Ledger growth addendum (E7 — assumptions, not measurements)
+
+The confirmed subset at MVP volume lands in the ledger's **append-only journal and postings, which are never
+purged** (the deliberate contrast with the outbox's 7-day retention, design.md §5.2). Same assumption set as
+the outbox table above (50 000 payments/day → ~100 000 events/day).
+
+| Premise (assumed, stated) | Value | Consequence |
+|---|---|---|
+| Confirmed events/day | ~100 000 (incl. non-posting created/failed) | ~100 000 `journal_entries` + ~300 000 `postings` (3 per confirmed) per day |
+| Journal+postings growth | ~40 MB/day incl. indexes | **permanent, no purge** → ~1.2 GB/month, ~14 GB/year — acceptable bare-metal; archival is E14's row |
+| Proof query cost | `O(postings)` across `ledger.postings` + `ledger.balances` | fine at this size (single-digit ms); revisit with measured floors before any hard gate (§5) |
+
+Consequence: the journal is treated as a financial record (bounded by MVP volume today); E14 is explicitly
+scoped to archival, not rollback. Growth knob is NOT a retention knob — lowering it is not a remedy.
+
 ---
 
 ## 1. Scenarios & budgets

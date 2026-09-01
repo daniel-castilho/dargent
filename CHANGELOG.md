@@ -79,6 +79,14 @@ versioning: semantic, cut from annotated git tags (see [release-runbook](docs/re
 - **Strict payload boundary**: `EventEnvelopeReader.extractPaymentPayload` rejects non-object payloads
   (true boundary validation).
 
+### Docs — E7 S6 (2026-08-31)
+
+- **BoE addendum** (`docs/load-test-baseline.md` §0.1 "Ledger growth addendum"): journal + postings grow
+  ~40 MB/day (~100k journal + ~300k postings), **never purged** (append-only) → ~1.2 GB/month, archival is
+  E14's row; growth knob is not a retention remedy. Assumptions labeled, not measured.
+- **README current state synced**: E7 S1–S5 live (journal + proof/rebuild + settlement behind
+  `DARGENT_LEDGER_CONSUMER_ENABLED`); M2 row marked ◐ — E10 notifications pending, honest per spec §9.
+
 ### Fixed — E6 (2026-08-30)
 
 - **`SimulatorChargeAdapter` proxy poisoning**: constructor set `System.setProperty("http.proxy*", "")`,
