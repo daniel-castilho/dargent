@@ -1,6 +1,7 @@
 package io.dargent.api.ledger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
@@ -263,51 +264,87 @@ class LedgerMoneyLoopIT {
         assertThat(audit).isEqualTo(1);
     }
 
-/** BD-15 guard IT: redelivery after posting failure resumes and posts exactly once. */
+/** BD-15 guard IT: redelivery after posting failure resumes and posts exactly once.
+     * Two legs (adjudicated Q1/Q2):
+     *   Leg 1 (failure injection): trigger on journal_entries INSERT throws -> exception, row RECEIVED, 0 journal rows.
+     *   Leg 2 (redelivery): drop trigger -> redeliver same message -> exactly-once resume (ack, 1 journal, 3 postings, proof ok).
+     * @AfterEach drops trigger as safety net for container reuse.
+     */
     @Test
     void redelivery_after_posting_failure_resumes_and_posts_exactly_once() throws Exception {
-        // This test mirrors the unit test pattern: manually insert an event in RECEIVED state
-        // (simulating a crash after the event insert but before the journal write committed),
-        // then verify that processMessage resumes posting correctly.
         String txid = "ledger-bd15-guard-" + UUID.randomUUID();
         UUID eventId = UUID.randomUUID();
         String raw = confirmedEnvelopeWithEventId(eventId, txid, "E9040381234567890123456789012345", 5000);
-
-        // Extract just the payload JSON from the envelope (the inner payload object)
         String payloadJson = extractPayloadJson(raw);
 
-        // 1. Manually insert event in RECEIVED state (simulating a crash after the event insert but before the journal write committed)
-        String insertSql = """
-                INSERT INTO ledger.events (event_id, type, txid, merchant_id, payload, status, note)
-                VALUES (?, 'payment.confirmed', ?, ?, ?::jsonb, 'RECEIVED', 'Initial receipt')
-                """;
-        jdbc.sql(insertSql)
-                .params(eventId, txid, MERCHANT, payloadJson)
-                .update();
+        // --- Leg 1: failure injection via trigger on journal_entries INSERT ---
+        String triggerName = "trg_fail_journal_insert";
+        String funcName = "fail_journal_insert_once";
+        String ddlCreate = "CREATE OR REPLACE FUNCTION " + funcName + "() RETURNS TRIGGER AS $$\n"
+                + "BEGIN\n"
+                + "    IF TG_OP = 'INSERT' THEN\n"
+                + "        RAISE EXCEPTION 'SIMULATED_POSTING_FAILURE';\n"
+                + "    END IF;\n"
+                + "    RETURN NEW;\n"
+                + "END;\n"
+                + "$$ LANGUAGE plpgsql;\n"
+                + "DROP TRIGGER IF EXISTS " + triggerName + " ON ledger.journal_entries;\n"
+                + "CREATE TRIGGER " + triggerName + " BEFORE INSERT ON ledger.journal_entries\n"
+                + "FOR EACH ROW EXECUTE FUNCTION " + funcName + "();";
+        jdbc.sql(ddlCreate).update();
 
-        // Verify initial state: RECEIVED, zero journal rows
-        String status = jdbc.sql("select status from ledger.events where txid = :t")
-                .param("t", txid).query(String.class).single();
-        assertThat(status).isEqualTo("RECEIVED");
-        assertThat(journalEntries()).isZero();
-        assertThat(postings()).isZero();
+        try {
+            // 1a. Manually insert event in RECEIVED state (simulating crash after event insert, before journal)
+            String insertSql = """
+                    INSERT INTO ledger.events (event_id, type, txid, merchant_id, payload, status, note)
+                    VALUES (?, 'payment.confirmed', ?, ?, ?::jsonb, 'RECEIVED', 'Initial receipt')
+                    """;
+            jdbc.sql(insertSql).params(eventId, txid, MERCHANT, payloadJson).update();
 
-        // 2. Deliver the SAME message (same eventId) — should resume and post exactly once
-        boolean ack = ingestion.processMessage(raw);
-        assertThat(ack).as("resume should ack and post exactly once").isTrue();
+            // Verify initial state: RECEIVED, zero journal rows
+            String status = jdbc.sql("select status from ledger.events where txid = :t")
+                    .param("t", txid).query(String.class).single();
+            assertThat(status).isEqualTo("RECEIVED");
+            assertThat(journalEntries()).isZero();
+            assertThat(postings()).isZero();
 
-        // Verify: exactly ONE journal entry + 3 postings, balances incremented once, proof ok
-        assertThat(journalEntries()).as("exactly one journal entry after resume").isEqualTo(1);
-        assertThat(postings()).as("exactly three postings").isEqualTo(3);
-        assertThat(balance("merchant:" + MERCHANT + ":available")).isEqualTo(4900);
-        assertThat(balance("fees:revenue")).isEqualTo(100);
-        assertThat(balance("payments:processing")).isEqualTo(-5000);
-        assertProofOk(3, 3);
+            // 1b. First attempt: trigger fires, exception propagates (consumer catches and nacks)
+            assertThatThrownBy(() -> ingestion.processMessage(raw))
+                    .isInstanceOf(Exception.class)
+                    .hasMessageContaining("SIMULATED_POSTING_FAILURE");
 
-        // 3. Verify event status is now POSTED
-        String finalStatus = jdbc.sql("select status from ledger.events where txid = :t")
-                .param("t", txid).query(String.class).single();
-        assertThat(finalStatus).isEqualTo("POSTED");
+            // Verify: row stays RECEIVED, zero journal rows, payment unaffected
+            String statusAfterFail = jdbc.sql("select status from ledger.events where txid = :t")
+                    .param("t", txid).query(String.class).single();
+            assertThat(statusAfterFail).isEqualTo("RECEIVED");
+            assertThat(journalEntries()).as("no journal rows on first attempt").isZero();
+            assertThat(postings()).isZero();
+
+            // --- Leg 2: drop trigger, redeliver same message -> exactly-once resume ---
+            String ddlDrop = "DROP TRIGGER IF EXISTS " + triggerName + " ON ledger.journal_entries;";
+            jdbc.sql(ddlDrop).update();
+
+            // 2a. Redeliver the SAME message (same eventId) - should resume and post exactly once
+            boolean ack2 = ingestion.processMessage(raw);
+            assertThat(ack2).as("redelivery should ack and post exactly once").isTrue();
+
+            // Verify: exactly ONE journal entry + 3 postings, balances incremented once, proof ok
+            assertThat(journalEntries()).as("exactly one journal entry after resume").isEqualTo(1);
+            assertThat(postings()).as("exactly three postings").isEqualTo(3);
+            assertThat(balance("merchant:" + MERCHANT + ":available")).isEqualTo(4900);
+            assertThat(balance("fees:revenue")).isEqualTo(100);
+            assertThat(balance("payments:processing")).isEqualTo(-5000);
+            assertProofOk(3, 3);
+
+            // 3. Verify event status is now POSTED
+            String finalStatus = jdbc.sql("select status from ledger.events where txid = :t")
+                    .param("t", txid).query(String.class).single();
+            assertThat(finalStatus).isEqualTo("POSTED");
+        } finally {
+            // Safety: ensure trigger is cleaned up even if test fails (container reuse safety)
+            String ddlCleanup = "DROP TRIGGER IF EXISTS " + triggerName + " ON ledger.journal_entries;";
+            jdbc.sql(ddlCleanup).update();
+        }
     }
 
     private String confirmedEnvelopeWithEventId(UUID eventId, String txid, String endToEndId, int amount) {
