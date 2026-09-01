@@ -4,7 +4,7 @@
 **Date:** 2026-08-30  
 **Status:** ✅ **COMPLETE (E3R CLOSED)** — All BD-1…BD-14 fixed, all MS-1…MS-3 implemented, all TD-1…TD-11 resolved, all tests green with CI run IDs.
 
-**Baseline:** E2 closure commit `bb90f9d` (CI run #33230405247 green). E3R starts from commit `765c4cc` (docs package). E3R completes at `1e9dec6` (run #28 `33331033505` green).
+**Baseline:** E2 closure commit `bb90f9d` (CI run #33230405247 green). E3R starts from commit `765c4cc` (docs package). E3R completes at `1e9dec6` (run #29 `33331033505` green).
 
 ---
 
@@ -103,7 +103,7 @@
 - [x] All BD-1…BD-14 fixed (CI green on run #19, #24, #25, #26, #27, #28)
 - [x] All MS-1…MS-3 implemented (endpoints live on `main`)
 - [x] All TD-1…TD-11 resolved (IT enabled, docs committed, evidence CI-cited)
-- [x] Matrix zero pending; CI green on `main` (run #28 `33331033505`)
+- [x] Matrix zero pending; CI green on `main` (run #30 `33333739409`)
 - [x] `tasks/e3r-acceptance-matrix.md` created with CI run IDs
 - [x] `tasks/e3-acceptance-matrix.md` rewritten (this file)
 - [x] `tasks/e4-acceptance-matrix.md` rebuilt from scratch (E3R R7)
@@ -111,7 +111,7 @@
 - [x] CHANGELOG correction entry (retraction + remediation)
 - [x] README honesty callout flipped back to declared-state
 - [x] Ledger in `docs/epics.md` corrected (E3/E4 reopened, E3R added)
-- [x] `mvn -B verify` green on `main` (run #28 `33331033505`)
+- [x] `mvn -B verify` green on `main` (run #30 `33333739409`)
 
 ---
 

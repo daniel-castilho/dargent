@@ -77,7 +77,7 @@
 |---|---|
 | Every cell cites CI test name + run id | ✅ |
 | Zero pending cells | ✅ |
-| `mvn -B verify` green on `main` | ✅ (run #28 `33331033505`) |
+| `mvn -B verify` green on `main` | ✅ (run #30 `33333739409`) |
 | Scope diff = 0 | ✅ |
 | `scripts/check-boundaries.sh` OK | ✅ |
 | No `com.fasterxml.jackson` in prod | ✅ |
@@ -91,6 +91,6 @@
 - #25 `33321575303` — BD-13 residual + BD-11 atomicity happy-path (2 tests)
 - #26 `33321575303` — BD-11 failure-injection (1 test)
 - #27 `33328906357` — BD-14 ratification (1 test)
-- #28 `33331033505` — Final verify (all green)
+- #30 `33333739409` — Final verify (all green)
 
 All cells green. All runs green. All evidence cited. E4 complete.

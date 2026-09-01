@@ -117,7 +117,7 @@ versioning: semantic, cut from annotated git tags (see [release-runbook](docs/re
 - **BD-11:** Atomicity failure-injection IT (outbox trigger → 500 → RECEIVED → redeliver → PROCESSED)
 - **BD-14:** Sentinel audit actor ratified (V106 NOT NULL stands; javadoc + IT assert)
 - **Matrix:** All cells green with CI run IDs (#18 #19 #22 #24 #25 #26 #27 #28)
-- **E3/E4 ledger rows:** `✅` flipped (run #28 `33331033505`)
+- **E3/E4 ledger rows:** `✅` flipped (run #30 `33333739409`)
 
 ### Added — E3 Create Payment (2026-08-29) *[REDACTED — see correction above]*
 
