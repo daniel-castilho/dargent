@@ -28,7 +28,7 @@ second** (among unblocked epics, the one that unlocks the most goes first).
 | E1 | Payment domain & state machine | payments | E0 | M1 | ✅ 2026-08-29 — CI green (run #33225043138), matrix evidenced, lesson #12 |
 | E2 | PSP simulator API (cobs + payer bank + chaos) | psp-simulator | E0 *(parallel with E1)* | M1 | ✅ 2026-08-29 — matrix evidenced (`tasks/e2-acceptance-matrix.md`), spec §5.4 vector asserted |
 | E3 | Create payment: idempotency + API keys + error contract | payments, api | E1, E2 | M1 | ✅ 2026-08-30 — run #19 `33285295818` (create path), run #20 `33288538459` (scenarios), run #30 `33333739409` — E3R remediation complete |
-| E4 | Webhook intake: HMAC, anti-replay, dedupe, confirmation | payments, api | E1, E2 | M1 | ✅ 2026-08-30 — run #24 `33318535724` (scenarios 6,7,8,10 + 3 ignored + full loop), run #25 `33321575303` (BD-13/BD-11), run #26 `33331033505` (BD-11 failure-injection), run #27 `33328906357` (BD-14), run #30 `33333739409` — E3R complete |
+| E4 | Webhook intake: HMAC, anti-replay, dedupe, confirmation | payments, api | E1, E2 | M1 | ✅ 2026-08-30 — run #24 `33318535724` (scenarios 6,7,8,10 + 3 ignored + full loop), run #25 `33321575303` (BD-13/BD-11), run #26 `33326648770` (BD-12/13 partial + sentinel), run #27 `33328906357` (BD-14), run #29 `33331033505` (BD-11 failure-injection), run #30 `33333739409` — E3R complete |
 | E3R | Remediation: create path + webhook intake (audit pass) | payments, api | E1, E2 (remediates E3 + E4) | M1 | ✅ 2026-08-30 — run #30 `33333739409` green — all E3/E4/E3R cells green — **unblocks E5 and E6** |
 | E5 | Expiration, resurrection & reconciliation | payments | E3R (E3+E4 remediated) | M3 | ☐ |
 | E6 | Outbox + messaging backbone (relay, SNS/SQS, DLQ) | payments, api | E3R (E3 remediated) | M2 | ✅ 2026-08-30 — run #43 `33354167958` (S6 canonical: envelope + IT5 M2 anchor + IT6) → #46 `33355073316` (closure docs green) — matrix evidenced (`tasks/e6-acceptance-matrix.md`) — **unblocks E5, E7, E10** |
@@ -114,7 +114,7 @@ behavior tests at both dispatcher and endpoint level. Evidence: `tasks/e2-accept
 The 2nd external audit (2026-08-29) refuted the prior closure: the endpoint never existed over HTTP
 (`PaymentController` ships GETs only), the use case violated E3 spec §5.7/§5.8 (ten audited defects), and the
 proving IT shipped `.disabled`. The E3 spec remained the binding behavior contract; remediation was E3R.
-**E3R closed (run #28 `33331033505`):** `POST /v1/payments` live with idempotency, API keys, canonical errors,
+**E3R closed (run #30 `33333739409`):** `POST /v1/payments` live with idempotency, API keys, canonical errors,
 dynamic BR Code; `CreatePaymentUseCase` with `TransactionTemplate` core + explicit PSP seam; idempotency PK race
 → 425, replay 201, conflict 409; D19 retry + 409 read-back; exhaustion → `FAILED` + 502 `psp_unavailable` +
 `PaymentFailed` outbox row + idempotency key deleted; dynamic BR Code (golden vector `EDD2`); outbox `payment.created`
@@ -125,7 +125,7 @@ all green (runs #19 #22 #28).
 ### E4 — Webhook intake ✅ (2026-08-30, E3R closed)
 Refuted by the audit: only `V108` + the `WebhookEventStore` port/adapter existed (`47d24408`); validator, intake
 use case and `POST /webhooks/psp` were absent; the closure matrix committed in `97882494` cited non-existent
-test classes and was void. **E3R closed (run #28 `33331033505`):** `POST /webhooks/psp` live with fail-closed
+test classes and was void. **E3R closed (run #30 `33333739409`):** `POST /webhooks/psp` live with fail-closed
 HMAC-SHA256 over `timestamp + "." + rawBody` (byte-exact vector §5.4), anti-replay (5 min, injected Clock),
 dedupe (`provider_event_id = endToEndId|type`), conditional confirm (fee=100bps, `confirm_from_webhook`
 audit with sentinel actor `00000000-0000-0000-0000-000000000000`, outbox `payment.confirmed` {amount, fee, net,
@@ -140,7 +140,7 @@ snapshot/requestId/actor, shared serializer, config callback), landed `POST /v1/
 intake per E4 §5.1–§5.4 (fail-closed HMAC with byte-exact vectors, anti-replay, dedupe, conditional confirmation,
 full-loop IT), deleted the debug tests, re-evidenced every matrix cell with CI tests (name + run id), and
 installed the governance (AGENTS §5.5/§5.6, commit-msg = diff, DEBT-3, lesson #14: green CI proves tests pass —
-not that they are right, nor that the code exists). **Closed: run #28 `33331033505` green — all E3/E4/E3R cells green. Unblocks E5 and E6.**
+not that they are right, nor that the code exists). **Closed: run #30 `33333739409` green — all E3/E4/E3R cells green. Unblocks E5 and E6.**
 
 ### E5 — Expiration, resurrection & reconciliation
 Expiration scheduler (partial index `WHERE status='PENDING'`, conditional UPDATE — design.md §5.1);
