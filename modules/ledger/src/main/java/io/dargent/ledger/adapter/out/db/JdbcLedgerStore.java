@@ -119,6 +119,63 @@ public final class JdbcLedgerStore implements LedgerStore {
     }
 
     @Override
+    public Optional<Account> lockAvailableBalance(UUID merchantId) {
+        String account = "merchant:" + merchantId + ":available";
+        return jdbc.sql("""
+                SELECT account, balance_cents, updated_at, last_event_id
+                FROM ledger.balances
+                WHERE account = ?
+                FOR UPDATE
+                """)
+                .param(account)
+                .query((rs, rowNum) -> new Account(
+                        rs.getString("account"),
+                        rs.getLong("balance_cents"),
+                        rs.getObject("updated_at", Instant.class),
+                        (UUID) rs.getObject("last_event_id")
+                ))
+                .optional();
+    }
+
+    @Override
+    public Optional<Settlement> findSettlementByKey(String idempotencyKey) {
+        return jdbc.sql("""
+                SELECT id, merchant_id, idempotency_key, amount_cents, entry_id, settled_at
+                FROM ledger.settlements
+                WHERE idempotency_key = ?
+                """)
+                .param(idempotencyKey)
+                .query((rs, rowNum) -> new Settlement(
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("merchant_id", UUID.class),
+                        rs.getString("idempotency_key"),
+                        rs.getLong("amount_cents"),
+                        rs.getObject("entry_id", UUID.class),
+                        rs.getObject("settled_at", Instant.class)
+                ))
+                .optional();
+    }
+
+    @Override
+    public void rebuildBalances() {
+        txTemplate.execute(status -> {
+            jdbc.sql("DELETE FROM ledger.balances").update();
+            jdbc.sql("""
+                    INSERT INTO ledger.balances (account, balance_cents, updated_at, last_event_id)
+                    SELECT p.account,
+                           SUM(CASE WHEN p.direction = 'CREDIT' THEN p.amount_cents
+                                    ELSE -p.amount_cents END) AS balance_cents,
+                           MAX(p.created_at) AS updated_at,
+                           NULL::uuid AS last_event_id
+                    FROM ledger.postings p
+                    GROUP BY p.account
+                    """)
+                    .update();
+            return null;
+        });
+    }
+
+    @Override
     public Optional<Settlement> insertSettlement(Settlement settlement) {
         int rows = jdbc.sql("""
                 INSERT INTO ledger.settlements (id, merchant_id, idempotency_key, amount_cents, entry_id, settled_at)
@@ -150,7 +207,24 @@ public final class JdbcLedgerStore implements LedgerStore {
     }
 
     @Override
+    public void recordAudit(AuditEntry audit) {
+        jdbc.sql("""
+                INSERT INTO ledger.audit_log (id, command, actor_key, merchant_id, target)
+                VALUES (?, ?, ?, ?, ?)
+                """)
+                .params(audit.id(), audit.command(), audit.actorKeyId(), audit.merchantId(), audit.target())
+                .update();
+    }
+
+    @Override
     public ProofResult verifyProof() {
+        long accountsChecked = jdbc.sql("SELECT COUNT(*) FROM ledger.balances")
+                .query(Long.class).single();
+        long entriesChecked = jdbc.sql("SELECT COUNT(*) FROM ledger.journal_entries")
+                .query(Long.class).single();
+        long postingsChecked = jdbc.sql("SELECT COUNT(*) FROM ledger.postings")
+                .query(Long.class).single();
+
         // (a) global Σ DEBIT = Σ CREDIT
         long totalDebit = jdbc.sql("""
                 SELECT COALESCE(SUM(amount_cents), 0)
@@ -167,7 +241,8 @@ public final class JdbcLedgerStore implements LedgerStore {
                 .query(Long.class).single();
 
         if (totalDebit != totalCredit) {
-            return new ProofResult(false, "Global imbalance: debit=" + totalDebit + " != credit=" + totalCredit);
+            return new ProofResult(false, "Global imbalance: debit=" + totalDebit + " != credit=" + totalCredit,
+                    accountsChecked, entriesChecked, postingsChecked);
         }
 
         // (b) per account: balance_cents == Σ credits - Σ debits
@@ -186,7 +261,8 @@ public final class JdbcLedgerStore implements LedgerStore {
                 .list();
 
         if (!divergences.isEmpty()) {
-            return new ProofResult(false, "Per-account divergence: " + divergences.get(0));
+            return new ProofResult(false, "Per-account divergence: " + divergences.get(0),
+                    accountsChecked, entriesChecked, postingsChecked);
         }
 
         // (c) every journal entry has ≥ 2 postings
@@ -197,9 +273,10 @@ public final class JdbcLedgerStore implements LedgerStore {
                 .query(Long.class).single();
 
         if (badEntries > 0) {
-            return new ProofResult(false, badEntries + " journal entries with < 2 postings");
+            return new ProofResult(false, badEntries + " journal entries with < 2 postings",
+                    accountsChecked, entriesChecked, postingsChecked);
         }
 
-        return new ProofResult(true, null);
+        return ProofResult.ok(accountsChecked, entriesChecked, postingsChecked);
     }
 }

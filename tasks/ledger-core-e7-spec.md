@@ -89,7 +89,8 @@ notify queue/DLQ from E6 are untouched. The script re-run must no-op (S3 proves 
   `payload jsonb`, `status CHECK (status IN ('POSTED','IGNORED','REJECTED'))`, `note text` (why
   ignored/rejected), `received_at`. **Dedupe = `INSERT … ON CONFLICT (event_id) DO NOTHING`**: 0 rows
   inserted ⇒ duplicate ⇒ ack + skip (the local idempotency the E6 contract demands).
-- `ledger.journal_entries` — `id uuid PK`, `event_id uuid UNIQUE REFERENCES ledger.events`, `txid`,
+- `ledger.journal_entries` — `id uuid PK`, `event_id uuid UNIQUE REFERENCES ledger.events` (nullable for
+  settlement entries which carry an `idempotency_key` instead of an envelope event — V205), `txid`,
   `merchant_id`, `description`, `created_at`.
 - `ledger.postings` — `id uuid PK`, `entry_id uuid REFERENCES ledger.journal_entries`, `account text`,
   `direction CHECK (direction IN ('DEBIT','CREDIT'))`, `amount_cents bigint CHECK (amount_cents > 0)`,

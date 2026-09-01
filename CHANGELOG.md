@@ -5,7 +5,29 @@ versioning: semantic, cut from annotated git tags (see [release-runbook](docs/re
 
 ## [Unreleased]
 
-### Added — E6 Outbox & Messaging Backbone (2026-08-30)
+### Added — E7 Ledger Core (2026-08-31)
+
+- **Ledger schema** (`modules/ledger/db/migration/ledger` V202–V206, schema-per-module): `events`
+  (ingestion + dedupe by `event_id` PK), `journal_entries` (`event_id` unique ref to events; nullable
+  per V205 so settlement entries with no envelope event can be written), `postings` (DEBIT/CREDIT,
+  amount > 0), `balances` (credit-positive projection), `settlements` (`idempotency_key` unique), and
+  `audit_log` (ledger's own command trail — no dependency on payments' audit table).
+- **Event ingestion use case** (§5.3): strict envelope reader (poison → no ack → DLQ), dedupe via
+  `INSERT … ON CONFLICT (event_id) DO NOTHING` first statement of the tx, `payment.confirmed` posts
+  DEBIT `payments:processing` / CREDIT `fees:revenue` / CREDIT `merchant:{id}:available` with the
+  `fee + net == amount` gate → REJECTED; non-confirmed → IGNORED.
+- **SQS consumer + fan-out topology** (§5.1): `deploy/localstack-init.sh` v2 adds ledger FIFO queue +
+  DLQ + redrive (`maxReceiveCount=5`) + SNS subscription; `SqsEventConsumer` (batch ≤ 10, long-poll,
+  ack-only-committed, poison→DLQ) behind `DARGENT_LEDGER_CONSUMER_ENABLED`.
+- **Settlement + reconcile + HTTP surface** (§5.4–§5.6): `SettlementUseCase` (full available balance in
+  one tx, `SELECT … FOR UPDATE` race arbitration, idempotent replay by key, `no_balance_to_settle` 409);
+  `LedgerReconciliationUseCase` (proof diagnostic with counts, rebuild-from-journal); `LedgerController`
+  exposes `GET /v1/ledger/accounts/{account}/balance`, `GET /v1/ledger/proof`, `POST /v1/ledger/rebuild`,
+  `POST /v1/ledger/settlements` — routes declared explicitly in `SecurityConfig`.
+- **Tests**: 27 ledger unit tests (reader strictness, posting math, dedupe, settlement guards/replay/race,
+  proof, rebuild) + `LedgerMigrationIT` (V202–V206 on PG16); full reactor `verify` green.
+
+
 
 - **Relay engine** (`OutboxDeliveryUseCase.runOnce()`): claim via `FOR UPDATE SKIP LOCKED`, strict-Jackson
   eventId parse, publish, conditional mark `SENT`; publish error → attempt bump + backoff (30s → 2min →

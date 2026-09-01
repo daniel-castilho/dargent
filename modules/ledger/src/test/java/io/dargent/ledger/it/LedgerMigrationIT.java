@@ -10,7 +10,7 @@ import java.sql.*;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Proves ledger migrations (V202–V204) apply cleanly on PostgreSQL 16.
+ * Proves ledger migrations (V202–V206) apply cleanly on PostgreSQL 16.
  * Uses flyway-database-postgresql extension for PostgreSQL 16+ support.
  */
 @Testcontainers
@@ -53,12 +53,16 @@ class LedgerMigrationIT {
             assertTableExists(conn, "postings");
             assertTableExists(conn, "balances");
             assertTableExists(conn, "settlements");
+            assertTableExists(conn, "audit_log");
 
             // 2) CHECK constraints present (spec §5.2)
             assertCheckExists(conn, "events", "status");
             assertCheckExists(conn, "postings", "direction");
             assertCheckExists(conn, "postings", "amount_cents");
             assertCheckExists(conn, "settlements", "amount_cents");
+
+            // event_id nullable (V205) so settlement entries with no envelope event can be written
+            assertColumnNullable(conn, "journal_entries", "event_id", true);
 
             // 3) PK / UNIQUE
             assertUniqueExists(conn, "events", "event_id");
@@ -75,6 +79,25 @@ class LedgerMigrationIT {
     private static void assertTableExists(java.sql.Connection conn, String table) throws java.sql.SQLException {
         try (var rs = conn.getMetaData().getTables(null, "ledger", table, null)) {
             org.assertj.core.api.Assertions.assertThat(rs.next()).as("table %s exists", table).isTrue();
+        }
+    }
+
+    private static void assertColumnNullable(java.sql.Connection conn, String table, String column,
+            boolean expectedNullable) throws java.sql.SQLException {
+        String sql = """
+                SELECT is_nullable FROM information_schema.columns
+                WHERE table_schema = 'ledger' AND table_name = ? AND column_name = ?
+                """;
+        try (var ps = conn.prepareStatement(sql)) {
+            ps.setString(1, table);
+            ps.setString(2, column);
+            try (var rs = ps.executeQuery()) {
+                org.assertj.core.api.Assertions.assertThat(rs.next()).as("column %s.%s exists", table, column).isTrue();
+                String nullable = rs.getString(1);
+                org.assertj.core.api.Assertions.assertThat("YES".equals(nullable))
+                        .as("column %s.%s nullable=%s", table, column, expectedNullable)
+                        .isEqualTo(expectedNullable);
+            }
         }
     }
 

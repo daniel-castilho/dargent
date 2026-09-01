@@ -129,7 +129,7 @@ class MigrationIT {
                 .list();
 
         assertThat(paymentTables).containsExactlyInAnyOrder("payments", "api_keys", "idempotency_keys", "outbox", "audit_log", "webhook_events", "flyway_schema_history");
-        assertThat(ledgerTables).containsExactlyInAnyOrder("events", "journal_entries", "postings", "balances", "settlements", "flyway_schema_history");
+        assertThat(ledgerTables).containsExactlyInAnyOrder("events", "journal_entries", "postings", "balances", "settlements", "audit_log", "flyway_schema_history");
         assertThat(notificationTables).containsExactlyInAnyOrder("flyway_schema_history");
     }
 }

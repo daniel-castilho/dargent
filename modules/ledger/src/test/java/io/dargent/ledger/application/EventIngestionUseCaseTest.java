@@ -246,13 +246,32 @@ class EventIngestionUseCaseTest {
         }
 
         @Override
-        public Optional<io.dargent.ledger.domain.model.Settlement> insertSettlement(io.dargent.ledger.domain.model.Settlement settlement) {
+        public Optional<io.dargent.ledger.domain.model.Settlement> insertSettlement(
+                io.dargent.ledger.domain.model.Settlement settlement) {
             return Optional.empty();
         }
 
         @Override
+        public Optional<io.dargent.ledger.domain.model.Account> lockAvailableBalance(UUID merchantId) {
+            return Optional.empty();
+        }
+
+        @Override
+        public Optional<io.dargent.ledger.domain.model.Settlement> findSettlementByKey(String idempotencyKey) {
+            return Optional.empty();
+        }
+
+        @Override
+        public void rebuildBalances() {
+        }
+
+        @Override
+        public void recordAudit(LedgerStore.AuditEntry audit) {
+        }
+
+        @Override
         public ProofResult verifyProof() {
-            return new ProofResult(true, null);
+            return new ProofResult(true, null, 0, 0, 0);
         }
     }
 }

@@ -16,6 +16,8 @@ public enum ErrorCode {
     SIGNATURE_EXPIRED("signature_expired", HttpStatus.UNAUTHORIZED, "Signature expired"),
     NOT_FOUND("not_found", HttpStatus.NOT_FOUND, "Resource not found"),
     PAYMENT_NOT_FOUND("payment_not_found", HttpStatus.NOT_FOUND, "Payment not found"),
+    LEDGER_ACCOUNT_NOT_FOUND("account_not_found", HttpStatus.NOT_FOUND, "Ledger account not found"),
+    NO_BALANCE_TO_SETTLE("no_balance_to_settle", HttpStatus.CONFLICT, "No balance to settle"),
     IDEMPOTENCY_KEY_CONFLICT("idempotency_key_conflict", HttpStatus.CONFLICT, "Idempotency key conflict"),
     PAYMENT_NOT_REFUNDABLE("payment_not_refundable", HttpStatus.CONFLICT, "Payment not refundable"),
     REFUND_EXCEEDS_REMAINING("refund_exceeds_remaining", HttpStatus.CONFLICT, "Refund exceeds remaining amount"),

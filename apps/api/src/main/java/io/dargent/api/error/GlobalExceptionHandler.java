@@ -59,6 +59,18 @@ public class GlobalExceptionHandler {
         writer.write(request, response, ErrorCode.INVALID_TRANSITION, e.getMessage());
     }
 
+    @ExceptionHandler(io.dargent.ledger.application.NoBalanceToSettleException.class)
+    public void noBalanceToSettle(HttpServletRequest request, HttpServletResponse response,
+            io.dargent.ledger.application.NoBalanceToSettleException e) {
+        writer.write(request, response, ErrorCode.NO_BALANCE_TO_SETTLE, e.getMessage());
+    }
+
+    @ExceptionHandler(io.dargent.ledger.application.LedgerAccountNotFoundException.class)
+    public void ledgerAccountNotFound(HttpServletRequest request, HttpServletResponse response,
+            io.dargent.ledger.application.LedgerAccountNotFoundException e) {
+        writer.write(request, response, ErrorCode.LEDGER_ACCOUNT_NOT_FOUND, e.getMessage());
+    }
+
     @ExceptionHandler(NoResourceFoundException.class)
     public void notFound(HttpServletRequest request, HttpServletResponse response, NoResourceFoundException e) {
         writer.write(request, response, ErrorCode.NOT_FOUND, "Unknown route");
