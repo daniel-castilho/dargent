@@ -276,6 +276,7 @@ create-path ITs (E3R A0)"), success — the handoff's "#17" and the matrix's "#1
 | #56 | `33454526460` | `5c033a9` | E7 S4 — settlement, rebuild, and ledger read API green (S4 canonical pair) |
 | #57 | `33454836831` | `05f5e76` | E7 S4 docs — canonical table S4 pair |
 | #59 | `33462467004` | `685aa3b` | E7 S5 — ledger ITs IT1-IT6 + wire-format/contract + prod fixes green (S5 canonical pair) |
+| #60 | `33464168975` | `20b5c68` | docs: canonical table S5 pair |
 
 (#15/#16 predate this audit's verified window; verify locally before citing.)
 
