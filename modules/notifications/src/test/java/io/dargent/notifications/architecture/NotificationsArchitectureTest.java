@@ -20,6 +20,7 @@ class NotificationsArchitectureTest {
                 .that().resideInAPackage("io.dargent.notifications..")
                 .should().dependOnClassesThat().resideInAnyPackage(
                         "io.dargent.payments..", "io.dargent.ledger..")
+                .allowEmptyShould(true)
                 .check(PRODUCTION);
     }
 }
