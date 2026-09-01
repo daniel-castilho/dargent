@@ -135,5 +135,15 @@ class LedgerReconciliationUseCaseTest {
         public ProofResult verifyProof() {
             return proof;
         }
+
+        @Override
+        public Optional<String> findEventStatus(java.util.UUID eventId) {
+            return Optional.empty();
+        }
+
+        @Override
+        public int claimEventForResume(java.util.UUID eventId) {
+            return 0;
+        }
     }
 }

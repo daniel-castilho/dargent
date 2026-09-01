@@ -46,6 +46,7 @@
 | Item | Deliverable | Test / Evidence | CI Run | Status |
 |---|---|---|---|---|
 | BD-15 | Resume-on-RECEIVED: duplicate branch re-reads status; RECEIVED → conditional claim + journal/postings in 1 tx; 0 rows → ack-skip; journal UNIQUE belt-and-suspenders | Unit: `EventIngestionUseCaseTest` duplicate-branch matrix (5 tests); Guard IT: `redelivery_after_posting_failure_resumes_and_posts_exactly_once`; Consumer: `SqsEventConsumerTest` false→nack | #59 `33462467004` / #72 `33555099220` `3ae463e` | ✅ |
+| BD-16 | Jackson 3 reader: single `tools.jackson` mapper, normalized parse failures (`DateTimeException` → `IllegalArgumentException`), `occurredAt: "not-a-date"` → poison by contract | Unit: `EventEnvelopeReaderTest.malformed_occurredAt_is_poison_by_contract`; Hygiene grep: `grep -rn "com.fasterxml" modules/ledger/src/main` = 0 hits (commit `<BD-16 commit>`) | #59 `33462467004` / <BD-16 run> | ✅ |
 
 ## Concurrency & Race Proofs (spec §6)
 
@@ -74,6 +75,7 @@ not depend on it (idempotent math). Nobody writes "exactly once".
 | AWS SDK confined to `adapter/out/messaging/` | `grep -rln "software.amazon.awssdk" modules/ledger/src/main` | only `SqsEventConsumer` | ✅ |
 | Zero Spring bean/annotation in ledger main (component-scan coupling) | `grep -rn "@Component\|@Service\|@Repository\|@Autowired\|@Value\|org.springframework.beans\|org.springframework.stereotype" modules/ledger/src/main` | 0 hits (`JdbcClient`/`TransactionTemplate` are §4-mandated persistence API, not scan coupling) | ✅ |
 | No `Thread.sleep` in ledger TESTS | `grep -rn "Thread.sleep" modules/ledger/src/test` | 0 hits — runOnce/SQS long-poll only | ✅ |
+| Zero `com.fasterxml` in ledger main (Jackson 2 removal) | `grep -rn "com.fasterxml" modules/ledger/src/main` | 0 hits — `tools.jackson.*` only (BD-16) | ✅ |
 | Scope diff = 0 (payments prod untouched) | `git log --oneline -- modules/payments/src/main` across E7 | last payments prod change is E6 (`d3d5590`) | ✅ |
 
 ## Evidence Requirements

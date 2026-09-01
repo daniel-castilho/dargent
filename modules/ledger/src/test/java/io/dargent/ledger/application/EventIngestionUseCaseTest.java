@@ -113,6 +113,123 @@ class EventIngestionUseCaseTest {
         assertThat(store.insertedEvents.get(eventId).status()).isEqualTo("REJECTED");
     }
 
+    // BD-15: duplicate-branch matrix by stored status
+
+    @Test
+    void duplicate_received_resumes_and_posts_once() {
+        String raw = rawEnvelope("payment.confirmed",
+                "{\"txid\":\"txid-123\",\"merchantId\":\"11111111-1111-1111-1111-111111111111\",\"amount\":10000,\"fee\":100,\"net\":9900,\"late\":false}");
+
+        // Pre-insert an event in RECEIVED state (simulating crash after insert, before journal)
+        String eventIdStr = extractEventId(raw);
+        UUID eventId = UUID.fromString(eventIdStr);
+        store.insertedEvents.put(eventId, new FakeLedgerStore.EventRecord(
+                eventId, "payment.confirmed", "txid-123",
+                UUID.fromString("11111111-1111-1111-1111-111111111111"),
+                raw, "RECEIVED", "Initial receipt"));
+
+        // Call processMessage - should resume from RECEIVED
+        boolean ack = useCase.processMessage(raw);
+        assertThat(ack).isTrue();
+        assertThat(store.postedEntries).hasSize(1);
+        assertThat(store.insertedEvents.get(eventId).status()).isEqualTo("POSTED");
+    }
+
+    @Test
+    void duplicate_posted_ack_skips() {
+        String raw = rawEnvelope("payment.confirmed",
+                "{\"txid\":\"txid-123\",\"merchantId\":\"11111111-1111-1111-1111-111111111111\",\"amount\":10000,\"fee\":100,\"net\":9900,\"late\":false}");
+
+        // Pre-insert an event in POSTED state
+        String eventIdStr = extractEventId(raw);
+        UUID eventId = UUID.fromString(eventIdStr);
+        store.insertedEvents.put(eventId, new FakeLedgerStore.EventRecord(
+                eventId, "payment.confirmed", "txid-123",
+                UUID.fromString("11111111-1111-1111-1111-111111111111"),
+                raw, "POSTED", "Posted successfully"));
+        store.postedEntries.add(new JournalEntry(
+                java.util.UUID.randomUUID(), eventId, "txid-123",
+                UUID.fromString("11111111-1111-1111-1111-111111111111"),
+                "Payment confirmed: txid-123", java.time.Instant.now(),
+                List.of()));
+
+        boolean ack = useCase.processMessage(raw);
+        assertThat(ack).isTrue();
+        // No new posting
+        assertThat(store.postedEntries).hasSize(1);
+    }
+
+    @Test
+    void duplicate_ignored_ack_skips() {
+        String raw = rawEnvelope("payment.created", "{}");
+
+        // Pre-insert an event in IGNORED state
+        String eventIdStr = extractEventId(raw);
+        UUID eventId = UUID.fromString(eventIdStr);
+        store.insertedEvents.put(eventId, new FakeLedgerStore.EventRecord(
+                eventId, "payment.created", "txid-123",
+                UUID.fromString("11111111-1111-1111-1111-111111111111"),
+                raw, "IGNORED", "Non-confirmed type: payment.created"));
+
+        boolean ack = useCase.processMessage(raw);
+        assertThat(ack).isTrue();
+        assertThat(store.postedEntries).isEmpty();
+    }
+
+    @Test
+    void duplicate_rejected_ack_skips() {
+        String raw = rawEnvelope("payment.confirmed", "\"not valid json\"");
+
+        // Pre-insert an event in REJECTED state
+        String eventIdStr = extractEventId(raw);
+        UUID eventId = UUID.fromString(eventIdStr);
+        store.insertedEvents.put(eventId, new FakeLedgerStore.EventRecord(
+                eventId, "payment.confirmed", "txid-123",
+                UUID.fromString("11111111-1111-1111-1111-111111111111"),
+                raw, "REJECTED", "Invalid envelope: ..."));
+
+        boolean ack = useCase.processMessage(raw);
+        assertThat(ack).isTrue();
+        assertThat(store.postedEntries).isEmpty();
+    }
+
+    @Test
+    void concurrent_resume_race_lost_ack_skips() {
+        String raw = rawEnvelope("payment.confirmed",
+                "{\"txid\":\"txid-123\",\"merchantId\":\"11111111-1111-1111-1111-111111111111\",\"amount\":10000,\"fee\":100,\"net\":9900,\"late\":false}");
+
+        // Pre-insert an event in RECEIVED state
+        String eventIdStr = extractEventId(raw);
+        UUID eventId = UUID.fromString(eventIdStr);
+        store.insertedEvents.put(eventId, new FakeLedgerStore.EventRecord(
+                eventId, "payment.confirmed", "txid-123",
+                UUID.fromString("11111111-1111-1111-1111-111111111111"),
+                raw, "RECEIVED", "Initial receipt"));
+
+        // Simulate another consumer winning the claim by setting status to POSTED
+        store.insertedEvents.put(eventId, new FakeLedgerStore.EventRecord(
+                eventId, "payment.confirmed", "txid-123",
+                UUID.fromString("11111111-1111-1111-1111-111111111111"),
+                raw, "POSTED", "Posted successfully"));
+        store.postedEntries.add(new JournalEntry(
+                java.util.UUID.randomUUID(), eventId, "txid-123",
+                UUID.fromString("11111111-1111-1111-1111-111111111111"),
+                "Payment confirmed: txid-123", java.time.Instant.now(),
+                List.of()));
+
+        boolean ack = useCase.processMessage(raw);
+        assertThat(ack).isTrue();
+        // No new posting — the other consumer already did it
+        assertThat(store.postedEntries).hasSize(1);
+    }
+
+    private String extractEventId(String raw) {
+        // Parse eventId from raw JSON
+        int start = raw.indexOf("\"eventId\":\"") + 11;
+        int end = raw.indexOf("\"", start);
+        return raw.substring(start, end);
+    }
+
     @Test
     void postings_balanced_debit_credit() {
         String raw = rawEnvelope("payment.confirmed",
@@ -154,14 +271,40 @@ class EventIngestionUseCaseTest {
         @Override
         public boolean insertEventIfAbsent(UUID eventId, String type, String txid, UUID merchantId,
                                            String payload, String status, String note) {
+            if (insertedEvents.containsKey(eventId)) {
+                return false; // Duplicate
+            }
             EventRecord record = new EventRecord(eventId, type, txid, merchantId, payload, status, note);
-            insertedEvents.put(eventId, record); // Always update to capture status changes
+            insertedEvents.put(eventId, record);
             return true;
+        }
+
+        @Override
+        public Optional<String> findEventStatus(UUID eventId) {
+            return Optional.ofNullable(insertedEvents.get(eventId))
+                    .map(EventRecord::status);
+        }
+
+        @Override
+        public int claimEventForResume(UUID eventId) {
+            EventRecord record = insertedEvents.get(eventId);
+            if (record != null && "RECEIVED".equals(record.status())) {
+                // Update to POSTED (mutable copy for test)
+                insertedEvents.put(eventId, new EventRecord(
+                        record.eventId(), record.type(), record.txid(), record.merchantId(),
+                        record.payload(), "POSTED", "Posted successfully"));
+                return 1;
+            }
+            return 0;
         }
 
         @Override
         public void postJournal(JournalEntry entry) {
             postedEntries.add(entry);
+            // Update event status to POSTED (simulating the real implementation's UPDATE)
+            insertedEvents.computeIfPresent(entry.eventId(), (id, record) ->
+                    new EventRecord(record.eventId(), record.type(), record.txid(), record.merchantId(),
+                            record.payload(), "POSTED", "Posted successfully"));
             for (var p : entry.postings()) {
                 long delta = p.direction() == io.dargent.ledger.domain.model.EntryDirection.CREDIT ? p.amountCents() : -p.amountCents();
                 balances.compute(p.account(), (k, v) -> v == null

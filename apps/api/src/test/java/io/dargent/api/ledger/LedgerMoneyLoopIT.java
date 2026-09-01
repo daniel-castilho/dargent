@@ -263,6 +263,87 @@ class LedgerMoneyLoopIT {
         assertThat(audit).isEqualTo(1);
     }
 
+/** BD-15 guard IT: redelivery after posting failure resumes and posts exactly once. */
+    @Test
+    void redelivery_after_posting_failure_resumes_and_posts_exactly_once() throws Exception {
+        // This test mirrors the unit test pattern: manually insert an event in RECEIVED state
+        // (simulating a crash after the event insert but before the journal write committed),
+        // then verify that processMessage resumes posting correctly.
+        String txid = "ledger-bd15-guard-" + UUID.randomUUID();
+        UUID eventId = UUID.randomUUID();
+        String raw = confirmedEnvelopeWithEventId(eventId, txid, "E9040381234567890123456789012345", 5000);
+
+        // Extract just the payload JSON from the envelope (the inner payload object)
+        String payloadJson = extractPayloadJson(raw);
+
+        // 1. Manually insert event in RECEIVED state (simulating a crash after the event insert but before the journal write committed)
+        String insertSql = """
+                INSERT INTO ledger.events (event_id, type, txid, merchant_id, payload, status, note)
+                VALUES (?, 'payment.confirmed', ?, ?, ?::jsonb, 'RECEIVED', 'Initial receipt')
+                """;
+        jdbc.sql(insertSql)
+                .params(eventId, txid, MERCHANT, payloadJson)
+                .update();
+
+        // Verify initial state: RECEIVED, zero journal rows
+        String status = jdbc.sql("select status from ledger.events where txid = :t")
+                .param("t", txid).query(String.class).single();
+        assertThat(status).isEqualTo("RECEIVED");
+        assertThat(journalEntries()).isZero();
+        assertThat(postings()).isZero();
+
+        // 2. Deliver the SAME message (same eventId) — should resume and post exactly once
+        boolean ack = ingestion.processMessage(raw);
+        assertThat(ack).as("resume should ack and post exactly once").isTrue();
+
+        // Verify: exactly ONE journal entry + 3 postings, balances incremented once, proof ok
+        assertThat(journalEntries()).as("exactly one journal entry after resume").isEqualTo(1);
+        assertThat(postings()).as("exactly three postings").isEqualTo(3);
+        assertThat(balance("merchant:" + MERCHANT + ":available")).isEqualTo(4900);
+        assertThat(balance("fees:revenue")).isEqualTo(100);
+        assertThat(balance("payments:processing")).isEqualTo(-5000);
+        assertProofOk(3, 3);
+
+        // 3. Verify event status is now POSTED
+        String finalStatus = jdbc.sql("select status from ledger.events where txid = :t")
+                .param("t", txid).query(String.class).single();
+        assertThat(finalStatus).isEqualTo("POSTED");
+    }
+
+    private String confirmedEnvelopeWithEventId(UUID eventId, String txid, String endToEndId, int amount) {
+        int net = amount - 100;
+        return "{\"eventId\":\"" + eventId + "\",\"type\":\"payment.confirmed"
+                + "\",\"version\":1,\"aggregateId\":\"" + txid
+                + "\",\"merchantId\":\"" + MERCHANT + "\",\"requestId\":\"req-" + txid
+                + "\",\"occurredAt\":\"" + FIXED_CLOCK.instant() + "\",\"payload\":{"
+                + "\"amount\":" + amount + ",\"fee\":100,\"net\":" + net
+                + ",\"late\":false,\"txid\":\"" + txid
+                + "\",\"endToEndId\":\"" + endToEndId + "\"}}";
+    }
+
+    private String extractPayloadJson(String envelopeJson) {
+        // Extract the "payload" object from the envelope JSON
+        int payloadStart = envelopeJson.indexOf("\"payload\":{");
+        if (payloadStart == -1) {
+            throw new IllegalStateException("No payload in envelope: " + envelopeJson);
+        }
+        payloadStart += 10; // length of "\"payload\":"
+        int depth = 0;
+        int end = payloadStart;
+        for (int i = payloadStart; i < envelopeJson.length(); i++) {
+            char c = envelopeJson.charAt(i);
+            if (c == '{') depth++;
+            else if (c == '}') {
+                depth--;
+                if (depth == 0) {
+                    end = i + 1;
+                    break;
+                }
+            }
+        }
+        return envelopeJson.substring(payloadStart, end);
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private void assertProofOk(long accounts, long postings) {

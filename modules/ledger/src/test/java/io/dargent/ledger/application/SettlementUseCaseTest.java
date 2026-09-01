@@ -184,5 +184,15 @@ class SettlementUseCaseTest {
         public ProofResult verifyProof() {
             return new ProofResult(true, null, 0, 0, 0);
         }
+
+        @Override
+        public Optional<String> findEventStatus(UUID eventId) {
+            return Optional.empty();
+        }
+
+        @Override
+        public int claimEventForResume(UUID eventId) {
+            return 0;
+        }
     }
 }

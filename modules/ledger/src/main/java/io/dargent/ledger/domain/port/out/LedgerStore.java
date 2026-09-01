@@ -13,6 +13,18 @@ import java.util.UUID;
 public interface LedgerStore {
 
     /**
+     * Finds the current status of an event by its ID.
+     */
+    Optional<String> findEventStatus(UUID eventId);
+
+    /**
+     * Attempts to claim a RECEIVED event for resume posting.
+     * Conditionally updates status from RECEIVED to POSTED.
+     * Returns number of affected rows (1 = claimed, 0 = already claimed by another consumer).
+     */
+    int claimEventForResume(UUID eventId);
+
+    /**
      * Inserts an event if event_id is new (idempotency).
      * Returns true if inserted, false if duplicate (event_id already exists).
      */

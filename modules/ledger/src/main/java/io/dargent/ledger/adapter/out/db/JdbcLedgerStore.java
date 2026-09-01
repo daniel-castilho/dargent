@@ -42,6 +42,25 @@ public final class JdbcLedgerStore implements LedgerStore {
     }
 
     @Override
+    public Optional<String> findEventStatus(UUID eventId) {
+        return jdbc.sql("SELECT status FROM ledger.events WHERE event_id = ?")
+                .param(eventId)
+                .query(String.class)
+                .optional();
+    }
+
+    @Override
+    public int claimEventForResume(UUID eventId) {
+        return jdbc.sql("""
+                UPDATE ledger.events
+                SET status = 'POSTED', note = 'Posted successfully'
+                WHERE event_id = ? AND status = 'RECEIVED'
+                """)
+                .param(eventId)
+                .update();
+    }
+
+    @Override
     public void postJournal(JournalEntry entry) {
         txTemplate.execute(status -> {
             // 1) Journal entry

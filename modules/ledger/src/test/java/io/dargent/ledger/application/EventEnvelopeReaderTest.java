@@ -1,11 +1,11 @@
 package io.dargent.ledger.application;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.UUID;
+import java.time.Instant;
 
 class EventEnvelopeReaderTest {
 
@@ -34,7 +34,7 @@ class EventEnvelopeReaderTest {
         assertThat(envelopeParsed.aggregateId()).isEqualTo("txid-123");
         assertThat(envelopeParsed.merchantId()).isEqualTo(UUID.fromString("11111111-1111-1111-1111-111111111111"));
         assertThat(envelopeParsed.requestId()).isEqualTo("req-123");
-        assertThat(envelopeParsed.occurredAt()).isEqualTo("2026-08-30T12:00:00Z");
+        assertThat(envelopeParsed.occurredAt()).isEqualTo(Instant.parse("2026-08-30T12:00:00Z"));
     }
 
     @Test
@@ -87,11 +87,11 @@ class EventEnvelopeReaderTest {
                 "txid-123",
                 UUID.fromString("11111111-1111-1111-1111-111111111111"),
                 "req-123",
-                java.time.Instant.now(),
+                Instant.now(),
                 "{\"txid\":\"txid-123\",\"merchantId\":\"11111111-1111-1111-1111-111111111111\",\"amount\":10000,\"fee\":100,\"net\":9900,\"late\":false}"
         );
 
-        var payload = new EventEnvelopeReader(new ObjectMapper().registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())).extractPaymentPayload(envelope);
+        var payload = reader.extractPaymentPayload(envelope);
 
         assertThat(payload.txid()).isEqualTo("txid-123");
         assertThat(payload.merchantId()).isEqualTo("11111111-1111-1111-1111-111111111111");
@@ -110,13 +110,11 @@ class EventEnvelopeReaderTest {
                 "txid-123",
                 UUID.fromString("11111111-1111-1111-1111-111111111111"),
                 null,
-                java.time.Instant.now(),
+                Instant.now(),
                 "{}"
         );
 
-        var reader2 = new EventEnvelopeReader(new ObjectMapper().registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule()));
-
-        assertThatThrownBy(() -> reader2.extractPaymentPayload(envelope))
+        assertThatThrownBy(() -> reader.extractPaymentPayload(envelope))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Expected payment.confirmed");
     }
@@ -130,13 +128,11 @@ class EventEnvelopeReaderTest {
                 "txid-123",
                 UUID.fromString("11111111-1111-1111-1111-111111111111"),
                 null,
-                java.time.Instant.now(),
+                Instant.now(),
                 "not valid json"
         );
 
-        var reader2 = new EventEnvelopeReader(new ObjectMapper().registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule()));
-
-        assertThatThrownBy(() -> reader2.extractPaymentPayload(envelope))
+        assertThatThrownBy(() -> reader.extractPaymentPayload(envelope))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Invalid payload JSON");
     }
@@ -150,14 +146,31 @@ class EventEnvelopeReaderTest {
                 "txid-123",
                 UUID.fromString("11111111-1111-1111-1111-111111111111"),
                 null,
-                java.time.Instant.now(),
+                Instant.now(),
                 "{\"txid\":\"txid-123\",\"merchantId\":\"11111111-1111-1111-1111-111111111111\",\"amount\":10000,\"fee\":200,\"net\":9900,\"late\":false}"
         );
 
-        var reader2 = new EventEnvelopeReader(new ObjectMapper().registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule()));
-
-        assertThatThrownBy(() -> reader2.extractPaymentPayload(envelope))
+        assertThatThrownBy(() -> reader.extractPaymentPayload(envelope))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Invariant violation: fee + net != amount");
+    }
+
+    @Test
+    void malformed_occurredAt_is_poison_by_contract() {
+        String raw = """
+                {
+                  "eventId": "123e4567-e89b-12d3-a456-426614174000",
+                  "type": "payment.confirmed",
+                  "version": 1,
+                  "aggregateId": "txid-123",
+                  "merchantId": "11111111-1111-1111-1111-111111111111",
+                  "occurredAt": "not-a-date",
+                  "payload": {}
+                }
+                """;
+
+        assertThatThrownBy(() -> reader.read(raw))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Invalid occurredAt timestamp");
     }
 }

@@ -1,10 +1,9 @@
 package io.dargent.ledger.application;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import io.dargent.shared.events.EventEnvelope;
+import java.time.DateTimeException;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -17,7 +16,7 @@ public final class EventEnvelopeReader {
     private final ObjectMapper mapper;
 
     public EventEnvelopeReader() {
-        this(new ObjectMapper().registerModule(new JavaTimeModule()));
+        this(new ObjectMapper());
     }
 
     public EventEnvelopeReader(ObjectMapper mapper) {
@@ -34,7 +33,7 @@ public final class EventEnvelopeReader {
         JsonNode node;
         try {
             node = mapper.readTree(rawJson);
-        } catch (JsonProcessingException e) {
+        } catch (Exception e) {
             throw new IllegalArgumentException("Invalid envelope JSON: " + e.getMessage(), e);
         }
         try {
@@ -45,11 +44,19 @@ public final class EventEnvelopeReader {
                     required(node, "aggregateId").asText(),
                     UUID.fromString(required(node, "merchantId").asText()),
                     node.path("requestId").asText(null),
-                    Instant.parse(required(node, "occurredAt").asText()),
+                    parseInstant(required(node, "occurredAt").asText()),
                     required(node, "payload").toString()
             );
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException("Invalid envelope: " + e.getMessage(), e);
+        }
+    }
+
+    private Instant parseInstant(String text) {
+        try {
+            return Instant.parse(text);
+        } catch (DateTimeException e) {
+            throw new IllegalArgumentException("Invalid occurredAt timestamp: " + text, e);
         }
     }
 
@@ -71,8 +78,8 @@ public final class EventEnvelopeReader {
         }
         JsonNode p;
         try {
-            p = new ObjectMapper().readTree(envelope.payload());
-        } catch (JsonProcessingException e) {
+            p = mapper.readTree(envelope.payload());
+        } catch (Exception e) {
             throw new IllegalArgumentException("Invalid payload JSON: " + e.getMessage(), e);
         }
         if (!p.isObject()) {

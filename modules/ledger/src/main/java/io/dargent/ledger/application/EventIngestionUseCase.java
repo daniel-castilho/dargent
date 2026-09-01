@@ -5,12 +5,14 @@ import io.dargent.ledger.domain.model.JournalEntry;
 import io.dargent.ledger.domain.model.Posting;
 import io.dargent.ledger.domain.port.out.LedgerStore;
 import io.dargent.shared.events.EventEnvelope;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -78,7 +80,15 @@ public final class EventIngestionUseCase {
                 envelope.merchantId(), envelope.payload(), status, note);
 
         if (!inserted) {
-            // Duplicate delivery — ack + skip
+            // Duplicate delivery — re-read stored status and branch
+            String storedStatus = store.findEventStatus(envelope.eventId())
+                    .orElseThrow(() -> new IllegalStateException("Event " + envelope.eventId() + " not found"));
+
+            if ("RECEIVED".equals(storedStatus)) {
+                // Resume posting in ONE transaction: claim + journal + postings + balances
+                return resumePosting(envelope, payload);
+            }
+            // POSTED / IGNORED / REJECTED → ack + skip
             return true;
         }
 
@@ -124,6 +134,66 @@ public final class EventIngestionUseCase {
             // Write journal + postings + balances
             store.postJournal(entry);
             return true;
+        });
+    }
+
+    /**
+     * Resumes posting for an event that was left in RECEIVED state (e.g., consumer crashed after
+     * insert but before journal write). Runs in a single transaction: conditional claim of the
+     * event row (UPDATE ... WHERE status = 'RECEIVED'), then journal + postings + balances.
+     * Belt-and-suspenders: if journal insert still collides (UNIQUE on journal_entries.event_id),
+     * re-read status and ack as already-posted.
+     */
+    private boolean resumePosting(EventEnvelope envelope, EventEnvelopeReader.PaymentPayload payload) {
+        if (payload == null) {
+            // Should not happen for RECEIVED status, but defensive
+            return true;
+        }
+
+        return txTemplate.execute(txStatus -> {
+            // Conditional claim: only this consumer wins the race
+            int claimed = store.claimEventForResume(envelope.eventId());
+            if (claimed == 0) {
+                // Another consumer won the resume — ack + skip, zero writes
+                return true;
+            }
+
+            try {
+                // Build postings (spec §5.3)
+                UUID entryId = UUID.randomUUID();
+                var postings = List.of(
+                        new Posting(UUID.randomUUID(), entryId, "payments:processing",
+                                EntryDirection.DEBIT, payload.amountCents(), clock.instant()),
+                        new Posting(UUID.randomUUID(), entryId, "fees:revenue",
+                                EntryDirection.CREDIT, payload.feeCents(), clock.instant()),
+                        new Posting(UUID.randomUUID(), entryId,
+                                "merchant:" + payload.merchantId() + ":available",
+                                EntryDirection.CREDIT, payload.netCents(), clock.instant())
+                );
+
+                var entry = new JournalEntry(
+                        entryId,
+                        envelope.eventId(),
+                        payload.txid(),
+                        UUID.fromString(payload.merchantId()),
+                        "Payment confirmed: " + payload.txid(),
+                        envelope.occurredAt(),
+                        postings
+                );
+
+                // Write journal + postings + balances
+                store.postJournal(entry);
+                return true;
+            } catch (DataIntegrityViolationException e) {
+                // Belt-and-suspenders: journal_entries.event_id UNIQUE collision
+                // Re-read status; if POSTED, ack as already-posted; else rethrow
+                String status = store.findEventStatus(envelope.eventId())
+                        .orElseThrow(() -> new IllegalStateException("Event " + envelope.eventId() + " vanished"));
+                if ("POSTED".equals(status)) {
+                    return true;
+                }
+                throw e;
+            }
         });
     }
 }
