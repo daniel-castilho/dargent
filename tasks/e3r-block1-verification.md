@@ -274,6 +274,7 @@ create-path ITs (E3R A0)"), success — the handoff's "#17" and the matrix's "#1
 | #53 | `33443733757` | `75fcfee` | E7 S1 — ledger schema + LedgerMigrationIT green (S1 canonical pair) |
 | #54 | `33448005815` | `53695cd` | E7 S3 — SQS consumer + fan-out topology green (S3 canonical pair) |
 | #56 | `33454526460` | `5c033a9` | E7 S4 — settlement, rebuild, and ledger read API green (S4 canonical pair) |
+| #57 | `33454836831` | `05f5e76` | E7 S4 docs — canonical table S4 pair |
 
 (#15/#16 predate this audit's verified window; verify locally before citing.)
 
