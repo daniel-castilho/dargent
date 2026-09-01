@@ -3,7 +3,7 @@
 > *d'argent* (French) — "of silver, of money", from Latin *argentum*.
 > The system is where the money lives.
 
-**A payment infrastructure backend in the shape of platforms like Stripe/Razorpay — built for the Brazilian PIX rail.**
+**A payment infrastructure backend with an architecture analogous to platforms like Stripe/Razorpay — built for the Brazilian PIX rail.**
 Modular monolith on **Java 25 + Spring Boot 4.1**, engineered from day one to be extracted into microservices.
 
 `Java 25` · `Spring Boot 4.1` · `PostgreSQL 16` · `SNS/SQS FIFO (LocalStack)` · `NGINX blue-green` · `MIT`
@@ -20,7 +20,7 @@ as its milestone closes — see *Current state* and the per-milestone acceptance
 | Guarantee | Mechanism |
 |---|---|
 | No payment is ever charged twice | Idempotency keys (request-level), webhook dedupe (`endToEndId` + type), consumer dedupe (`eventId`) |
-| No confirmed payment is lost — even without a webhook | Signed webhook intake + **reconciliation job** against the PSP |
+| No confirmed payment is lost — even without a webhook | Signed webhook intake + **future reconciliation job (E5, not started)** against the PSP |
 | Every cent is traceable and balanced | Append-only **double-entry ledger** + daily balance proof + property tests |
 | Invalid states are impossible | State machine guarded by the entity **and** imposed by conditional `UPDATE`s (the database arbitrates races) |
 | No downtime deploys on bare metal | NGINX **blue-green with canary**, instant rollback, shutdown-under-load gate in CI |
@@ -64,15 +64,15 @@ communication flows through the outbox → SNS → SQS, and each consumer has it
 | `apps/api` | Boot application wiring the modules: REST, security, schedulers, messaging adapters |
 | `apps/psp-simulator` | **Separate app** — the fake Stripe: merchant-side PSP + payer bank + configurable chaos |
 
-## The money flow
+## The money flow (TARGET STATE — narrates what will exist at M3/M5)
 
 ```
 POST /v1/payments (Idempotency-Key) → PENDING + dynamic QR (BR Code, EMV + CRC16)
 payer pays the QR at the simulator's "bank" → PSP fires signed webhook (HMAC + timestamp)
 webhook validated → dedupe → conditional UPDATE → CONFIRMED (fee computed in bps)
 outbox → SNS → SQS → ledger journals DR clearing / CR pending+fees · notifications notified
-webhook never arrived? → reconciler asks the PSP and confirms on its own
-QR expired but paid late? → resurrection (trust the PSP) with audit trail
+webhook never arrived? → reconciler (E5, future) asks the PSP and confirms on its own
+QR expired but paid late? → resurrection (E5, future) with audit trail
 POST /v1/payments/{txid}/refunds → partial/total, fee returned proportionally, ledger drains balance
 ```
 
@@ -128,7 +128,7 @@ curl -sX POST http://localhost:8080/v1/payments \
 # 4. Pay the QR at the payer bank (simulator)
 curl -sX POST http://localhost:8090/cobs/{txid}/payments
 
-# 4. Watch it land (will show PENDING until E4 webhook arrives)
+# 4. Watch it land (will show PENDING until the PSP's webhook arrives — E4 complete)
 curl -s http://localhost:8080/v1/payments/{txid}   # → "status": "PENDING"
 ```
 
