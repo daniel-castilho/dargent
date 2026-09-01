@@ -55,7 +55,7 @@
 | Duplicate delivery (SQS at-least-once) | IT2 — same message twice → one entry, second ack-skips (`ON CONFLICT (event_id) DO NOTHING`) | #59 `33462467004` | ✅ |
 | Two consumers / redelivery while processing | SQS visibility timeout + DB dedupe as backstop (IT2/IT3 conflict path) | #59 `33462467004` | ✅ |
 | Settlement vs confirm racing on the same merchant balance | IT5b — concurrent settle + confirm land, proof stays green, no lost update (`SELECT … FOR UPDATE` on balances) | #59 `33462467004` | ✅ |
-| Consumer crash between receive and ack | Redelivery resumes from RECEIVED via conditional claim + belt-and-suspenders journal UNIQUE (BD-15 guard IT) | #59 `33462467004` / <BD-15 guard IT run> | ✅ |
+| Consumer crash between receive and ack | Redelivery resumes from RECEIVED via conditional claim + belt-and-suspenders journal UNIQUE (BD-15 guard IT) | #59 `33462467004` / #72 `33555099220` `3ae463e` | ✅ |
 | Rebuild vs consumer writing | `FOR UPDATE` on balances during rebuild; consumer txs serialize on same rows (IT4 runOnce determinism) | #59 `33462467004` | ✅ |
 
 ## Delivery Guarantee Statement (spec §5.7 — verbatim)
