@@ -76,15 +76,21 @@ import com.sun.net.httpserver.HttpServer;
         "dargent.relay.enabled=true",
         "dargent.psp.webhook-secret=dev-only-secret"
     })
-@ContextConfiguration(initializers = DisableFlywayInitializer.class)
+@ContextConfiguration(initializers = ConfigureFlywayInitializer.class)
 @Testcontainers
 
-class DisableFlywayInitializer implements ApplicationContextInitializer<ConfigurableApplicationContext> {
+class ConfigureFlywayInitializer implements ApplicationContextInitializer<ConfigurableApplicationContext> {
     @Override
     public void initialize(ConfigurableApplicationContext context) {
         context.getEnvironment().getPropertySources()
-                .addFirst(new org.springframework.core.env.MapPropertySource("disableFlyway",
-                        Map.of("spring.flyway.enabled", "false")));
+                .addFirst(new org.springframework.core.env.MapPropertySource("configureFlyway",
+                        Map.of(
+                                "spring.flyway.enabled", "true",
+                                "spring.flyway.schemas", "payments,ledger,notifications",
+                                "spring.flyway.locations", "classpath:db/migration/payments,classpath:db/migration/ledger,classpath:db/migration/notifications",
+                                "spring.flyway.baseline-on-migrate", "true",
+                                "spring.flyway.create-schemas", "true"
+                        )));
     }
 }
 
