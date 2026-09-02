@@ -149,4 +149,4 @@ Greps are pasted in the handoff with the commit id they ran at.
 | S5 | loop + poison ITs | `NotificationLoopIT` + `NotificationPoisonDlqIT` (§8 names) | #113 `33674334484` / #114 `33675295464` | ✅ |
 | S6 | API contract | `NotificationsApiIT` | `7a024c5` `33683261976` (+ TD-20 rider; see S6-rider row below) | ✅ |
 | S7 | docs + flip + M2 ✅ | commit pair (README/CHANGELOG/this row) | `fa00eb3` `33684112090` | ✅ |
-| S6-rider | TD-20: merchantId echo + cross-tenant proof + naming negatives | `NotificationsApiIT.cross_tenant_rows_are_never_visible_across_credentials` + shape negatives | `RIDER_SHA` `RIDER_RUN` | ◻ |
+| S6-rider | TD-20: merchantId echo + cross-tenant proof + naming negatives | `NotificationsApiIT.cross_tenant_rows_are_never_visible_across_credentials` + shape negatives | `79aa8e5` `33690323704` | ✅ |
