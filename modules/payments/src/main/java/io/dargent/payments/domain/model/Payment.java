@@ -93,7 +93,45 @@ public final class Payment {
         payment.lateConfirmation = lateConfirmation;
         payment.confirmedAt = confirmedAt;
         payment.refunded = Money.of(refundedCents, BRL);
+        validateRestored(payment);
         return payment;
+    }
+
+    /**
+     * DEBT-1 rejection: {@link #restore} is the hydration seam for the persistence adapter.
+     * The aggregate is the single authority on what is legal (AGENTS §3.1, §5.1), so the seam
+     * re-validates the invariants {@link #create}/{@link #confirm} guarantee, never materializing
+     * a silent invalid aggregate from a lying adapter.
+     */
+    private static void validateRestored(Payment p) {
+        if (p.amount == null) {
+            throw new IllegalArgumentException("restored payment requires an amount");
+        }
+        if (!BRL.equals(p.amount.currency())) {
+            throw new IllegalArgumentException("BRL-only, got: " + p.amount.currency());
+        }
+        if (p.amount.cents() <= 0) {
+            throw new IllegalArgumentException("amount must be positive: " + p.amount.cents());
+        }
+        if (p.expiresAt == null || p.createdAt == null || !p.expiresAt.isAfter(p.createdAt)) {
+            throw new IllegalArgumentException("expiresAt must be after createdAt");
+        }
+        if (p.refunded == null || p.refunded.cents() < 0) {
+            throw new IllegalArgumentException("refunded must be non-negative");
+        }
+        boolean confirmedFamily = p.status == PaymentStatus.CONFIRMED
+                || p.status == PaymentStatus.PARTIALLY_REFUNDED
+                || p.status == PaymentStatus.REFUNDED;
+        if (confirmedFamily) {
+            if (p.fee == null || p.net == null || p.confirmedAt == null) {
+                throw new IllegalArgumentException(
+                        p.status.name() + " snapshot must carry fee, net and confirmedAt");
+            }
+        } else if (p.fee != null || p.net != null || p.confirmedAt != null
+                || (p.status != PaymentStatus.PENDING && p.status != PaymentStatus.EXPIRED
+                && p.status != PaymentStatus.FAILED)) {
+            throw new IllegalArgumentException("unknown restored status: " + p.status);
+        }
     }
 
     public Payment confirm(EndToEndId endToEndId, FeeBreakdown breakdown, Instant when) {

@@ -217,10 +217,18 @@ class WebhookIntakeUseCaseTest {
     // ---- helper to seed a PENDING payment ----
 
     private void seedPayment(PaymentStatus status) {
+        boolean confirmedFamily = status == PaymentStatus.CONFIRMED
+                || status == PaymentStatus.PARTIALLY_REFUNDED
+                || status == PaymentStatus.REFUNDED;
+        Instant created = Instant.parse("2026-08-29T12:00:00Z");
         Payment payment = Payment.restore(
                 UUID.randomUUID(), TXID, MERCHANT, Money.of(10000, "BRL"), "Order #1",
-                Instant.parse("2026-08-29T12:02:00Z"), Instant.parse("2026-08-29T12:00:00Z"),
-                status, 0, null, null, null, false, null, 0
+                Instant.parse("2026-08-29T12:02:00Z"), created,
+                status, 0,
+                confirmedFamily ? END_TO_END_ID : null,
+                confirmedFamily ? Money.of(100, "BRL") : null,
+                confirmedFamily ? Money.of(9900, "BRL") : null,
+                confirmedFamily, confirmedFamily ? created.plusSeconds(60) : null, 0
         );
         paymentRepo.save(payment);
     }
