@@ -23,7 +23,7 @@ public final class JdbcNotificationStore implements NotificationStore {
             String payload, Instant occurredAt) {
         int rows = jdbc.sql("""
                 INSERT INTO notifications.notification (id, event_id, type, txid, merchant_id, payload, occurred_at)
-                VALUES (?, ?, ?, ?, ?, CAST(? AS jsonb), ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (event_id) DO NOTHING
                 """)
                 .params(UUID.randomUUID(), eventId, type, txid, merchantId, payload, occurredAt)
