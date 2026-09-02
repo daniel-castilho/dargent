@@ -355,3 +355,158 @@ Block 1.5 remediation pairs (this block; flyway/jsonb/auth iterations then close
 - **Required correction (docs-only, no code, no re-flip):** one commit fixing the matrix ids/structure,
   traceability rows, artifact index, and every id↔number pair per the table above — rides as E6 block step 0.
 - **E6 authorized** (pending the usual 4-doc commissioning set); E5 follows sequentially.
+## Triage — 3rd external analysis (2026-09-01, HEAD `6897d1d`; all claims tree-checked)
+
+**Verified TRUE (her wide read — wider than mine in docs):** MIT license ✓; created 2026-08-28 / pushed
+2026-09-01 ✓ (pushed_at = `6897d1d` — the BD-15/16 fix block had NOT executed yet); `docs/` inventory she
+cited EXISTS and I had never enumerated: `twelve-factor.md`, `slos.md`, `testing-playbook.md`,
+`release-runbook.md`, `observability.md`, `load-test-baseline.md` (+ coding-standards, data-model-decisions,
+design 48 KB, lessons 17 KB) — direct E11/E12/E14 inputs; notifications module hollow ✓; ledger consumer
+flag-off by default ✓ (spec-authored); blue-green not a CI gate ✓ (README itself says "the entire pipeline
+that runs today — by design", scripts "land at M4"); M3 blank ✓; E3R self-correction credited as honesty ✓;
+Boot 4.1.1 real ✓. Her "Current state" praise is deserved — the milestone table is the anti-overclaim anchor.
+
+**The README finding — confirmed and EXTENDED (TD-15 registered):** she flagged "pitch > code" residual;
+the tree shows the concrete defect: the Testing section's reconciliation-scenario sentence is TD-8's lie
+surviving R7 (reconciler = E5, does not exist), plus subtitle Stripe-shape scope, present-tense money-flow
+block, stale E4 comment. Docs-only fix rides the BD-15/16 block.
+
+**Where her read stops (and the deep pass started):** she praised the ledger slice and offered to deep-dive
+state machine / outbox / ledger — all three were already deep-read (E3R B3, E6, E7 audits), which is how
+BD-15 (money-loss duplicate-ack window) and BD-16 (Jackson 2) were found; neither appears in her analysis.
+Nits: "100+ commits" (71 runs verified); "Stripe analogy is marketing" partially misattributed (the intro
+hedge + Current-state table exist — the residual is the unmarked blocks, registered as TD-15).
+
+**Frames (standing user rulings respected):** "0 stars/0 forks" — fact ✓, but as evidence previously
+rejected; her version ("no external reviewer matters for money software") is a fair methodological point
+that this very triage process answers. "Product: not applicable yet" — stage-qualified, materially different
+from the rejected "2/10"; the project never targeted a real rail by design (simulator = the honest outside
+world, E2). "Ceremony generated to justify the next step" — the kernel is real (TD-12/TD-14 were the process
+emitting claims ahead of the tree) and the counter is real (every AGENTS rule maps to a numbered TD/BD);
+cost/benefit is the owner's standing call, not reopened by this triage.
+
+**Actions:** TD-15 registered (fix rides BD-15/16 block); slos/twelve-factor/observability/playbook flagged
+as E11–E14 commissioning inputs; E10 still gated on BD-15/16 (+ now TD-15) fix commits.
+
+## Fix-block audit — BD-15 + BD-16 (2026-09-01, main `de54825910de92844bfeae020d40f33b8ba016b2`)
+
+### Verified chain (API, runs?branch=main)
+
+| Run | Id | Head | Content |
+|---|---|---|---|
+| #72 | `33555099220` | `3ae463e` | `fix(ledger): resume posting on duplicate RECEIVED (BD-15)` (matrix + table cite; commit in chain, tree covered by #73/#75 green) |
+| #73 | `33556352180` | `5b70ae1` | `docs(e7): record BD-15 run pair (#72) in matrix + canonical table` — **citation-commit run, correctly unregistered** (#57/#67 precedent; handoff's "gap" dissolved) |
+| #74 | `33559514160` | `e946a15` | `refactor(ledger): Jackson 3 reader and normalized parse failures (BD-16)` ✅ API-verified; message discloses pom `tools.jackson.core:jackson-databind:3.1.5` + `jackson-core:3.1.5` |
+| #75 | `33560118008` | `de54825` | `docs(e7): record BD-16 run pair (#74)` ✅ API-verified @main (21:16Z); citation-commit run |
+
+### Line-level verdicts @`de54825` (compare `6897d1d...main`, all 14 file patches read)
+
+- **BD-15 fix VERIFIED**: duplicate branch re-reads `findEventStatus` (orElseThrow ISE); RECEIVED → `resumePosting` in ONE tx — `claimEventForResume` conditional UPDATE (`WHERE event_id = ? AND status='RECEIVED'`), 0 rows → ack-skip zero writes, else postings §5.3 + `postJournal`; belt-and-suspenders catch `DataIntegrityViolationException` → re-read → POSTED → ack, else rethrow. Port + `JdbcLedgerStore` SQL exactly as contracted.
+- **BD-16 fix VERIFIED**: `tools.jackson.databind` only; default + injecting ctors (one shared mapper); `parseInstant` catches `DateTimeException` → IAE; both `readTree` sites wrap → IAE; fee+net invariant untouched.
+- **Tests VERIFIED**: `EventIngestionUseCaseTest` duplicate matrix (RECEIVED resumes / POSTED, IGNORED, REJECTED ack-skip) + `concurrent_resume_race_lost_ack_skips`; `SqsEventConsumerTest` (false → `never deleteMessageBatch`; true → ack entries; mixed); `EventEnvelopeReaderTest.malformed_occurredAt_is_poison_by_contract` on the default ctor; fakes updated with real duplicate semantics.
+- **Guard IT adjudicated**: `redelivery_after_posting_failure_resumes_and_posts_exactly_once` lives in `apps/api/.../ledger/LedgerMoneyLoopIT` (not modules it/). Real DB: hand-seeded RECEIVED → `processMessage` → ack, exactly 1 journal + 3 postings, balances 4900/100/−5000, `assertProofOk(3,3)`, status POSTED. **Deviation**: Q1/Q2 trigger failure-injection leg not implemented (disclosed honestly in the handoff; diverged without prior stop-and-report). Property proven; failure→RECEIVED transition unexercised → **BD-15R** opened (LOW, test-only rider on E10).
+- **Matrix amendments VERIFIED**: "Post-closure remediation" section (BD-15/BD-16 rows with pairs), race row rewritten to the truthful mechanism, new permanent hygiene gate `com.fasterxml` = 0 hits @`e946a15`. Cosmetic defect: race row cites `#59 ... /` with an **empty second pair** after the slash — one-line docs fix, rides E10 S0.
+- **Canonical table**: rows #71/#72/#74 added; #73 (citation run) intentionally absent — precedent-compliant.
+
+### Verdict
+
+**Fix block APPROVED. BD-15 and BD-16 CLOSED (zeroed in the register 2026-09-01).** Open riders carried to E10: BD-15R (test leg), TD-15 (README honesty, docs-only), matrix race-row dangling pair (docs). E10 commissioning = owner decision (auditor recommendation: green light).
+
+### Owner adjudications (2026-09-01, same channel)
+
+- **E10 commissioned** with all three riders in step 0 (TD-15 + BD-15R + matrix race-row pair). Package: `tasks/notifications-e10-prompt.md` + backlog + sequence + spec + block-1 execution prompt (5 files).
+- **JaCoCo/OWASP placement confirmed as E13 (canonical)** — owner raised moving JaCoCo to E11 (Observability); after the E11-vs-E13 trade-off was laid out, owner chose to keep both in E13 with the full §11.1 pipeline (SpotBugs, OWASP NVD cache, JaCoCo per-module post-IT floors, Trivy 2-pass, SBOM, CodeQL, Dependency Review). No doc amendment needed — epics.md / testing-playbook §5 / ci.yml already state this. Coverage floors for notifications (50%) apply at E13, not at E10.
+- **E13 seeded from spotpobre + flowtxt (owner reinforcement, "full force")**: both projects run mature OWASP + JaCoCo in production; the E13 package seeds line-level from them (spotpobre ci.yml: NVD-cache OWASP policy + post-IT combined JaCoCo + Trivy 2-pass + SHA-pinned actions — NOASSERTION license, verbatim later authorized (grant below); flowtxt: per-module `jacoco:check` floors bound to `verify` + `docs/ci-vulnerability-gates.md` as an E13 deliverable + security job). Sources re-pinned by SHA at E13 commissioning; 1000-maneiras rule governs. Notebook updated (`internal-notes/ideias-para-roubar.md` §4).
+
+## E10 Block 1 — audit: riders CLEAN, S1–S3 REAL, Block NOT complete (2026-09-02, main `8138f4c9d2e70bb5a8604841be68b3b7fb5fceb6`)
+
+### Verified chain (API runs?branch=main; curl-verified locally, shallow clone)
+
+| Run | Id | Head | Verdict |
+|---|---|---|---|
+| #76 | `33566863734` | `5919275` | ✅ TD-15 README honesty — all 4 register items landed; message = diff |
+| #77 | `33568197213` | `c1b435c` | ✅ BD-15R guard IT leg — Q1/Q2 mechanics per adjudication |
+| #78 | `33568586974` | `98c4be0` | ✅ matrix race-row citation completed (`#72 33555099220 3ae463e`) |
+| #79 | `33569381410` | `30245af` | ❌ **RED** — S1 first push (never cited in handoff; P1 violation) |
+| #80 | `33569955450` | `d47eec4` | ✅ S1 green (fix MigrationIT + removed scaffold `NotificationType` enum, disclosed) |
+| #81 | `33570585786` | `8565060` | ✅ S2 reader |
+| #82 | `33573089260` | `9a13f76` | ✅ S3 use case + store |
+| #83 | `33580602148` | `db82f60` | ❌ **RED** — S4 commit (block-summary message citing a non-existent `NotificationPoisonDlqIT`) |
+| #84 | `33581153906` | `8138f4c` | ✅ green by DISABLING `NotificationLoopIT` (@Disabled) — the S4 content has never been green WITH its IT |
+
+### Verified clean (line-level, local clone + greps)
+
+- **Riders 0a/0b/0c**: all three conform; register TD-15 + BD-15R + matrix nit CLOSED.
+- **Hygiene greps @`8138f4c`**: `com.fasterxml` in notifications main = 0; AWS SDK only in `SqsNotificationConsumer`; zero Spring annotations in module main; zero Thread.sleep in tests. V301 matches spec §2.1 verbatim. Reader = full BD-16 mirror; consumer = binary ack + batch delete of acked only; consumer test mirrors `SqsEventConsumerTest` 1:1; store SQL `ON CONFLICT (event_id) DO NOTHING` per §5; env gate `@ConditionalOnProperty` (relaxed binding — contracted `DARGENT_NOTIFS_*` names work).
+
+### Findings (register: TD-16, BD-17, BD-18)
+
+1. **BD-17 (blocker, wiring)**: main `NotificationCompositionConfig` injects `@Qualifier("notifsTestSqsClient")` — test-only bean; prod boot with consumer enabled fails; CI never exercises the wiring (that's why disabling the IT made CI green). Ledger pattern (`ledgerSqsClient`) is the fix template.
+2. **TD-16 (false citations)**: `NotificationPoisonDlqIT` never existed (handoff + `db82f60` message cite it); S1/S4 run-sha mislabels; reds #79/#83 concealed under "CI green (#84)".
+3. **BD-18 (pre-existing, found during audit)**: `DevApiKeyProvisionerTest` @Disabled("to be fixed in S8") — E3-era, never registered.
+4. Minor: use case injects unused `jdbc`/`clock`; stale "terminal status / event row" comment (table has no status); `NotificationApplicationConfig` javadoc copy-pasted from ledger ("ledger HTTP surface"); arch test `allowEmptyShould(true)` (pragmatic, noted).
+
+### Verdict
+
+**Block 1 is NOT complete** — S1–S3 accepted (evidenced), riders zeroed, but S4 is blocked by BD-17 (its only green run is the disable commit) and S5 is missing (poison IT non-existent; loop IT disabled, single happy-path test, main wiring never exercised). Handoff's "complete" claim is refuted in that part — substance partially real, citation layer defective (Block-3-E3R shape). Block 2 (S6/S7/M2 flip) is NOT commissionable until the remediation block lands. Canonical-table rows #76–#84 not yet in repo — governance docs ride the owner's commit.
+- **License grant (owner, 2026-09-01)**: "both projects are mine and you may use all the code freely" — corroborated by account evidence (spotpobre, flowtxt, dargent all under `daniel-castilho`). Verbatim reuse now authorized for both repos; the 1000-maneiras method stays as default discipline (verbatim reserved for where direct copy is clearly superior, e.g. CI YAML); any verbatim block lands with a provenance note in the commit message (origin repo + pinned SHA); SHAs re-pinned at the moment of use.
+
+## Triage — 4th external analysis (ledger critique + double-entry/accrual tutorials) — 2026-09-02, main `8138f4c`
+
+### Fact-check: 8/8 core claims TRUE (line-level, local clone)
+
+| Claim | Evidence |
+|---|---|
+| `JournalEntry` ctor holds no invariant | ctor is pure field copy; `netAmountCents()` = signed sum, returns regardless |
+| No typed chart of accounts | no accounts catalog table (tables: events, journal_entries, postings, balances, settlements, audit_log); account = free string |
+| No currency on balances | `currency` absent from all ledger migrations |
+| V202 status CHECK lacked RECEIVED; fixed later | V202 line 10 vs `V207__events_status_includes_received.sql` (honest comment inside) |
+| Settlement idempotency key rides the journal `txid` field | `SettlementUseCase` line 64: `new JournalEntry(entryId, null, idempotencyKey, ...)` |
+| `postJournal` opens nested `txTemplate` | `JdbcLedgerStore` line 65 — but REQUIRED propagation joins the outer tx (one tx by design §5.3); critique's "catches in concurrency+timeout" OVERSTATED |
+| No DB barrier against unbalanced journal | no deferred constraint/trigger in any ledger migration; `verifyProof()` is post-facto |
+| Consumer default-off ⇒ ledger optional to payments | env contract (ratified as-built §10); proof is internal-only, no payments⇔ledger coverage check |
+
+### Frames adjudicated (not reopened)
+
+- **"Ligado por default" as the criterion** — conflicts with the ratified env contract (`DARGENT_LEDGER_CONSUMER_ENABLED` default false, §4 names never change). REJECTED as stated; its substantive core (silent coverage gap) distilled into **DEBT-4**.
+- **Roadmap overlap**: refund in the same book = E8 brief (entries [3]+[4], D8 proportional fee reversal); expiration/late = E5; chargeback/holds = stretch — the critique's "what's missing" partially re-discovers M3 and acknowledges "M3 ainda nem começou". Multi-currency/multi-rail: out of scope (PIX BRL only, standing decision).
+- **Portfolio/interview ruler**: quality-score frames are not litigated (standing); technical content only.
+- **"Mencione Apache Kafka"**: empty header artifact; Kafka remains a standing rejection.
+
+### Actions
+
+- **DEBT-4** (coverage reconciliation) and **DEBT-5** (balanced-entry barrier) registered; recommended addresses E5 and E8 respectively (ratification at commissioning).
+- E8 design seeds: reversal-entry pattern; settlement `txid`-overload fix; payout as reconciliation with a real cash account (not `payouts:external` as an accounting well).
+- Reusable didactics → `internal-notes/ideias-para-roubar.md` §8.
+- Block 1.5 prompt untouched (already issued; these debts are E5/E8-addressed).
+## Stop-and-report adjudications — E10 (2026-09-02, drafting phase)
+
+- **Q1 (Block 1.5, dedupe leg)**: ledger-IT2 form adjudicated — full-wiring first delivery, redelivery = direct second `processMessage(raw)` asserting ack + unchanged count; SNS re-publish with distinct dedup id REJECTED (artificial broker state, fan-out already proven by E6, determinism per E7 Q3 precedent). Recorded in the 1.5 prompt addendum.
+- **Q2 (Block 2 drafting, spec §7 vs AGENTS §3.7)**: engineer escalated a real conflict — the required `merchantId` query param was an AUTHOR-SIDE spec defect (governance-written). Adjudicated: **tenant from principal** (option 1) — AGENTS §3.7 governs; spec §7 amended in-workspace; `merchant_id` stays as output echo; §8.3's param-negative replaced by a cross-tenant isolation proof (seed 2nd merchant, assert absence). Registered as **TD-17** (closed pending the owner's governance commit). Pattern note: this is §9d succeeding in the direction that matters — the engineer asked instead of choosing, and the constitution won.
+- **Q3 (Block 2 drafting, §7 wire naming)**: snake_case (`event_id`, `next_cursor`) vs house camelCase. Adjudicated **camelCase** (TD-18) — PaymentController + envelope fixtures are the convention; Stripe analogy is architectural only; §8.3 gains a drift-guard assertion (`eventId` present, `event_id` absent; no global naming-strategy config). Method note (rule candidate): governance-authored specs state field SETS; wire NAMING follows the codebase convention unless explicitly adjudicated otherwise — two author-side defects (TD-17, TD-18) caught pre-execution by the same §9d mechanism in one drafting cycle.
+
+## E10 Block 1.5 + Block 2 — closure audit (2026-09-02, main `be91286`; combined handoff, 1.5 audited retroactively)
+
+### Chain (curl-verified; total 120 runs)
+
+- **Block 1.5 (#85–#116)**: 27 consecutive REDS (#85–#112 — SNS fan-out fight, jsonb binding saga, multi-schema Flyway war), ALL landed as commits with descriptive fix messages (P1 exemplary); greens #113 `e41baba` (Instant→Timestamp — the real PG blocker), #114 `5b53809` (`NotificationPoisonDlqIT` — the file TD-16 said never existed now exists and redrive-asserts), #115 `09eb26a` (BD-18 un-disabled), #116 `f6212b7` (TD-16 correction: rows #76–#115 with reds + explicit retraction).
+- **Block 2 (#117–#120)**: #117 `e6a2a50` ✅ (self-commission + spec §7 TD-17 amendment — see process note), #118 `7a024c5` ✅ (S6 read API), #119 `fa00eb3` ✅ (**flip commit**: README M2 ✅ + CHANGELOG + spec §10 matrix), #120 `be91286` ✅ (**citation commit**, exactly one post-flip citation run, unregistered per #57/#67 precedent — pairing structurally PERFECT).
+
+### Verified clean
+
+- Zero `@Disabled` repo-wide; BD-17 production wiring fixed (`@Qualifier` test bean gone, prod client); scope clean (zero payments/psp/ledger-main touches since `8138f4c`); S6 principal-scoped (`queryPort.findPage(principal.merchantId(), …)`, §3.7 in code), camelCase wire, keyset cursor, no payload; use case deps cleaned; poison IT real (redrive + zero rows); dedupe leg per Q1 (direct 2nd `processMessage`, count stays 1).
+
+### Findings (register: TD-19, TD-20, RAT-E10-IT)
+
+1. **TD-19**: `docs/epics.md` NOT flipped (E10 still ☐; E7 note stale) — flip landed on README only; canonical ledger contradicts README.
+2. **TD-20**: response drops `merchantId` (against TD-17 ruling); cross-tenant isolation test missing (TD-17 §8.3); naming-guard negative absent (TD-18).
+3. **RAT-E10-IT**: LoopIT/PoisonIT keep test-provided clients/consumers (ledger-harness reality) instead of the 1.5 prompt's "drive the main wiring" text — the prompt's premise about ledger IT practice was wrong; BD-17's substance is fixed. Ratification requested.
+4. **Process note**: Block 2 self-commissioned at #117 before this audit (gate bypass); mitigated by owner-relayed adjudications (Q1–Q3) + combined handoff.
+
+### Verdict
+
+**M2 substance stands** (all acceptance artifacts real, chain green, pairing conventional). Closure is INCOMPLETE on: canonical-ledger flip (TD-19) + owner adjudications on TD-20 dispositions and RAT-E10-IT seal. M2's ✅ in README is justified in substance but the canonical ledger must agree before the epic is declared closed by THIS channel.
+
+**Owner adjudications (2026-09-02, same channel)**: TD-19 → flip lands in the owner's governance commit (patch pre-built); TD-20 → FULL rider (cross-tenant test + naming guard + merchantId restored); RAT-E10-IT → seal granted, process note accepted. Closure path: rider lands (content commit + green run + citation) AND owner's governance commit flips epics.md → E10 ✅, M2 ✅ declared by this channel.
+
+**Governance commit verified (2026-09-02 22:02Z)**: `368e76c4a8cf` — epics.md flip + patch + rider prompt landed (3 files; run #121 `33688340781`). Register + verification (this file, now MERGED: repo canonical rows + audit sections) still pending the owner's next governance commit. `internal-notes/ideias-para-roubar.md` deliberately NOT in the public repo (never committed; strategy notes — recommended to keep local).
