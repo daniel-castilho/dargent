@@ -2,28 +2,19 @@ package io.dargent.api.provisioning;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.dargent.api.error.ErrorResponseWriter;
-import io.dargent.api.error.GlobalExceptionHandler;
-import io.dargent.api.security.ApiKeyAuthenticationFilter;
 import io.dargent.api.security.ApiKeyHasher;
-import io.dargent.api.security.ApiKeyRepository;
 import io.dargent.api.security.JdbcApiKeyRepository;
-import io.dargent.api.security.ApiKeyRecord;
-import io.dargent.api.web.RequestIdFilter;
-import io.dargent.api.security.SecurityConfig;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.SpringBootConfiguration;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -32,14 +23,15 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
  * Dev key provisioning idempotency (E3 spec §5.9): running the provisioner multiple times with the
- * same key produces exactly one row. Uses Testcontainers PostgreSQL for the real DB.
- * Loads only the necessary API infrastructure, NOT the main app's DevApiKeyProvisioner.
+ * same key produces exactly one row for the deterministic dev merchant. Uses Testcontainers
+ * PostgreSQL for the real DB. A focused boot context (DataSource + Flyway + TestProvisioner)
+ * instead of the full app, so the dev-profile {@code DevApiKeyProvisioner}'s @PostConstruct
+ * never races Flyway at startup (BD-18).
  */
-@SpringBootTest
+@SpringBootTest(
+    classes = DevApiKeyProvisionerTest.TestConfig.class,
+    webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @Testcontainers
-@ActiveProfiles("dev")
-@Import(DevApiKeyProvisionerTest.TestConfig.class)
-@Disabled("Flyway context loading issue — to be fixed in S8")
 class DevApiKeyProvisionerTest {
 
     @Container
@@ -76,6 +68,7 @@ class DevApiKeyProvisionerTest {
 
     @Test
     void provisioned_key_has_correct_merchant_and_prefix() {
+        provisioner.provision();
         var repo = new JdbcApiKeyRepository(jdbc);
         String rawKey = "psp_test_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrst";
         var keyOpt = repo.findByPrefix(ApiKeyHasher.prefix(rawKey));
@@ -87,16 +80,19 @@ class DevApiKeyProvisionerTest {
         assertThat(record.revokedAt()).isNull();
     }
 
-    @Configuration
-    @Import({SecurityConfig.class, GlobalExceptionHandler.class, ErrorResponseWriter.class,
-            RequestIdFilter.class, ApiKeyAuthenticationFilter.class})
+    @SpringBootConfiguration
+    @EnableAutoConfiguration
     static class TestConfig {
         @Bean
-        @Primary
         Flyway flyway(DataSource dataSource) {
             Flyway flyway = Flyway.configure()
                     .dataSource(dataSource)
-                    .locations("classpath:db/migration/payments")
+                    .schemas("payments", "ledger", "notifications")
+                    .locations(
+                            "classpath:db/migration/payments",
+                            "classpath:db/migration/ledger",
+                            "classpath:db/migration/notifications"
+                    )
                     .baselineOnMigrate(true)
                     .load();
             flyway.migrate();
