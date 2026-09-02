@@ -71,7 +71,8 @@ import com.sun.net.httpserver.HttpServer;
     classes = {DargentApiApplication.class, NotificationLoopIT.NotificationsTestConfig.class},
     properties = {
         "dargent.relay.enabled=true",
-        "dargent.psp.webhook-secret=dev-only-secret"
+        "dargent.psp.webhook-secret=dev-only-secret",
+        "spring.flyway.enabled=false"
     })
 @Testcontainers
 class NotificationLoopIT {
