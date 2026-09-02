@@ -149,12 +149,14 @@ class NotificationLoopIT {
     @BeforeEach
     void setUp() {
         baseUrl = "http://localhost:" + port;
-        // Ensure all required schemas exist (auto-config Flyway only runs for 'public' schema)
+        // Ensure all required schemas exist before truncate (auto-config Flyway runs after @BeforeEach)
         jdbc.sql("CREATE SCHEMA IF NOT EXISTS ledger").update();
         jdbc.sql("CREATE SCHEMA IF NOT EXISTS notifications").update();
-        jdbc.sql("truncate notifications.notification, ledger.events, ledger.postings, ledger.journal_entries, ledger.balances, "
-                + "ledger.settlements, ledger.audit_log, "
-                + "payments.webhook_events, payments.outbox, payments.idempotency_keys, "
+        // Split truncate per schema to avoid multi-table truncate failing if schema missing
+        jdbc.sql("truncate notifications.notification restart identity cascade").update();
+        jdbc.sql("truncate ledger.events, ledger.postings, ledger.journal_entries, ledger.balances, "
+                + "ledger.settlements, ledger.audit_log restart identity cascade").update();
+        jdbc.sql("truncate payments.webhook_events, payments.outbox, payments.idempotency_keys, "
                 + "payments.audit_log, payments.payments, payments.api_keys restart identity cascade").update();
         jdbc.sql(
                 "insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
