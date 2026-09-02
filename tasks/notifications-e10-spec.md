@@ -148,4 +148,4 @@ Greps are pasted in the handoff with the commit id they ran at.
 | S4 | consumer translation | `SqsNotificationConsumerTest` | #115 `33676638904` | ✅ |
 | S5 | loop + poison ITs | `NotificationLoopIT` + `NotificationPoisonDlqIT` (§8 names) | #113 `33674334484` / #114 `33675295464` | ✅ |
 | S6 | API contract | `NotificationsApiIT` | `7a024c5` `33683261976` | ✅ |
-| S7 | docs + flip + M2 ✅ | commit pair (README/CHANGELOG/this row) | `S7_sha` `S7_run` | ◻ |
+| S7 | docs + flip + M2 ✅ | commit pair (README/CHANGELOG/this row) | `fa00eb3` `33684112090` | ✅ |
