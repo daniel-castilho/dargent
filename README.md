@@ -161,10 +161,12 @@ shipped image. Deployment is **blue-green by immutable tag** with a 10%/30s cana
 
 ## Current state
 
-**E6 complete + E7 ledger (S1–S5) live on `main` (E6 canonical run #43 `33354167958`, E7 S4 `33454526460` #56,**
-**E7 S5 `33462467004` #59 green). The ledger consumes `payment.confirmed`, journals double-entry postings,**
-**maintains the balance projection with proof + rebuild, and settles the full available balance — all behind**
-**`DARGENT_LEDGER_CONSUMER_ENABLED` (off by default). M2 stays ◐ until E10 (notifications).**
+**E6 + E7 ledger (S1–S5) + E10 notifications (S0–S7) complete on `main` (E7 S5 `33462467004` #59 green;**
+**E10 loop/poison `33674334484` #113 / `33675295464` #114; E10 read API `33683261976` green). Ledger**
+**consumes `payment.confirmed`, journals double-entry postings, maintains balance proof + rebuild, and**
+**settles the full available balance behind `DARGENT_LEDGER_CONSUMER_ENABLED` (off by default).**
+**Notifications consume events into `notifications.notification` behind `DARGENT_NOTIFS_CONSUMER_ENABLED`**
+**(off by default) and expose `GET /v1/notifications` (tenant-scoped read API). M2 is now ✅.**
 
 | Milestone | Scope | Status |
 |---|---|---|
@@ -172,7 +174,7 @@ shipped image. Deployment is **blue-green by immutable tag** with a 10%/30s cana
 | M1 (E3) — Create path | Create cob → PENDING → webhook → CONFIRMED; idempotency; API keys; canonical errors | ✅ |
 | M2 (E4) — Webhook intake | `POST /webhooks/psp` fail-closed HMAC, anti-replay, dedupe, conditional confirm | ✅ |
 | M2 (E6) — Events backbone | Outbox relay → SNS/SQS FIFO with DLQ + retention (at-least-once, `runOnce`-driven ITs incl. E2E anchor) | ✅ |
-| M2 (E7/E10) — Events ledger/consumer | Ledger journaling + balance proof/rebuild + settlement (E7 S1–S5 ✓) | ◐ *(E10 notifications pending)* |
+| M2 (E7/E10) — Events ledger/consumer | Ledger journaling + balance proof/rebuild + settlement (E7 S1–S5 ✓); notifications consumer + `GET /v1/notifications` read API (E10 S0–S7 ✓) | ✅ |
 | M3 — Suffering | Refunds, expiration, resurrection, reconciler, settlement, DLQ/backoff/EXHAUSTED/requeue | ☐ |
 | M4 — Finish | Metrics, blue-green deploy, runtime smoke in CI, tag releases + SBOM, restore drill | ☐ |
 | M5 — Stretch | Card as second Strategy, k6 as hard gate, Redis read cache, webhook reprocessing | ☐ |

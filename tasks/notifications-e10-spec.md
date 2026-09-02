@@ -135,17 +135,17 @@ In `apps/api/src/test/java/io/dargent/api/notifications/`, ledger harness:
 
 Greps are pasted in the handoff with the commit id they ran at.
 
-## §10 Acceptance matrix (to be appended to by the executor)
+## §10 Acceptance matrix (appended by the executor)
 
 | Item | Deliverable | Test / Evidence | CI Run | Status |
 |---|---|---|---|---|
-| S0 TD-15 | README honesty pass | diff + audit | pair | ◻ |
-| S0 BD-15R | guard IT trigger leg | IT name + pair | pair | ◻ |
-| S0 matrix nit | citation pair completed | diff | pair | ◻ |
-| S1 | migration applies | `NotificationLoopIT` green | pair | ◻ |
-| S2 | reader poison-by-contract | `EventEnvelopeReaderTest` (module) | pair | ◻ |
-| S3 | use case matrix | `NotificationIngestionUseCaseTest` | pair | ◻ |
-| S4 | consumer translation | `SqsNotificationConsumerTest` | pair | ◻ |
-| S5 | loop + poison ITs | `NotificationLoopIT` + `NotificationPoisonDlqIT` (§8 names) | #113 `33674334484` / #114 `33675295464` | ◻ |
-| S6 | API contract | `NotificationsApiIT` | pair | ◻ |
-| S7 | docs + flip + M2 ✅ | citation commit pair | pair | ◻ |
+| S0 TD-15 | README honesty pass | diff + audit | #113 `33674334484` | ✅ |
+| S0 BD-15R | guard IT trigger leg | IT name + pair | #113 `33674334484` / #114 `33675295464` | ✅ |
+| S0 matrix nit | citation pair completed | diff | canonical table `tasks/e3r-block1-verification.md` | ✅ |
+| S1 | migration applies | `NotificationLoopIT` green (notifications V101 applies) | #113 `33674334484` | ✅ |
+| S2 | reader poison-by-contract | `EventEnvelopeReaderTest` (module) | #115 `33676638904` | ✅ |
+| S3 | use case matrix | `NotificationIngestionUseCaseTest` | #115 `33676638904` | ✅ |
+| S4 | consumer translation | `SqsNotificationConsumerTest` | #115 `33676638904` | ✅ |
+| S5 | loop + poison ITs | `NotificationLoopIT` + `NotificationPoisonDlqIT` (§8 names) | #113 `33674334484` / #114 `33675295464` | ✅ |
+| S6 | API contract | `NotificationsApiIT` | `7a024c5` `33683261976` | ✅ |
+| S7 | docs + flip + M2 ✅ | commit pair (README/CHANGELOG/this row) | `S7_sha` `S7_run` | ◻ |

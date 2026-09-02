@@ -5,6 +5,26 @@ versioning: semantic, cut from annotated git tags (see [release-runbook](docs/re
 
 ## [Unreleased]
 
+### Added — E10 Notifications Consumer + Read API (2026-09-02)
+
+- **Notifications schema** (`modules/notifications` V101, schema-per-module): `notifications.notification`
+  with `event_id` unique dedupe key, `payload` JSONB (already envelope-validated), and a merchant-scoped
+  keyset index `(merchant_id, created_at DESC, id DESC)` backing §7 pagination.
+- **Event reader** parsing `io.dargent.shared.events.EventEnvelope` strictly (poison → IAE, no ack → DLQ),
+  Jackson 3 only, mirroring ledger's reader shape with zero ledger imports.
+- **Ingestion use case** (§3–§4): dedupe via `INSERT … ON CONFLICT (event_id) DO NOTHING` (at-least-once),
+  translation happens at the boundary (AGENTS §3.6); non-consumable envelope kinds → IGNORED.
+- **SQS FIFO consumer** (`DARGENT_NOTIFS_CONSUMER_ENABLED`, off by default): batch, long-poll, ack-only-on
+  commit, poison → DLQ with redrive; message-dedupe by `eventId`.
+- **Read API** (§7): `GET /v1/notifications` — tenant from the authenticated principal (AGENTS §3.7,
+  never from query/path/body, no `merchant_id` emitted), `type` filter, `limit` (1..100, default 20),
+  opaque base64url keyset `cursor` over `(created_at, id) DESC`, `payload` never returned. Route declared
+  explicitly in `SecurityConfig`. Response fields camelCase to match Payments API serialization
+  (owner adjudication 2026-09-02 — spec §7 amended).
+- **Tests**: reader/use-case/consumer unit tests + `NotificationLoopIT` + `NotificationPoisonDlqIT`
+  (S1–S5, CI #113 #114) + `NotificationsApiIT` (S6: shape, type filter, pagination cursor round-trip,
+  400/401). Full reactor `verify` (43 API ITs) + ArchUnit + `check-boundaries.sh` green.
+
 ### Added — E7 Ledger Core (2026-08-31)
 
 - **Ledger schema** (`modules/ledger/db/migration/ledger` V202–V206, schema-per-module): `events`
