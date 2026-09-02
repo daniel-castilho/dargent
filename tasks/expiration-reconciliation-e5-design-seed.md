@@ -34,7 +34,7 @@ so the spec author does not re-derive them. Nothing here is binding until the E5
 - **Fixed scan interval (60 s fixed-delay) + per-payment poll backoff**, aligned with design's RPO ≤ 15 min:
   poll schedule per payment ≈ **1 m → 5 m → 15 m (RPO anchor) → 1 h cap**; stop at `expires_at` + resurrection
   window (window length is a spec decision; past it → manual review flag, not silent forever-polling).
-- Per-payment throttling needs state: **V109 adds `next_reconcile_at` (nullable) to `payments`** (E5 owns its
+- Per-payment throttling needs state: **V111 adds `next_reconcile_at` (nullable) to `payments`** (E5 owns its
   migrations; derive-from-`updated_at` does not work — polls do not transition the payment, so the age never
   advances). Index choice per design §5.1; numbers become named constants/env (env names are contract).
 
@@ -55,7 +55,7 @@ so the spec author does not re-derive them. Nothing here is binding until the E5
   `expire_payment` (scheduler; actor null) · `confirm_from_reconciliation` (reconciler; actor null) ·
   `confirm_from_webhook` (exists, E4).
 - `late=true` is carried by the `payment.confirmed` envelope payload (already specified, E4 §5.3 step 6);
-  `audit_log` has no payload column. If `late` must be queryable in audit, V109 may add a nullable
+  `audit_log` has no payload column. If `late` must be queryable in audit, V111 may add a nullable
   `details jsonb` — spec decision, not assumed.
 
 ## Anchors for the spec author

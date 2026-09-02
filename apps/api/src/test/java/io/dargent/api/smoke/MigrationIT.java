@@ -100,6 +100,42 @@ class MigrationIT {
     }
 
     @Test
+    void v111_reconciliation_columns_and_pending_expires_index_apply() {
+        // E5 S1 accept: V111 applies on real PG — next_reconcile_at/reconcile_attempts columns
+        // plus the partial expiration index (spec §2).
+        List<String> reconcileColumns = jdbc.sql("""
+                select column_name
+                from information_schema.columns
+                where table_schema = 'payments' and table_name = 'payments'
+                  and column_name in ('next_reconcile_at', 'reconcile_attempts')
+                order by column_name
+                """).query(String.class).list();
+        assertThat(reconcileColumns).containsExactly("next_reconcile_at", "reconcile_attempts");
+
+        Integer reconcileAttemptsDefault = jdbc.sql("""
+                select column_default
+                from information_schema.columns
+                where table_schema = 'payments' and table_name = 'payments'
+                  and column_name = 'reconcile_attempts'
+                """).query(Integer.class).optional().orElseThrow();
+        assertThat(reconcileAttemptsDefault).isZero();
+
+        List<String> pendingExpiresIndex = jdbc.sql("""
+                select indexname
+                from pg_indexes
+                where schemaname = 'payments' and indexname = 'idx_payments_pending_expires'
+                """).query(String.class).list();
+        assertThat(pendingExpiresIndex).containsExactly("idx_payments_pending_expires");
+
+        List<String> indexDefinition = jdbc.sql("""
+                select indexdef
+                from pg_indexes
+                where schemaname = 'payments' and indexname = 'idx_payments_pending_expires'
+                """).query(String.class).list();
+        assertThat(indexDefinition.get(0)).contains("(status)::text = 'PENDING'::text");
+    }
+
+    @Test
     void flyway_creates_all_module_schemas() {
         List<String> schemas = jdbc
                 .sql("select schema_name from information_schema.schemata")
