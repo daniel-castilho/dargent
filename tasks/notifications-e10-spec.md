@@ -106,7 +106,9 @@ No other new env names in E10. Existing contract names are never touched.
   query or body. Cross-merchant access answers 404-style empty, not 403.
   (Amended 2026-09-02: the original draft required a `merchantId` query param; that contradicts AGENTS §3.7
   and was adjudicated tenant-from-principal — see block 2 prompt.)
-- 200 → `{ "data": [ { "id", "event_id", "type", "txid", "occurred_at", "created_at" } ], "next_cursor": string|null }`.
+- 200 → `{ "data": [ { "id", "eventId", "type", "txid", "occurredAt", "createdAt" } ], "nextCursor": string|null }`.
+  (Amended 2026-09-02: response field names changed from snake_case to camelCase to match the Payments API
+  serialization convention — owner decision, stop-and-report; DB columns stay snake_case.)
 - 400 invalid params (bad `limit`, malformed cursor) · 401/403 per the existing auth behavior.
 - `payload` is NOT returned in the list (keep the endpoint lean; detail endpoint is stretch).
 

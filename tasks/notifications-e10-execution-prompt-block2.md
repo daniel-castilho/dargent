@@ -28,7 +28,8 @@ in SecurityConfig, AGENTS §4.1).
   token over `(created_at DESC, id DESC)`).
 - Tenant/merchant comes from the authenticated principal (AGENTS §3.7); the merchant is never taken from
   path, query or body. Cross-merchant returns 404-style empty (existing auth behavior).
-- 200 → `{ "data": [ { "id", "event_id", "type", "txid", "occurred_at", "created_at" } ], "next_cursor": string|null }`.
+- 200 → `{ "data": [ { "id", "eventId", "type", "txid", "occurredAt", "createdAt" } ], "nextCursor": string|null }`.
+  (amended 2026-09-02: response field names camelCase to match Payments API convention — owner decision).
 - 400 invalid/missing params (bad `limit`, malformed cursor) · 401/403 per existing auth behavior.
 - `payload` is NOT returned (lean list; detail endpoint is stretch — out of scope).
 

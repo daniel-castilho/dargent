@@ -39,6 +39,7 @@ public class SecurityConfig {
                         .requestMatchers("/v1/ledger/proof").authenticated()
                         .requestMatchers("/v1/ledger/rebuild").authenticated()
                         .requestMatchers("/v1/ledger/settlements").authenticated()
+                        .requestMatchers("/v1/notifications").authenticated()
                         .requestMatchers("/v1/**").authenticated()
                         .anyRequest().denyAll())
                 .addFilterBefore(apiKeyFilter, UsernamePasswordAuthenticationFilter.class);
