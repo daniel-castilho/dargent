@@ -4,7 +4,6 @@ import io.dargent.notifications.adapter.out.messaging.SqsNotificationConsumer;
 import io.dargent.notifications.application.NotificationIngestionUseCase;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -46,7 +45,7 @@ public class NotificationCompositionConfig {
 
     @Bean
     SqsNotificationConsumer sqsNotificationConsumer(
-            @Qualifier("notifsTestSqsClient") SqsClient sqsClient,
+            SqsClient sqsClient,
             @Value("${DARGENT_NOTIFS_QUEUE_URL}") String queueUrl,
             @Value("${DARGENT_NOTIFS_BATCH:10}") int batchSize,
             @Value("${DARGENT_NOTIFS_POLL_MS:1000}") long pollMs,

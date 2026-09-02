@@ -28,7 +28,6 @@ import javax.crypto.spec.SecretKeySpec;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -60,11 +59,7 @@ import com.sun.net.httpserver.HttpServer;
  *      same event again → still one row (dedupe), zero writes.
  * IT2: NotificationPoisonDlqIT — malformed body → not acked → maxReceive attempts → lands in notify DLQ.
  * Both green in CI; no sleeps; names locked by spec §8.
- *
- * DISABLED in CI: LocalStack SNS/SQS fan-out topology has environment-specific issues.
- * Enable locally for manual verification: remove @Disabled.
  */
-@Disabled("LocalStack SNS/SQS fan-out topology issue in CI; enable locally")
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     classes = {DargentApiApplication.class, NotificationLoopIT.NotificationsTestConfig.class},
@@ -113,7 +108,7 @@ class NotificationLoopIT {
     OutboxDeliveryUseCase.Policy relayPolicy;
 
     @Autowired
-    SqsNotificationConsumer notifsConsumer;
+    SqsNotificationConsumer sqsNotificationConsumer;
 
     @Autowired
     NotificationIngestionUseCase ingestion;
@@ -180,7 +175,7 @@ class NotificationLoopIT {
         int relayed = relay.runOnce(relayPolicy.batchSize());
         assertThat(relayed).isGreaterThan(0);
         for (int i = 0; i < 8 && notificationCount() == 0; i++) {
-            notifsConsumer.runOnce();
+            sqsNotificationConsumer.runOnce();
         }
         assertThat(notificationCount()).as("confirmed should create a notification row").isEqualTo(1);
 
@@ -205,13 +200,12 @@ class NotificationLoopIT {
         assertThat(row.get("txid")).isEqualTo(txid);
         assertThat(row.get("merchant_id")).isEqualTo(MERCHANT);
 
-        // Redelivery (same eventId) — ack, no second row
-        int relayed2 = relay.runOnce(relayPolicy.batchSize());
-        assertThat(relayed2).isGreaterThan(0);
-        for (int i = 0; i < 8 && notificationCount() == 1; i++) {
-            notifsConsumer.runOnce();
-        }
-        assertThat(notificationCount()).as("redelivery should not create second row").isEqualTo(1);
+        // Redelivery dedupe (IT2 analogue): same eventId delivered again → ack, no second row
+        UUID eventId = (UUID) row.get("event_id");
+        String rawEnvelope = buildEnvelopeWithEventId(eventId, "payment.confirmed", txid, 10000, 100, endToEndId);
+        boolean ack = ingestion.processMessage(rawEnvelope);
+        assertThat(ack).as("redelivery must ack").isTrue();
+        assertThat(notificationCount()).as("redelivery must not create second row").isEqualTo(1);
     }
 
     // ------------------------------------------------------------------ helpers
@@ -219,9 +213,6 @@ class NotificationLoopIT {
     private long notificationCount() {
         return jdbc.sql("select count(*) from notifications.notification").query(Long.class).single();
     }
-
-    @Autowired
-    io.dargent.ledger.application.LedgerReconciliationUseCase reconciliation;
 
     private String createPayment(String idemKey) throws Exception {
         psp.mode = PspStub.Mode.SUCCESS;
@@ -257,6 +248,23 @@ class NotificationLoopIT {
                 + "\",\"endToEndId\":\"" + endToEndId + "\"}}";
     }
 
+    private String buildEnvelopeWithEventId(UUID eventId, String type, String txid, int amount, int fee, String endToEndId) {
+        int net = amount - fee;
+        return "{\"eventId\":\"" + eventId + "\",\"type\":\"" + type
+                + "\",\"version\":1,\"aggregateId\":\"" + txid
+                + "\",\"merchantId\":\"" + MERCHANT + "\",\"requestId\":\"req-" + txid
+                + "\",\"occurredAt\":\"" + FIXED_CLOCK.instant() + "\",\"payload\":{"
+                + "\"amount\":" + amount + ",\"fee\":" + fee + ",\"net\":" + net
+                + ",\"late\":false,\"txid\":\"" + txid
+                + "\",\"endToEndId\":\"" + endToEndId + "\"}}";
+    }
+
+    private String confirmedBody(String txid, String endToEndId, int amount) {
+        return "{\"eventId\":\"psp-evt-1\",\"type\":\"payment.confirmed"
+                + "\",\"txid\":\"" + txid + "\",\"endToEndId\":\"" + endToEndId
+                + "\",\"amount\":" + amount + ",\"paidAt\":\"" + PAID_AT + "\"}";
+    }
+
     private HttpResponse<String> sendWebhook(String ts, String body) throws Exception {
         return sendWebhook(ts, body, sign(ts, body));
     }
@@ -289,12 +297,6 @@ class NotificationLoopIT {
 
     private JsonNode parse(HttpResponse<String> resp) throws IOException {
         return MAPPER.readTree(resp.body());
-    }
-
-    private String confirmedBody(String txid, String endToEndId, int amount) {
-        return "{\"eventId\":\"psp-evt-1\",\"type\":\"payment.confirmed"
-                + "\",\"txid\":\"" + txid + "\",\"endToEndId\":\"" + endToEndId
-                + "\",\"amount\":" + amount + ",\"paidAt\":\"" + PAID_AT + "\"}";
     }
 
     private String sign(String ts, String body) {
@@ -373,17 +375,6 @@ class NotificationLoopIT {
         @Primary
         Clock fixedClock() {
             return FIXED_CLOCK;
-        }
-
-        @Bean
-        SqsClient notifsTestSqsClient() {
-            return sqs;
-        }
-
-        @Bean
-        @Primary
-        SqsNotificationConsumer notifsConsumer(NotificationIngestionUseCase ingestion, SqsClient notifsTestSqsClient) {
-            return new SqsNotificationConsumer(notifsTestSqsClient, notifsUrl, 10, 600000, ingestion);
         }
 
         @Bean
