@@ -26,7 +26,6 @@ import java.util.UUID;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import javax.sql.DataSource;
-import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -410,21 +409,6 @@ class NotificationLoopIT {
 
     @TestConfiguration
     static class NotificationsTestConfig {
-
-        @Bean
-        Flyway flyway(DataSource dataSource) {
-            Flyway flyway = Flyway.configure()
-                    .dataSource(dataSource)
-                    .locations(
-                            "classpath:db/migration/payments",
-                            "classpath:db/migration/ledger",
-                            "classpath:db/migration/notifications"
-                    )
-                    .baselineOnMigrate(true)
-                    .load();
-            flyway.migrate();
-            return flyway;
-        }
 
         @Bean
         @Primary
