@@ -149,6 +149,8 @@ class NotificationLoopIT {
     @BeforeEach
     void setUp() {
         baseUrl = "http://localhost:" + port;
+        // Ensure notifications schema exists (auto-config Flyway only runs for 'public' schema)
+        jdbc.sql("CREATE SCHEMA IF NOT EXISTS notifications").update();
         jdbc.sql("truncate notifications.notification, ledger.events, ledger.postings, ledger.journal_entries, ledger.balances, "
                 + "ledger.settlements, ledger.audit_log, "
                 + "payments.webhook_events, payments.outbox, payments.idempotency_keys, "
