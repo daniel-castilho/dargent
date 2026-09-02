@@ -9,6 +9,7 @@ import io.dargent.notifications.application.NotificationIngestionUseCase;
 import io.dargent.payments.adapter.out.psp.SimulatorChargeAdapter;
 import io.dargent.payments.application.OutboxDeliveryUseCase;
 import io.dargent.payments.domain.port.out.PspPort;
+import org.springframework.test.context.TestPropertySource;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URI;
@@ -26,6 +27,7 @@ import java.util.UUID;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import javax.sql.DataSource;
+import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -70,11 +72,9 @@ import com.sun.net.httpserver.HttpServer;
     classes = {DargentApiApplication.class, NotificationLoopIT.NotificationsTestConfig.class},
     properties = {
         "dargent.relay.enabled=true",
-        "dargent.psp.webhook-secret=dev-only-secret",
-        "spring.flyway.schemas=payments,ledger,notifications",
-        "spring.flyway.locations=classpath:db/migration/payments,classpath:db/migration/ledger,classpath:db/migration/notifications",
-        "spring.flyway.baseline-on-migrate=true"
+        "dargent.psp.webhook-secret=dev-only-secret"
     })
+@TestPropertySource(properties = {"spring.flyway.enabled=false"})
 @Testcontainers
 class NotificationLoopIT {
 
@@ -412,6 +412,18 @@ void setUp() {
 
     @TestConfiguration
     static class NotificationsTestConfig {
+
+        @Bean
+        Flyway notificationsFlyway(DataSource dataSource) {
+            Flyway flyway = Flyway.configure()
+                    .dataSource(dataSource)
+                    .schemas("payments", "ledger", "notifications")
+                    .locations("classpath:db/migration/payments", "classpath:db/migration/ledger", "classpath:db/migration/notifications")
+                    .baselineOnMigrate(true)
+                    .load();
+            flyway.migrate();
+            return flyway;
+        }
 
         @Bean
         @Primary
