@@ -26,7 +26,6 @@ import java.util.UUID;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import javax.sql.DataSource;
-import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -150,6 +149,9 @@ class NotificationLoopIT {
     @BeforeEach
     void setUp() {
         baseUrl = "http://localhost:" + port;
+        // Ensure all required schemas exist (auto-config Flyway only runs for 'public' schema)
+        jdbc.sql("CREATE SCHEMA IF NOT EXISTS ledger").update();
+        jdbc.sql("CREATE SCHEMA IF NOT EXISTS notifications").update();
         jdbc.sql("truncate notifications.notification, ledger.events, ledger.postings, ledger.journal_entries, ledger.balances, "
                 + "ledger.settlements, ledger.audit_log, "
                 + "payments.webhook_events, payments.outbox, payments.idempotency_keys, "
@@ -410,18 +412,6 @@ class NotificationLoopIT {
 
     @TestConfiguration
     static class NotificationsTestConfig {
-
-        @Bean
-        Flyway notificationsFlyway(DataSource dataSource) {
-            Flyway flyway = Flyway.configure()
-                    .dataSource(dataSource)
-                    .schemas("notifications")
-                    .locations("classpath:db/migration/notifications")
-                    .baselineOnMigrate(true)
-                    .load();
-            flyway.migrate();
-            return flyway;
-        }
 
         @Bean
         @Primary
