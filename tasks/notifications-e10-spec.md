@@ -100,11 +100,14 @@ No other new env names in E10. Existing contract names are never touched.
 
 `GET /v1/notifications` — API-key auth reused from payments (same filter/interceptor scope).
 
-- Query: `merchantId` (required, UUID), `type` (optional), `limit` (optional, default 20, max 100),
-  `cursor` (optional, opaque keyset token over `(created_at DESC, id DESC)`).
-- 200 → `{ "data": [ { "id", "event_id", "type", "txid", "merchant_id", "occurred_at",
-  "created_at" } ], "next_cursor": string|null }`.
-- 400 invalid/missing params · 401/403 per the existing auth behavior.
+- Query: `type` (optional), `limit` (optional, default 20, max 100), `cursor` (optional, opaque keyset
+  token over `(created_at DESC, id DESC)`).
+- **Tenant comes from the authenticated principal (AGENTS §3.7).** The merchant is never taken from path,
+  query or body. Cross-merchant access answers 404-style empty, not 403.
+  (Amended 2026-09-02: the original draft required a `merchantId` query param; that contradicts AGENTS §3.7
+  and was adjudicated tenant-from-principal — see block 2 prompt.)
+- 200 → `{ "data": [ { "id", "event_id", "type", "txid", "occurred_at", "created_at" } ], "next_cursor": string|null }`.
+- 400 invalid params (bad `limit`, malformed cursor) · 401/403 per the existing auth behavior.
 - `payload` is NOT returned in the list (keep the endpoint lean; detail endpoint is stretch).
 
 ## §8 Integration tests (names locked)
