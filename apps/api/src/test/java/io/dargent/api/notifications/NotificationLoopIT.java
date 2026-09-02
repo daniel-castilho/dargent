@@ -65,7 +65,6 @@ import com.sun.net.httpserver.HttpServer;
     classes = {DargentApiApplication.class, NotificationLoopIT.NotificationsTestConfig.class},
     properties = {
         "dargent.relay.enabled=true",
-        "dargent.notifs.consumer.enabled=true",
         "dargent.psp.webhook-secret=dev-only-secret"
     })
 @Testcontainers
@@ -108,7 +107,7 @@ class NotificationLoopIT {
     OutboxDeliveryUseCase.Policy relayPolicy;
 
     @Autowired
-    SqsNotificationConsumer sqsNotificationConsumer;
+    SqsNotificationConsumer notifsConsumer;
 
     @Autowired
     NotificationIngestionUseCase ingestion;
@@ -140,7 +139,6 @@ class NotificationLoopIT {
         registry.add("DARGENT_NOTIFS_QUEUE_URL", () -> notifsUrl);
         registry.add("DARGENT_NOTIFS_BATCH", () -> "10");
         registry.add("DARGENT_NOTIFS_POLL_MS", () -> "1000");
-        registry.add("DARGENT_NOTIFS_CONSUMER_ENABLED", () -> "true");
     }
 
     @BeforeEach
@@ -175,7 +173,7 @@ class NotificationLoopIT {
         int relayed = relay.runOnce(relayPolicy.batchSize());
         assertThat(relayed).isGreaterThan(0);
         for (int i = 0; i < 8 && notificationCount() == 0; i++) {
-            sqsNotificationConsumer.runOnce();
+            notifsConsumer.runOnce();
         }
         assertThat(notificationCount()).as("confirmed should create a notification row").isEqualTo(1);
 
@@ -375,6 +373,16 @@ class NotificationLoopIT {
         @Primary
         Clock fixedClock() {
             return FIXED_CLOCK;
+        }
+
+        @Bean
+        SqsClient notifsTestSqsClient() {
+            return sqs;
+        }
+
+        @Bean
+        SqsNotificationConsumer notifsConsumer(NotificationIngestionUseCase ingestion, SqsClient notifsTestSqsClient) {
+            return new SqsNotificationConsumer(notifsTestSqsClient, notifsUrl, 10, 600000, ingestion);
         }
 
         @Bean
