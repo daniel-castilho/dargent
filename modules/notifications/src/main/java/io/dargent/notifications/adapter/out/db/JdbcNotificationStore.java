@@ -3,7 +3,7 @@ package io.dargent.notifications.adapter.out.db;
 import io.dargent.notifications.domain.port.out.NotificationStore;
 import org.postgresql.util.PGobject;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.core.PreparedStatementSetter;
 
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
@@ -13,17 +13,13 @@ import java.util.UUID;
 
 /**
  * JDBC implementation of NotificationStore (E10 spec §5).
- * Uses Spring JdbcClient — zero JPA, zero Hibernate.
- * Uses JdbcTemplate with PGobject for jsonb binding (mirrors ledger's approach
- * but with explicit PGobject for CI compatibility).
+ * Uses Spring JdbcTemplate with PGobject for jsonb binding (CI-compatible).
  */
 public final class JdbcNotificationStore implements NotificationStore {
 
-    private final JdbcClient jdbc;
     private final JdbcTemplate jdbcTemplate;
 
-    public JdbcNotificationStore(JdbcClient jdbc, JdbcTemplate jdbcTemplate) {
-        this.jdbc = jdbc;
+    public JdbcNotificationStore(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
     }
 
@@ -36,25 +32,26 @@ public final class JdbcNotificationStore implements NotificationStore {
                 ON CONFLICT (event_id) DO NOTHING
                 """;
 
-        int rows = jdbcTemplate.update(con -> {
-            PreparedStatement ps = con.prepareStatement(sql);
-            ps.setObject(1, UUID.randomUUID());
-            ps.setObject(2, eventId);
-            ps.setString(3, type);
-            ps.setString(4, txid);
-            ps.setObject(5, merchantId);
+        int rows = jdbcTemplate.update(sql, new PreparedStatementSetter() {
+            @Override
+            public void setValues(PreparedStatement ps) throws SQLException {
+                ps.setObject(1, UUID.randomUUID());
+                ps.setObject(2, eventId);
+                ps.setString(3, type);
+                ps.setString(4, txid);
+                ps.setObject(5, merchantId);
 
-            PGobject jsonb = new PGobject();
-            jsonb.setType("jsonb");
-            try {
-                jsonb.setValue(payload);
-            } catch (SQLException e) {
-                throw new IllegalStateException("Invalid JSON payload for jsonb column", e);
+                PGobject jsonb = new PGobject();
+                jsonb.setType("jsonb");
+                try {
+                    jsonb.setValue(payload);
+                } catch (SQLException e) {
+                    throw new IllegalStateException("Invalid JSON payload for jsonb column", e);
+                }
+                ps.setObject(6, jsonb, Types.OTHER);
+
+                ps.setObject(7, occurredAt);
             }
-            ps.setObject(6, jsonb, Types.OTHER);
-
-            ps.setObject(7, occurredAt);
-            return ps;
         });
         return rows > 0;
     }

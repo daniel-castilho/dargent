@@ -7,7 +7,6 @@ import io.dargent.notifications.domain.port.out.NotificationStore;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.core.simple.JdbcClient;
 
 /**
  * Notifications application beans (E10 spec §4). Always-on application beans for the
@@ -18,8 +17,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 public class NotificationApplicationConfig {
 
     @Bean
-    NotificationStore notificationStore(JdbcClient jdbc, JdbcTemplate jdbcTemplate) {
-        return new JdbcNotificationStore(jdbc, jdbcTemplate);
+    NotificationStore notificationStore(JdbcTemplate jdbcTemplate) {
+        return new JdbcNotificationStore(jdbcTemplate);
     }
 
     @Bean
