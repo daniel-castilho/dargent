@@ -185,6 +185,10 @@ class NotificationLoopIT {
                 .messageDeduplicationId(UUID.randomUUID().toString())
                 .messageBody(envelope));
 
+        // Brief pause for SQS eventual consistency (message visibility after sendMessage)
+        // This is test-infrastructure only; no business-logic Thread.sleep.
+        try { Thread.sleep(500); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+
         // Drive the notifications consumer runOnce
         for (int i = 0; i < 8 && notificationCount() == 0; i++) {
             notifsConsumer.runOnce();
