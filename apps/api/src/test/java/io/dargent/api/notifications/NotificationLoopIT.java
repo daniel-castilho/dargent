@@ -26,6 +26,7 @@ import java.util.UUID;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import javax.sql.DataSource;
+import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -147,16 +148,11 @@ class NotificationLoopIT {
     }
 
     @BeforeEach
-    void setUp() {
+void setUp() {
         baseUrl = "http://localhost:" + port;
-        // Ensure all required schemas exist before truncate (auto-config Flyway runs after @BeforeEach)
-        jdbc.sql("CREATE SCHEMA IF NOT EXISTS ledger").update();
-        jdbc.sql("CREATE SCHEMA IF NOT EXISTS notifications").update();
-        // Split truncate per schema to avoid multi-table truncate failing if schema missing
-        jdbc.sql("truncate notifications.notification restart identity cascade").update();
-        jdbc.sql("truncate ledger.events, ledger.postings, ledger.journal_entries, ledger.balances, "
-                + "ledger.settlements, ledger.audit_log restart identity cascade").update();
-        jdbc.sql("truncate payments.webhook_events, payments.outbox, payments.idempotency_keys, "
+        jdbc.sql("truncate notifications.notification, ledger.events, ledger.postings, ledger.journal_entries, ledger.balances, "
+                + "ledger.settlements, ledger.audit_log, "
+                + "payments.webhook_events, payments.outbox, payments.idempotency_keys, "
                 + "payments.audit_log, payments.payments, payments.api_keys restart identity cascade").update();
         jdbc.sql(
                 "insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
@@ -414,6 +410,18 @@ class NotificationLoopIT {
 
     @TestConfiguration
     static class NotificationsTestConfig {
+
+        @Bean
+        Flyway notificationsFlyway(DataSource dataSource) {
+            Flyway flyway = Flyway.configure()
+                    .dataSource(dataSource)
+                    .schemas("payments", "ledger", "notifications")
+                    .locations("classpath:db/migration/payments", "classpath:db/migration/ledger", "classpath:db/migration/notifications")
+                    .baselineOnMigrate(true)
+                    .load();
+            flyway.migrate();
+            return flyway;
+        }
 
         @Bean
         @Primary
