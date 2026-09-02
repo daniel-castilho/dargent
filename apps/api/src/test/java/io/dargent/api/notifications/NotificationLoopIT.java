@@ -9,7 +9,9 @@ import io.dargent.notifications.application.NotificationIngestionUseCase;
 import io.dargent.payments.adapter.out.psp.SimulatorChargeAdapter;
 import io.dargent.payments.application.OutboxDeliveryUseCase;
 import io.dargent.payments.domain.port.out.PspPort;
-import org.springframework.test.context.TestPropertySource;
+import org.springframework.context.ApplicationContextInitializer;
+import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.test.context.ContextConfiguration;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URI;
@@ -74,8 +76,18 @@ import com.sun.net.httpserver.HttpServer;
         "dargent.relay.enabled=true",
         "dargent.psp.webhook-secret=dev-only-secret"
     })
-@TestPropertySource(properties = {"spring.flyway.enabled=false"})
+@ContextConfiguration(initializers = DisableFlywayInitializer.class)
 @Testcontainers
+
+class DisableFlywayInitializer implements ApplicationContextInitializer<ConfigurableApplicationContext> {
+    @Override
+    public void initialize(ConfigurableApplicationContext context) {
+        context.getEnvironment().getPropertySources()
+                .addFirst(new org.springframework.core.env.MapPropertySource("disableFlyway",
+                        Map.of("spring.flyway.enabled", "false")));
+    }
+}
+
 class NotificationLoopIT {
 
     private static final String REGION = "us-east-1";
