@@ -220,8 +220,8 @@ void setUp() {
                     m.put("txid", rs.getString("txid"));
                     m.put("merchant_id", rs.getObject("merchant_id", UUID.class));
                     m.put("payload", rs.getString("payload"));
-                    m.put("occurred_at", rs.getObject("occurred_at", Instant.class));
-                    m.put("created_at", rs.getObject("created_at", Instant.class));
+                    m.put("occurred_at", rs.getTimestamp("occurred_at").toInstant());
+                    m.put("created_at", rs.getTimestamp("created_at").toInstant());
                     return m;
                 })
                 .single();
@@ -417,6 +417,7 @@ void setUp() {
         Flyway flyway(DataSource dataSource) {
             Flyway flyway = Flyway.configure()
                     .dataSource(dataSource)
+                    .schemas("payments", "ledger", "notifications")
                     .locations(
                             "classpath:db/migration/payments",
                             "classpath:db/migration/ledger",

@@ -7,6 +7,7 @@ import org.springframework.jdbc.core.PreparedStatementSetter;
 
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.sql.Types;
 import java.time.Instant;
 import java.util.UUID;
@@ -50,7 +51,7 @@ public final class JdbcNotificationStore implements NotificationStore {
                 }
                 ps.setObject(6, jsonb, Types.OTHER);
 
-                ps.setObject(7, occurredAt);
+                ps.setObject(7, Timestamp.from(occurredAt));
             }
         });
         return rows > 0;
