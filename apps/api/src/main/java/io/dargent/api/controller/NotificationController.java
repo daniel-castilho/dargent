@@ -58,7 +58,7 @@ class NotificationController {
         }
         List<NotificationItemResponse> items = page.stream()
                 .map(n -> new NotificationItemResponse(
-                        n.id(), n.eventId(), n.type(), n.txid(), n.occurredAt(), n.createdAt()))
+                        n.id(), n.eventId(), n.type(), n.txid(), n.merchantId(), n.occurredAt(), n.createdAt()))
                 .toList();
         return ResponseEntity.ok(new NotificationListResponse(items, nextCursor));
     }
@@ -84,6 +84,7 @@ class NotificationController {
             UUID eventId,
             String type,
             String txid,
+            UUID merchantId,
             Instant occurredAt,
             Instant createdAt) {}
 

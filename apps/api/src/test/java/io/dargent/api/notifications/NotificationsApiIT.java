@@ -49,7 +49,9 @@ class NotificationsApiIT {
 
     private static final String REGION = "us-east-1";
     private static final UUID MERCHANT = UUID.fromString("11111111-1111-1111-1111-111111111111");
+    private static final UUID OTHER_MERCHANT = UUID.fromString("33333333-3333-3333-3333-333333333333");
     private static final UUID KEY_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
+    private static final UUID OTHER_KEY_ID = UUID.fromString("44444444-4444-4444-4444-444444444444");
     private static final Instant BASE = Instant.parse("2027-01-01T12:00:00Z");
     private static final JsonMapper MAPPER = new JsonMapper();
 
@@ -71,15 +73,7 @@ class NotificationsApiIT {
     void setUp() {
         baseUrl = "http://localhost:" + port;
         jdbc.sql("truncate notifications.notification, payments.api_keys restart identity cascade").update();
-        jdbc.sql("""
-                insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at)
-                values (:id, :merchant, 'api-it-key', :prefix, :hash, now(), null)
-                """)
-                .param("id", KEY_ID)
-                .param("merchant", MERCHANT)
-                .param("prefix", ApiKeyHasher.prefix(rawKey))
-                .param("hash", ApiKeyHasher.hash(rawKey))
-                .update();
+        provisionKey(KEY_ID, MERCHANT, rawKey);
     }
 
     // ------------------------------------------------------------------ tests
@@ -100,14 +94,19 @@ class NotificationsApiIT {
         assertThat(data.get(0).get("txid").asText()).isEqualTo("tx-1");
         assertThat(data.get(1).get("txid").asText()).isEqualTo("tx-2");
         assertThat(data.get(2).get("txid").asText()).isEqualTo("tx-3");
-        // required fields present; payload absent; merchant_id absent (AGENTS §3.7)
+        // required fields present; merchantId echoes the tenant (TD-17 output echo); payload absent
+        // naming guard negatives (TD-18): snake_case keys never emitted
         assertThat(data.get(0).has("id")).isTrue();
         assertThat(data.get(0).has("eventId")).isTrue();
         assertThat(data.get(0).get("type").asText()).isEqualTo("payment.confirmed");
+        assertThat(data.get(0).get("merchantId").asText()).isEqualTo(MERCHANT.toString());
         assertThat(data.get(0).has("occurredAt")).isTrue();
         assertThat(data.get(0).has("createdAt")).isTrue();
         assertThat(data.get(0).has("payload")).isFalse();
-        assertThat(data.get(0).has("merchantId")).isFalse();
+        assertThat(data.get(0).has("event_id")).isFalse();
+        assertThat(data.get(0).has("occurred_at")).isFalse();
+        assertThat(data.get(0).has("created_at")).isFalse();
+        assertThat(body.has("next_cursor")).isFalse();
     }
 
     @Test
@@ -169,9 +168,47 @@ class NotificationsApiIT {
         assertThat(resp.statusCode()).isEqualTo(401);
     }
 
+    @Test
+    void cross_tenant_rows_are_never_visible_across_credentials() throws Exception {
+        // Both merchants' rows coexists in the DB throughout. uq_api_keys_key_prefix_active is a
+        // partial unique index over active (non-revoked) keys sharing the fixed dev prefix
+        // (psp_test_), so only ONE key can be active at a time — the payments IT cross-tenant
+        // pattern: prove direction A with the principal key active, then revoke it and prove
+        // direction B with the second merchant's key active. Both directions therefore assert that
+        // a credential NEVER sees the other tenant's rows that are still present in the DB.
+
+        // Phase A — principal key active (from setUp); both merchants' rows exist.
+        seed("payment.confirmed", "principal-tx", BASE.plusSeconds(2), MERCHANT);
+        seed("payment.confirmed", "other-tx", BASE.plusSeconds(3), OTHER_MERCHANT);
+
+        var principalResp = get("/v1/notifications", bearer());
+        assertThat(principalResp.statusCode()).isEqualTo(200);
+        JsonNode principalData = MAPPER.readTree(principalResp.body()).get("data");
+        assertThat(principalData).hasSize(1);
+        assertThat(principalData.get(0).get("txid").asText()).isEqualTo("principal-tx");
+        assertThat(principalData.get(0).get("merchantId").asText()).isEqualTo(MERCHANT.toString());
+
+        // Phase B — revoke principal key, activate second merchant's key; principal's row still present.
+        jdbc.sql("update payments.api_keys set revoked_at = now() where id = :id")
+                .param("id", KEY_ID).update();
+        String otherRawKey = ApiKeyHasher.generateRawKey();
+        provisionKey(OTHER_KEY_ID, OTHER_MERCHANT, otherRawKey);
+
+        var otherResp = get("/v1/notifications", bearer(otherRawKey));
+        assertThat(otherResp.statusCode()).isEqualTo(200);
+        JsonNode otherData = MAPPER.readTree(otherResp.body()).get("data");
+        assertThat(otherData).hasSize(1);
+        assertThat(otherData.get(0).get("txid").asText()).isEqualTo("other-tx");
+        assertThat(otherData.get(0).get("merchantId").asText()).isEqualTo(OTHER_MERCHANT.toString());
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private long seed(String type, String txid, Instant createdAt) {
+        return seed(type, txid, createdAt, MERCHANT);
+    }
+
+    private long seed(String type, String txid, Instant createdAt, UUID merchantId) {
         return jdbc.sql("""
                 insert into notifications.notification
                     (id, event_id, type, txid, merchant_id, payload, occurred_at, created_at)
@@ -181,7 +218,7 @@ class NotificationsApiIT {
                 .param("eventId", UUID.randomUUID())
                 .param("type", type)
                 .param("txid", txid)
-                .param("merchant", MERCHANT)
+                .param("merchant", merchantId)
                 .param("payload", "{\"amount\":10000}")
                 .param("occurred", java.sql.Timestamp.from(createdAt))
                 .param("created", java.sql.Timestamp.from(createdAt))
@@ -198,6 +235,22 @@ class NotificationsApiIT {
 
     private Map<String, String> bearer() {
         return Map.of("Authorization", "Bearer " + rawKey);
+    }
+
+    private Map<String, String> bearer(String key) {
+        return Map.of("Authorization", "Bearer " + key);
+    }
+
+    private void provisionKey(UUID keyId, UUID merchantId, String key) {
+        jdbc.sql("""
+                insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at)
+                values (:id, :merchant, 'api-it-key', :prefix, :hash, now(), null)
+                """)
+                .param("id", keyId)
+                .param("merchant", merchantId)
+                .param("prefix", ApiKeyHasher.prefix(key))
+                .param("hash", ApiKeyHasher.hash(key))
+                .update();
     }
 
     @TestConfiguration

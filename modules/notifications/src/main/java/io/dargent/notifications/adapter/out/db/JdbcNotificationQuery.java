@@ -17,7 +17,7 @@ import org.springframework.jdbc.core.RowMapper;
 public final class JdbcNotificationQuery implements NotificationQueryPort {
 
     private static final String BASE = """
-            select id, event_id, type, txid, occurred_at, created_at
+            select id, event_id, type, txid, merchant_id, occurred_at, created_at
             from notifications.notification
             """;
 
@@ -26,6 +26,7 @@ public final class JdbcNotificationQuery implements NotificationQueryPort {
             rs.getObject("event_id", UUID.class),
             rs.getString("type"),
             rs.getString("txid"),
+            rs.getObject("merchant_id", UUID.class),
             rs.getTimestamp("occurred_at").toInstant(),
             rs.getTimestamp("created_at").toInstant());
 
