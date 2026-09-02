@@ -71,9 +71,9 @@ import com.sun.net.httpserver.HttpServer;
 class NotificationLoopIT {
 
     private static final String REGION = "us-east-1";
-    private static final String TOPIC_NAME = "dargent-payments-events-notifications-ml.fifo";
-    private static final String NOTIFS_QUEUE = "dargent-payments-notifications-ml.fifo";
-    private static final String NOTIFS_DLQ = "dargent-payments-notifications-dlq-ml.fifo";
+    private static final String TOPIC_NAME = "dargent-payments-events-notif-ml.fifo";
+    private static final String NOTIFS_QUEUE = "dargent-payments-notif-ml.fifo";
+    private static final String NOTIFS_DLQ = "dargent-payments-notif-dlq-ml.fifo";
     private static final UUID MERCHANT = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID KEY_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
     private static final Clock FIXED_CLOCK =
@@ -328,7 +328,7 @@ class NotificationLoopIT {
         String redrive = "{\"deadLetterTargetArn\":\"" + dlqArn + "\",\"maxReceiveCount\":\"5\"}";
         notifsUrl = createFifoQueue(sqs, "dargent-payments-notifications-ml.fifo", redrive, dlqArn);
         String notifsArn = arnOf(notifsUrl);
-        topicArn = sns.createTopic(r -> r.name("dargent-payments-events-notifications-ml.fifo")
+        topicArn = sns.createTopic(r -> r.name("dargent-payments-events-notif-ml.fifo")
                 .attributes(Map.of("FifoTopic", "true", "ContentBasedDeduplication", "false"))).topicArn();
         // RawMessageDelivery: the ledger consumer passes msg.body() straight to EventIngestionUseCase
         // (§5.3), so the SNS→SQS edge must deliver the raw envelope, not the SNS wrapper.
