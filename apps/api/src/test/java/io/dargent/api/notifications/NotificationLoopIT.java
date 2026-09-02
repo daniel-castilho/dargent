@@ -413,6 +413,7 @@ void setUp() {
     static class NotificationsTestConfig {
 
         @Bean
+        @Primary
         Flyway notificationsFlyway(DataSource dataSource) {
             Flyway flyway = Flyway.configure()
                     .dataSource(dataSource)
