@@ -332,8 +332,36 @@ class NotificationLoopIT {
                 .attributes(Map.of("FifoTopic", "true", "ContentBasedDeduplication", "false"))).topicArn();
         // RawMessageDelivery: the ledger consumer passes msg.body() straight to EventIngestionUseCase
         // (§5.3), so the SNS→SQS edge must deliver the raw envelope, not the SNS wrapper.
-        sns.subscribe(r -> r.topicArn(topicArn).protocol("sqs").endpoint(notifsArn)
+        var subResp = sns.subscribe(r -> r.topicArn(topicArn).protocol("sqs").endpoint(notifsArn)
                 .attributes(Map.of("RawMessageDelivery", "true")));
+        String subscriptionArn = subResp.subscriptionArn();
+        if ("pending confirmation".equalsIgnoreCase(subscriptionArn)) {
+            // LocalStack may require explicit subscription confirmation
+            confirmSubscription(sqs, notifsUrl, sns, topicArn);
+        }
+    }
+
+    private static void confirmSubscription(SqsClient sqs, String queueUrl, SnsClient sns, String topicArn) {
+        // Poll for the subscription confirmation message
+        for (int i = 0; i < 30; i++) {
+            var msgs = sqs.receiveMessage(r -> r.queueUrl(queueUrl)
+                    .maxNumberOfMessages(10)
+                    .waitTimeSeconds(2)
+                    .build()).messages();
+            for (var msg : msgs) {
+                try {
+                    var node = MAPPER.readTree(msg.body());
+                    if ("SubscriptionConfirmation".equals(node.get("Type").asText())) {
+                        String token = node.get("Token").asText();
+                        sns.confirmSubscription(r -> r.topicArn(topicArn).token(token));
+                        sqs.deleteMessage(r -> r.queueUrl(queueUrl).receiptHandle(msg.receiptHandle()));
+                        return;
+                    }
+                } catch (Exception ignored) {
+                }
+                // Not a confirmation message, leave in queue
+            }
+        }
     }
 
     private static String createFifoQueue(SqsClient client, String name, String redrive, String dlqArn) {
