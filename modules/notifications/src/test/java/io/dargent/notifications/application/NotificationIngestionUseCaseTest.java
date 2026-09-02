@@ -3,36 +3,23 @@ package io.dargent.notifications.application;
 import io.dargent.notifications.domain.port.out.NotificationStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.jdbc.core.simple.JdbcClient;
 
-import java.time.Clock;
 import java.time.Instant;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.*;
 
 class NotificationIngestionUseCaseTest {
 
     private NotificationIngestionUseCase useCase;
     private FakeNotificationStore store;
-    private Clock fixedClock;
-    private JdbcClient jdbc;
 
     @BeforeEach
     void setUp() {
         store = new FakeNotificationStore();
-        fixedClock = Clock.fixed(Instant.parse("2026-08-30T12:00:00Z"), java.time.ZoneOffset.UTC);
         var reader = new EventEnvelopeReader();
-        jdbc = mock(JdbcClient.class);
-        var spec = mock(JdbcClient.StatementSpec.class);
-        when(jdbc.sql(anyString())).thenReturn(spec);
-        when(spec.param(any())).thenReturn(spec);
-        when(spec.update()).thenReturn(1);
-        useCase = new NotificationIngestionUseCase(new EventEnvelopeReader(), store, jdbc, fixedClock);
+        useCase = new NotificationIngestionUseCase(reader, store);
     }
 
     @Test
