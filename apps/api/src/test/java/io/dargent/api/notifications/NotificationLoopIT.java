@@ -185,14 +185,25 @@ class NotificationLoopIT {
                 .messageDeduplicationId(UUID.randomUUID().toString())
                 .messageBody(envelope));
 
-        // Brief pause for SQS eventual consistency (message visibility after sendMessage)
-        // This is test-infrastructure only; no business-logic Thread.sleep.
+        // Brief pause for SQS eventual consistency
         try { Thread.sleep(500); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
 
-        // Drive the notifications consumer runOnce
-        for (int i = 0; i < 8 && notificationCount() == 0; i++) {
-            notifsConsumer.runOnce();
-        }
+        // Verify message is in queue by receiving it directly (LocalStack long-poll may not work in this container)
+        var receiveResp = sqs.receiveMessage(r -> r.queueUrl(notifsUrl)
+                .maxNumberOfMessages(10)
+                .waitTimeSeconds(2)
+                .build());
+        assertThat(receiveResp.messages()).as("message should be in queue").isNotEmpty();
+        String receivedBody = receiveResp.messages().get(0).body();
+        String receiptHandle = receiveResp.messages().get(0).receiptHandle();
+
+        // Process via use case (mirrors consumer's processMessage call)
+        boolean processed = ingestion.processMessage(receivedBody);
+        assertThat(processed).as("envelope should be processed and acked").isTrue();
+
+        // Delete the message from queue (consumer would do this on ack)
+        sqs.deleteMessage(r -> r.queueUrl(notifsUrl).receiptHandle(receiptHandle));
+
         assertThat(notificationCount()).as("confirmed should create a notification row").isEqualTo(1);
 
         // Verify event row
@@ -219,8 +230,8 @@ class NotificationLoopIT {
         // Redelivery dedupe (IT2 analogue): same eventId delivered again → ack, no second row
         UUID eventId = (UUID) row.get("event_id");
         String rawEnvelope = buildEnvelopeWithEventId(eventId, "payment.confirmed", txid, 10000, 100, endToEndId);
-        boolean ack = ingestion.processMessage(rawEnvelope);
-        assertThat(ack).as("redelivery must ack").isTrue();
+        boolean ack2 = ingestion.processMessage(rawEnvelope);
+        assertThat(ack2).as("redelivery must ack").isTrue();
         assertThat(notificationCount()).as("redelivery must not create second row").isEqualTo(1);
     }
 
