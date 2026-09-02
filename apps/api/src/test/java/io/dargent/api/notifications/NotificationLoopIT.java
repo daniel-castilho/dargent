@@ -9,9 +9,8 @@ import io.dargent.notifications.application.NotificationIngestionUseCase;
 import io.dargent.payments.adapter.out.psp.SimulatorChargeAdapter;
 import io.dargent.payments.application.OutboxDeliveryUseCase;
 import io.dargent.payments.domain.port.out.PspPort;
-import org.springframework.context.ApplicationContextInitializer;
-import org.springframework.context.ConfigurableApplicationContext;
-import org.springframework.test.context.ContextConfiguration;
+import org.flywaydb.core.Flyway;
+import javax.sql.DataSource;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URI;
@@ -76,24 +75,7 @@ import com.sun.net.httpserver.HttpServer;
         "dargent.relay.enabled=true",
         "dargent.psp.webhook-secret=dev-only-secret"
     })
-@ContextConfiguration(initializers = ConfigureFlywayInitializer.class)
 @Testcontainers
-
-class ConfigureFlywayInitializer implements ApplicationContextInitializer<ConfigurableApplicationContext> {
-    @Override
-    public void initialize(ConfigurableApplicationContext context) {
-        context.getEnvironment().getPropertySources()
-                .addFirst(new org.springframework.core.env.MapPropertySource("configureFlyway",
-                        Map.of(
-                                "spring.flyway.enabled", "true",
-                                "spring.flyway.schemas", "payments,ledger,notifications",
-                                "spring.flyway.locations", "classpath:db/migration/payments,classpath:db/migration/ledger,classpath:db/migration/notifications",
-                                "spring.flyway.baseline-on-migrate", "true",
-                                "spring.flyway.create-schemas", "true"
-                        )));
-    }
-}
-
 class NotificationLoopIT {
 
     private static final String REGION = "us-east-1";
@@ -170,14 +152,9 @@ class NotificationLoopIT {
     @BeforeEach
 void setUp() {
         baseUrl = "http://localhost:" + port;
-        // Ensure schemas exist (auto-config Flyway disabled)
-        jdbc.sql("CREATE SCHEMA IF NOT EXISTS ledger").update();
-        jdbc.sql("CREATE SCHEMA IF NOT EXISTS notifications").update();
-        // Split truncate per schema to avoid multi-table truncate failing if schema missing
-        jdbc.sql("truncate notifications.notification restart identity cascade").update();
-        jdbc.sql("truncate ledger.events, ledger.postings, ledger.journal_entries, ledger.balances, "
-                + "ledger.settlements, ledger.audit_log restart identity cascade").update();
-        jdbc.sql("truncate payments.webhook_events, payments.outbox, payments.idempotency_keys, "
+        jdbc.sql("truncate notifications.notification, ledger.events, ledger.postings, ledger.journal_entries, ledger.balances, "
+                + "ledger.settlements, ledger.audit_log, "
+                + "payments.webhook_events, payments.outbox, payments.idempotency_keys, "
                 + "payments.audit_log, payments.payments, payments.api_keys restart identity cascade").update();
         jdbc.sql(
                 "insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
@@ -435,6 +412,21 @@ void setUp() {
 
     @TestConfiguration
     static class NotificationsTestConfig {
+
+        @Bean
+        Flyway flyway(DataSource dataSource) {
+            Flyway flyway = Flyway.configure()
+                    .dataSource(dataSource)
+                    .locations(
+                            "classpath:db/migration/payments",
+                            "classpath:db/migration/ledger",
+                            "classpath:db/migration/notifications"
+                    )
+                    .baselineOnMigrate(true)
+                    .load();
+            flyway.migrate();
+            return flyway;
+        }
 
         @Bean
         @Primary
