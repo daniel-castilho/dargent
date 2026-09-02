@@ -290,7 +290,59 @@ create-path ITs (E3R A0)"), success — the handoff's "#17" and the matrix's "#1
 | #72 | `33555099220` | `3ae463e` | **BD-15** — resume-on-RECEIVED (duplicate branch resume, guard IT, consumer test) |
 | #74 | `33559514160` | `e946a15` | **BD-16** — Jackson 3 reader, normalized parse failures, hygiene grep 0 hits |
 
-(#15/#16 predate this audit's verified window; verify locally before citing.)
+### E10 run-pair table (Block 1 + Block 1.5 remediation — appends to the same canonical table)
+
+Block 1 pairs (verified chain; #79/#83 are the designed/defect reds cited in the Block 1.5 prompt):
+
+| Run | Id | Head | Meaning |
+|---|---|---|---|
+| #76 | `33566863734` | `5919275` | E10 S1–S3 accept (loop/migration + reader + use-case) |
+| #77 | `33568197213` | `c1b435c` | E10 S4 consumer translation |
+| #78 | `33568586974` | `98c4be0` | E10 S4 tests |
+| #79 | `33569381410` | `30245af` | **RED** — cited defect (BD-17 surface before wiring fix) |
+| #80 | `33569955450` | `d47eec4` | E10 docs/migration addition |
+| #81 | `33570585786` | `8565060` | E10 wiring/tests |
+| #82 | `33573089260` | `9a13f76` | E10 consumer + local green |
+| #83 | `33580602148` | `db82f60` | **RED** — cited defect; also carried the FALSE claim that `NotificationPoisonDlqIT` was "@Disabled" — the file NEVER existed (TD-16) |
+| #84 | `33581153906` | `8138f4c` | green by disabling the loop IT (the defect this block removes) |
+
+Block 1.5 remediation pairs (this block; flyway/jsonb/auth iterations then closes):
+
+| Run | Id | Head | Meaning |
+|---|---|---|---|
+| #85 | `33586718748` | `a48bead` | **RED** — flyway schema wiring iteration |
+| #86 | `33587602923` | `69b1ce4` | **RED** — flyway schema wiring iteration |
+| #87 | `33588249739` | `b2da6ef` | **RED** — flyway schema wiring iteration |
+| #88 | `33588978107` | `6ec3e36` | **RED** — flyway schema wiring iteration |
+| #89 | `33589728243` | `12efe6a` | **RED** — flyway schema wiring iteration |
+| #90 | `33590429849` | `86e4e8b` | **RED** — flyway schema wiring iteration |
+| #91 | `33590906530` | `d3d393f` | **RED** — flyway schema wiring iteration |
+| #92 | `33591769300` | `e03c7de` | **RED** — flyway schema wiring iteration |
+| #93 | `33592139839` | `53acf12` | **RED** — flyway schema wiring iteration |
+| #94 | `33592469427` | `00b9616` | **RED** — flyway schema wiring iteration |
+| #95 | `33592917986` | `ef4682d` | **RED** — flyway schema wiring iteration |
+| #96 | `33635383298` | `d207d0c` | **RED** — flyway/schema/jsonb iteration |
+| #97 | `33640213619` | `d9993ba` | **RED** — flyway/schema/jsonb iteration |
+| #98 | `33643256157` | `f2beb40` | **RED** — flyway/schema/jsonb iteration |
+| #99 | `33646080856` | `cccf8d1` | **RED** — flyway/schema/jsonb iteration |
+| #100 | `33647688723` | `9ca0871` | **RED** — flyway/schema/jsonb iteration |
+| #101 | `33650146963` | `c60f7f9` | **RED** — flyway/schema/jsonb iteration |
+| #102 | `33660307937` | `f9154ee` | **RED** — flyway/schema/jsonb iteration |
+| #103 | `33661180428` | `0c9ad49` | **RED** — flyway/schema/jsonb iteration |
+| #104 | `33662144596` | `542199e` | **RED** — flyway/schema/jsonb iteration |
+| #105 | `33662844567` | `a8262cd` | **RED** — flyway/schema/jsonb iteration |
+| #106 | `33663582428` | `c2202da` | **RED** — flyway/schema/jsonb iteration |
+| #107 | `33664565491` | `0761034` | **RED** — flyway/schema/jsonb iteration |
+| #108 | `33666394816` | `2b9085d` | **RED** — flyway/schema/jsonb iteration |
+| #109 | `33669553229` | `9cac9ca` | **RED** — flyway/schema/jsonb iteration |
+| #110 | `33670604801` | `2d57270` | **RED** — flyway/schema/jsonb iteration (DisableFlywayInitializer) |
+| #111 | `33671785193` | `285a1d7` | **RED** — ConfigureFlywayInitializer attempt (auto-config flyway in public schema) |
+| #112 | `33673202889` | `735e0e0` | **RED** — test Flyway bean pattern; blocked on PG Instant binding |
+| #113 | `33674334484` | `e41baba` | **GREEN** — S5 `NotificationLoopIT` closes (test Flyway bean with schemas + Instant-as-Timestamp binding); Block 1.5 Fix 1/4/5 core |
+| #114 | `33675295464` | `5b53809` | **GREEN** — S5 `NotificationPoisonDlqIT` lands (true file now exists; TD-16 citation closes by delivery) |
+| #115 | `33676638904` | `09eb26a` | **GREEN** — BD-18 close: `DevApiKeyProvisionerTest` enabled (focused boot context, no @Disabled) |
+
+**(#15/#16 predate this audit's verified window; verify locally before citing.)**
 
 ### Verdict
 

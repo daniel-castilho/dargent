@@ -136,11 +136,11 @@ Greps are pasted in the handoff with the commit id they ran at.
 |---|---|---|---|---|
 | S0 TD-15 | README honesty pass | diff + audit | pair | ◻ |
 | S0 BD-15R | guard IT trigger leg | IT name + pair | pair | ◻ |
-| S0 matrix nit | citation pair completed | diff | — | ◻ |
+| S0 matrix nit | citation pair completed | diff | pair | ◻ |
 | S1 | migration applies | `NotificationLoopIT` green | pair | ◻ |
 | S2 | reader poison-by-contract | `EventEnvelopeReaderTest` (module) | pair | ◻ |
 | S3 | use case matrix | `NotificationIngestionUseCaseTest` | pair | ◻ |
 | S4 | consumer translation | `SqsNotificationConsumerTest` | pair | ◻ |
-| S5 | loop + poison ITs | §8 names | pair | ◻ |
+| S5 | loop + poison ITs | `NotificationLoopIT` + `NotificationPoisonDlqIT` (§8 names) | #113 `33674334484` / #114 `33675295464` | ◻ |
 | S6 | API contract | `NotificationsApiIT` | pair | ◻ |
 | S7 | docs + flip + M2 ✅ | citation commit pair | pair | ◻ |
