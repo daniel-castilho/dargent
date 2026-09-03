@@ -326,7 +326,7 @@ public class PaymentsCompositionConfig {
     @Bean
     @ConditionalOnProperty(name = "DARGENT_JOURNAL_COVERAGE_ENABLED", havingValue = "true", matchIfMissing = false)
     TaskScheduler journalCoverageSchedulerTask(JournalCoverageScheduler scheduler,
-            @Value("${DARGENT_JOURNAL_COVERAGE_SCAN_MS:60000}") long intervalMs) {
+            @Value("${DARGENT_JOURNAL_COVERAGE_SCAN_MS:300000}") long intervalMs) {
         ThreadPoolTaskScheduler taskScheduler = new ThreadPoolTaskScheduler();
         taskScheduler.setPoolSize(1);
         taskScheduler.setThreadNamePrefix("journal-coverage-");
