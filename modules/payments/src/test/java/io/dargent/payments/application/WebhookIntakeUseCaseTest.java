@@ -143,6 +143,56 @@ class WebhookIntakeUseCaseTest {
             committedVersions.put(payment.txid(), stored.version() + 1);
             return true;
         }
+
+        @Override
+        public java.util.List<Payment> findDueReconciliation(java.time.Instant now, int limit) {
+            return store.values().stream()
+                    .filter(p -> p.status() == io.dargent.payments.domain.model.PaymentStatus.PENDING
+                            || p.status() == io.dargent.payments.domain.model.PaymentStatus.EXPIRED)
+                    .filter(p -> p.nextReconcileAt() != null && p.nextReconcileAt().isBefore(now))
+                    .limit(limit)
+                    .toList();
+        }
+
+        @Override
+        public boolean updateReconciliationSchedule(Payment payment, java.time.Instant nextReconcileAt, int reconcileAttempts, int expectedVersion) {
+            Integer committed = committedVersions.get(payment.txid());
+            if (committed == null || committed != expectedVersion) {
+                return false;
+            }
+            Payment stored = store.get(payment.txid());
+            if (stored == null) return false;
+            Payment updated = Payment.restore(
+                    stored.id(), stored.txid(), stored.merchantId(), stored.amount(),
+                    stored.description(), stored.expiresAt(), stored.createdAt(),
+                    stored.status(), expectedVersion + 1,
+                    stored.endToEndId(), stored.fee(), stored.net(), stored.lateConfirmation(),
+                    stored.confirmedAt(), stored.refunded().cents(), nextReconcileAt, reconcileAttempts);
+            store.put(payment.txid(), updated);
+            committedVersions.put(payment.txid(), expectedVersion + 1);
+            return true;
+        }
+
+        @Override
+        public boolean clearReconciliationScheduleIfPastWindow(Payment payment, java.time.Instant windowEnd, int expectedVersion) {
+            Integer committed = committedVersions.get(payment.txid());
+            if (committed == null || committed != expectedVersion) {
+                return false;
+            }
+            Payment stored = store.get(payment.txid());
+            if (stored == null || stored.nextReconcileAt() == null) {
+                return false;
+            }
+            Payment updated = Payment.restore(
+                    stored.id(), stored.txid(), stored.merchantId(), stored.amount(),
+                    stored.description(), stored.expiresAt(), stored.createdAt(),
+                    stored.status(), expectedVersion + 1,
+                    stored.endToEndId(), stored.fee(), stored.net(), stored.lateConfirmation(),
+                    stored.confirmedAt(), stored.refunded().cents(), null, 0);
+            store.put(payment.txid(), updated);
+            committedVersions.put(payment.txid(), expectedVersion + 1);
+            return true;
+        }
     }
 
     static class FakeOutboxWriter implements OutboxWriter {

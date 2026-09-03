@@ -88,6 +88,59 @@ public class JdbcPaymentRepository implements PaymentRepository {
     }
 
     @Override
+    public java.util.List<Payment> findDueReconciliation(java.time.Instant now, int limit) {
+        return jdbc.sql("""
+                select * from payments.payments
+                where status in ('PENDING', 'EXPIRED')
+                  and next_reconcile_at is not null
+                  and next_reconcile_at <= :now
+                order by next_reconcile_at
+                limit :limit
+                """)
+                .param("now", java.sql.Timestamp.from(now))
+                .param("limit", limit)
+                .query(PaymentEntity.class)
+                .list()
+                .stream()
+                .map(PaymentMapper::toDomain)
+                .toList();
+    }
+
+    @Override
+    public boolean updateReconciliationSchedule(Payment payment, java.time.Instant nextReconcileAt, int reconcileAttempts, int expectedVersion) {
+        int updated = jdbc.sql("""
+                update payments.payments set
+                    next_reconcile_at = :nextReconcileAt,
+                    reconcile_attempts = :reconcileAttempts,
+                    version = :newVersion
+                where id = :id and version = :expectedVersion
+                """)
+                .param("nextReconcileAt", java.sql.Timestamp.from(nextReconcileAt))
+                .param("reconcileAttempts", reconcileAttempts)
+                .param("newVersion", expectedVersion + 1)
+                .param("id", payment.id())
+                .param("expectedVersion", expectedVersion)
+                .update();
+        return updated != 0;
+    }
+
+    @Override
+    public boolean clearReconciliationScheduleIfPastWindow(Payment payment, java.time.Instant windowEnd, int expectedVersion) {
+        int updated = jdbc.sql("""
+                update payments.payments set
+                    next_reconcile_at = NULL,
+                    version = version + 1
+                where id = :id and version = :expectedVersion
+                  and status in ('PENDING', 'EXPIRED')
+                  and next_reconcile_at is not null
+                """)
+                .param("id", payment.id())
+                .param("expectedVersion", expectedVersion)
+                .update();
+        return updated != 0;
+    }
+
+    @Override
     public Optional<Payment> findByTxid(Txid txid) {
         return jdbc.sql("""
                 select * from payments.payments where txid = :txid

@@ -99,7 +99,7 @@ class CreatePaymentUseCaseTest {
         useCase = new CreatePaymentUseCase(paymentRepo, idempotencyStore, outboxWriter, auditWriter,
                 pspPort, txidGenerator, txTemplate, new EventEnvelopeFactory(new EventSerializer(mapper)),
                 PIX_KEY, RECEIVER_NAME, RECEIVER_CITY, CALLBACK_URL,
-                Clock.fixed(NOW, ZoneOffset.UTC));
+                Clock.fixed(NOW, ZoneOffset.UTC), Duration.ofSeconds(60));
     }
 
     private Input input() {

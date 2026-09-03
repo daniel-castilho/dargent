@@ -31,6 +31,8 @@ public final class PaymentMapper {
         entity.setStatus(payment.status().name());
         entity.setVersion(payment.version());
         entity.setExpiresAt(payment.expiresAt());
+        entity.setNextReconcileAt(payment.nextReconcileAt());
+        entity.setReconcileAttempts(payment.reconcileAttempts());
         if (payment.endToEndId() != null) {
             entity.setEndToEndId(payment.endToEndId().value());
         }
@@ -67,6 +69,8 @@ public final class PaymentMapper {
                 net,
                 entity.isLateConfirmation(),
                 entity.getConfirmedAt(),
-                entity.getRefundedCents());
+                entity.getRefundedCents(),
+                entity.getNextReconcileAt(),
+                entity.getReconcileAttempts());
     }
 }

@@ -18,6 +18,7 @@ import io.dargent.payments.application.EventEnvelopeFactory;
 import io.dargent.payments.application.EventSerializer;
 import io.dargent.payments.application.ExpirationUseCase;
 import io.dargent.payments.application.OutboxDeliveryUseCase;
+import io.dargent.payments.application.ReconciliationUseCase;
 import io.dargent.payments.application.WebhookIntakeUseCase;
 import io.dargent.payments.domain.model.WebhookSignatureValidator;
 import io.dargent.payments.domain.port.out.AuditWriter;
@@ -166,10 +167,12 @@ public class PaymentsCompositionConfig {
             @Value("${dargent.pix.profile.pix-key}") String pixKey,
             @Value("${dargent.pix.profile.receiver-name}") String receiverName,
             @Value("${dargent.pix.profile.receiver-city}") String receiverCity,
-            @Value("${dargent.psp.callback-url}") String pspCallbackUrl) {
+            @Value("${dargent.psp.callback-url}") String pspCallbackUrl,
+            @Value("${DARGENT_RECONCILER_BACKOFF_MS:60000,300000,900000,3600000}") String backoffRungs) {
         return new CreatePaymentUseCase(paymentRepository, idempotencyStore, outboxWriter, auditWriter,
                 pspPort, txidGenerator, transactionTemplate, envelopeFactory, pixKey, receiverName,
-                receiverCity, pspCallbackUrl, clock);
+                receiverCity, pspCallbackUrl, clock,
+                Duration.ofMillis(parseBackoffRungs(backoffRungs).get(0)));
     }
 
     // --- E6 outbox relay beans ---
@@ -267,5 +270,47 @@ public class PaymentsCompositionConfig {
         taskScheduler.initialize();
         taskScheduler.scheduleWithFixedDelay(scheduler::runOnce, Duration.ofMillis(intervalMs));
         return taskScheduler;
+    }
+
+    // --- E5 reconciler beans (spec §4, §4.1) ---
+
+    @Bean
+    @ConditionalOnProperty(name = "DARGENT_RECONCILER_ENABLED", havingValue = "true", matchIfMissing = false)
+    ReconciliationUseCase reconciliationUseCase(PaymentRepository paymentRepository, PspPort pspPort,
+            OutboxWriter outboxWriter, AuditWriter auditWriter,
+            EventEnvelopeFactory envelopeFactory, TransactionTemplate transactionTemplate, Clock clock,
+            @Value("${DARGENT_RECONCILER_BACKOFF_MS:60000,300000,900000,3600000}") String backoffRungs,
+            @Value("${DARGENT_RECONCILER_GIVE_UP_HOURS:72}") long giveUpHours) {
+        return new ReconciliationUseCase(paymentRepository, pspPort, outboxWriter, auditWriter,
+                envelopeFactory, transactionTemplate, clock,
+                parseBackoffRungs(backoffRungs).stream().map(Duration::ofMillis).toList(),
+                Duration.ofHours(giveUpHours));
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "DARGENT_RECONCILER_ENABLED", havingValue = "true", matchIfMissing = false)
+    ReconciliationScheduler reconciliationScheduler(ReconciliationUseCase useCase,
+            @Value("${DARGENT_RECONCILER_BATCH:100}") int batch) {
+        return new ReconciliationScheduler(useCase, batch);
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "DARGENT_RECONCILER_ENABLED", havingValue = "true", matchIfMissing = false)
+    TaskScheduler reconciliationSchedulerTask(ReconciliationScheduler scheduler,
+            @Value("${DARGENT_RECONCILER_SCAN_MS:60000}") long intervalMs) {
+        ThreadPoolTaskScheduler taskScheduler = new ThreadPoolTaskScheduler();
+        taskScheduler.setPoolSize(1);
+        taskScheduler.setThreadNamePrefix("reconciler-");
+        taskScheduler.initialize();
+        taskScheduler.scheduleWithFixedDelay(scheduler::runOnce, Duration.ofMillis(intervalMs));
+        return taskScheduler;
+    }
+
+    private static java.util.List<Long> parseBackoffRungs(String raw) {
+        return java.util.Arrays.stream(raw.trim().split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .map(Long::parseLong)
+                .toList();
     }
 }

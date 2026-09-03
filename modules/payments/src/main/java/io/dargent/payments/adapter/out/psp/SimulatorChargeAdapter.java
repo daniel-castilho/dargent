@@ -137,6 +137,36 @@ public final class SimulatorChargeAdapter implements PspPort {
         }
     }
 
+@Override
+    public CobStatus getCob(Txid txid) {
+        try {
+            String url = baseUrl + "/cobs/" + txid.value();
+            var request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .timeout(Duration.ofSeconds(5))
+                    .GET()
+                    .build();
+            var response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() == 200) {
+                var cob = objectMapper.readValue(response.body(), CobResponse.class);
+                return new CobStatus(
+                        new Txid(cob.txid()),
+                        CobState.valueOf(cob.state()),
+                        cob.amountCents(),
+                        Instant.parse(cob.expiresAt()),
+                        cob.endToEndId(),
+                        cob.paidAt() == null ? null : Instant.parse(cob.paidAt())
+                );
+            } else if (response.statusCode() == 404) {
+                throw new PspException("COB not found for txid " + txid.value());
+            }
+            throw new PspException("PSP getCob failed with status " + response.statusCode() + " for txid " + txid.value());
+        } catch (IOException | InterruptedException e) {
+            throw new PspException("PSP getCob failed for txid " + txid.value(), e);
+        }
+    }
+
+    // Request/response records
     private record ChargeRequest(
             String txid,
             long amount,
@@ -150,5 +180,14 @@ public final class SimulatorChargeAdapter implements PspPort {
             String expiresAt,
             String endToEndId,
             String brcode
+    ) {}
+
+    private record CobResponse(
+            String txid,
+            String state,
+            long amountCents,
+            String expiresAt,
+            String endToEndId,
+            String paidAt
     ) {}
 }

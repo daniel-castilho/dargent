@@ -46,6 +46,12 @@ public class PaymentEntity {
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
 
+    @Column(name = "next_reconcile_at")
+    private Instant nextReconcileAt;
+
+    @Column(name = "reconcile_attempts", nullable = false)
+    private int reconcileAttempts;
+
     @Column(name = "end_to_end_id", length = 32)
     private String endToEndId;
 
@@ -185,5 +191,21 @@ public class PaymentEntity {
 
     public void setConfirmedAt(Instant confirmedAt) {
         this.confirmedAt = confirmedAt;
+    }
+
+    public Instant getNextReconcileAt() {
+        return nextReconcileAt;
+    }
+
+    public void setNextReconcileAt(Instant nextReconcileAt) {
+        this.nextReconcileAt = nextReconcileAt;
+    }
+
+    public int getReconcileAttempts() {
+        return reconcileAttempts;
+    }
+
+    public void setReconcileAttempts(int reconcileAttempts) {
+        this.reconcileAttempts = reconcileAttempts;
     }
 }

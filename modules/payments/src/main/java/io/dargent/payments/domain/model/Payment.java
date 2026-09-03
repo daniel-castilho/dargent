@@ -3,6 +3,7 @@ package io.dargent.payments.domain.model;
 import io.dargent.payments.domain.exception.InvalidTransitionException;
 import io.dargent.payments.domain.exception.RefundExceedsRemainingException;
 import io.dargent.shared.money.Money;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -39,6 +40,9 @@ public final class Payment {
     private boolean lateConfirmation;
     private Instant confirmedAt;
     private Money refunded;
+
+    private Instant nextReconcileAt;
+    private int reconcileAttempts;
 
     private final List<PaymentEvent> domainEvents = new ArrayList<>();
 
@@ -83,7 +87,7 @@ public final class Payment {
     public static Payment restore(UUID id, Txid txid, UUID merchantId, Money amount, String description,
                                   Instant expiresAt, Instant createdAt, PaymentStatus status, int version,
                                   EndToEndId endToEndId, Money fee, Money net, boolean lateConfirmation,
-                                  Instant confirmedAt, long refundedCents) {
+                                  Instant confirmedAt, long refundedCents, Instant nextReconcileAt, int reconcileAttempts) {
         var payment = new Payment(id, txid, merchantId, amount, description, expiresAt, createdAt);
         payment.status = status;
         payment.version = version;
@@ -93,8 +97,22 @@ public final class Payment {
         payment.lateConfirmation = lateConfirmation;
         payment.confirmedAt = confirmedAt;
         payment.refunded = Money.of(refundedCents, BRL);
+        payment.nextReconcileAt = nextReconcileAt;
+        payment.reconcileAttempts = reconcileAttempts;
         validateRestored(payment);
         return payment;
+    }
+
+    /**
+     * Backward-compatible overload for tests and legacy code — defaults reconciliation
+     * fields to {@code null} and {@code 0}.
+     */
+    public static Payment restore(UUID id, Txid txid, UUID merchantId, Money amount, String description,
+                                  Instant expiresAt, Instant createdAt, PaymentStatus status, int version,
+                                  EndToEndId endToEndId, Money fee, Money net, boolean lateConfirmation,
+                                  Instant confirmedAt, long refundedCents) {
+        return restore(id, txid, merchantId, amount, description, expiresAt, createdAt, status, version,
+                endToEndId, fee, net, lateConfirmation, confirmedAt, refundedCents, null, 0);
     }
 
     /**
@@ -295,6 +313,31 @@ public final class Payment {
 
     public Money refunded() {
         return refunded;
+    }
+
+    public Instant nextReconcileAt() {
+        return nextReconcileAt;
+    }
+
+    public int reconcileAttempts() {
+        return reconcileAttempts;
+    }
+
+    /**
+     * Initial reconciliation scheduling (E5 spec §4): sets {@code next_reconcile_at = now + firstBackoff}
+     * with {@code reconcile_attempts = 0} so a freshly created PENDING payment enters the reconciler
+     * scan on its first ladder rung. Domain-owned so the schedule is always coherent with the aggregate.
+     */
+    public Payment scheduleInitialReconciliation(Duration firstBackoff, Instant now) {
+        if (status != PaymentStatus.PENDING) {
+            throw new InvalidTransitionException(txid, status, PaymentStatus.PENDING);
+        }
+        if (firstBackoff == null || now == null) {
+            throw new IllegalArgumentException("firstBackoff and now are required");
+        }
+        this.nextReconcileAt = now.plus(firstBackoff);
+        this.reconcileAttempts = 0;
+        return this;
     }
 
     /** {@code amount − Σ refunded}; the ledger's balance check is E8. */

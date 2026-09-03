@@ -128,4 +128,65 @@ public class PaymentJpaAdapter implements PaymentRepository {
         em.clear();
         return true;
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.List<Payment> findDueReconciliation(java.time.Instant now, int limit) {
+        return em.createQuery(
+                        "select p from PaymentEntity p "
+                                + "where p.status in ('PENDING','EXPIRED') and p.nextReconcileAt is not null "
+                                + "and p.nextReconcileAt <= :now "
+                                + "order by p.nextReconcileAt", PaymentEntity.class)
+                .setParameter("now", now)
+                .setMaxResults(limit)
+                .getResultStream()
+                .map(PaymentMapper::toDomain)
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public boolean updateReconciliationSchedule(Payment payment, java.time.Instant nextReconcileAt, int reconcileAttempts, int expectedVersion) {
+        Query update = em.createQuery(
+                "update PaymentEntity p set "
+                        + "p.nextReconcileAt = :nextReconcileAt, "
+                        + "p.reconcileAttempts = :reconcileAttempts, "
+                        + "p.version = :newVersion "
+                        + "where p.id = :id and p.version = :expectedVersion");
+        int updatedRows = update
+                .setParameter("nextReconcileAt", nextReconcileAt)
+                .setParameter("reconcileAttempts", reconcileAttempts)
+                .setParameter("newVersion", expectedVersion + 1)
+                .setParameter("id", payment.id())
+                .setParameter("expectedVersion", expectedVersion)
+                .executeUpdate();
+        if (updatedRows == 0) {
+            return false;
+        }
+        em.clear();
+        PaymentEntity stored = findEntityByTxid(payment.txid().value()).orElseThrow();
+        payment.markPersistedVersion(stored.getVersion());
+        return true;
+    }
+
+    @Override
+    @Transactional
+    public boolean clearReconciliationScheduleIfPastWindow(Payment payment, java.time.Instant windowEnd, int expectedVersion) {
+        Query update = em.createQuery(
+                "update PaymentEntity p set "
+                        + "p.nextReconcileAt = NULL, "
+                        + "p.version = p.version + 1 "
+                        + "where p.id = :id and p.version = :expectedVersion "
+                        + "and p.status in ('PENDING','EXPIRED') "
+                        + "and p.nextReconcileAt is not null");
+        int updatedRows = update
+                .setParameter("id", payment.id())
+                .setParameter("expectedVersion", expectedVersion)
+                .executeUpdate();
+        if (updatedRows == 0) {
+            return false;
+        }
+        em.clear();
+        return true;
+    }
 }

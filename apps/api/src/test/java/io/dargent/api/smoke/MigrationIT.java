@@ -133,6 +133,21 @@ class MigrationIT {
                 where schemaname = 'payments' and indexname = 'idx_payments_pending_expires'
                 """).query(String.class).list();
         assertThat(indexDefinition.get(0)).contains("(status)::text = 'PENDING'::text");
+
+        // TD-21: reconciler scan index + PENDING backfill into the pipeline.
+        List<String> reconcileIndex = jdbc.sql("""
+                select indexname
+                from pg_indexes
+                where schemaname = 'payments' and indexname = 'idx_payments_reconcile_due'
+                """).query(String.class).list();
+        assertThat(reconcileIndex).containsExactly("idx_payments_reconcile_due");
+
+        List<String> reconcileIndexDef = jdbc.sql("""
+                select indexdef
+                from pg_indexes
+                where schemaname = 'payments' and indexname = 'idx_payments_reconcile_due'
+                """).query(String.class).list();
+        assertThat(reconcileIndexDef.get(0)).contains("((status)::text = ANY ((ARRAY['PENDING'::character varying, 'EXPIRED'::character varying])::text[]))");
     }
 
     @Test

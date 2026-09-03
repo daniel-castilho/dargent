@@ -39,4 +39,27 @@ public interface PaymentRepository {
      * caller must no-op without outbox/audit writes. The DB, not the domain, arbitrates this race.
      */
     boolean expireIfDue(Payment payment, java.time.Instant now);
+
+    /**
+     * Reconciliation scan (spec §4, TD-21): PENDING and EXPIRED payments whose {@code next_reconcile_at}
+     * is due, bounded by {@code limit}, ordered by {@code next_reconcile_at}. EXPIRED rows stay in the
+     * poll within the give-up window so a late PAID can resurrect (PIX: PSP may report PAID after EXPIRED).
+     * {@code next_reconcile_at IS NOT NULL} means only actively scheduled rows are scanned (NULL = gave up).
+     */
+    java.util.List<Payment> findDueReconciliation(java.time.Instant now, int limit);
+
+    /**
+     * Updates the reconciliation scheduling fields for a payment (spec §4): sets
+     * {@code next_reconcile_at} and increments {@code reconcile_attempts}. Conditional on the
+     * current version to detect lost races.
+     */
+    boolean updateReconciliationSchedule(Payment payment, java.time.Instant nextReconcileAt, int reconcileAttempts, int expectedVersion);
+
+    /**
+     * Conditionally clears the reconciliation schedule when the give-up window is reached (spec §4,
+     * TD-21): sets {@code next_reconcile_at = NULL} where the payment is still PENDING or EXPIRED and
+     * past the window. NULL means "gave up / not scheduled" (never re-enters the scan). Returns true if
+     * the row was updated.
+     */
+    boolean clearReconciliationScheduleIfPastWindow(Payment payment, java.time.Instant windowEnd, int expectedVersion);
 }

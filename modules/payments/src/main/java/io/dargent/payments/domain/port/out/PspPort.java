@@ -9,6 +9,9 @@ public interface PspPort {
     /** Creates a PIX charge at the PSP. Retries are handled by the adapter. */
     ChargeResult createCharge(CreateChargeInput input);
 
+    /** Queries the PSP for the current state of a charge (E5 spec §4). */
+    CobStatus getCob(Txid txid);
+
     /** Input for creating a PIX charge. */
     record CreateChargeInput(
             Txid txid,
@@ -25,4 +28,21 @@ public interface PspPort {
             String endToEndId,
             String brcodePayload
     ) {}
+
+    /** PSP charge status response (E2 truth endpoint GET /cobs/{txid}). */
+    record CobStatus(
+            Txid txid,
+            CobState state,
+            long amountCents,
+            Instant expiresAt,
+            String endToEndId,
+            Instant paidAt
+    ) {}
+
+    /** PSP charge states. */
+    enum CobState {
+        OPEN,
+        PAID,
+        EXPIRED
+    }
 }

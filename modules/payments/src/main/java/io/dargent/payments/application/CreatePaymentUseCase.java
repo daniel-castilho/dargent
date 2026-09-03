@@ -58,11 +58,13 @@ public final class CreatePaymentUseCase {
     private final String receiverCity;
     private final String pspCallbackUrl;
     private final Clock clock;
+    private final Duration firstReconcileBackoff;
 
     public CreatePaymentUseCase(PaymentRepository paymentRepo, IdempotencyStore idempotencyStore,
             OutboxWriter outboxWriter, AuditWriter auditWriter, PspPort pspPort,
             TxidGenerator txidGenerator, TransactionTemplate txTemplate, EventEnvelopeFactory envelopeFactory,
-            String pixKey, String receiverName, String receiverCity, String pspCallbackUrl, Clock clock) {
+            String pixKey, String receiverName, String receiverCity, String pspCallbackUrl, Clock clock,
+            Duration firstReconcileBackoff) {
         this.paymentRepo = paymentRepo;
         this.idempotencyStore = idempotencyStore;
         this.outboxWriter = outboxWriter;
@@ -76,6 +78,7 @@ public final class CreatePaymentUseCase {
         this.receiverCity = receiverCity;
         this.pspCallbackUrl = pspCallbackUrl;
         this.clock = clock;
+        this.firstReconcileBackoff = firstReconcileBackoff;
     }
 
     public Output execute(Input input) {
@@ -127,6 +130,7 @@ public final class CreatePaymentUseCase {
             Txid txid = txidGenerator.generate();
             Payment candidate = Payment.create(txid, input.merchantId(), input.amount(),
                     input.description(), expiresAtRequested, now);
+            candidate.scheduleInitialReconciliation(firstReconcileBackoff, now);
             try {
                 paymentRepo.save(candidate);
                 return candidate;
