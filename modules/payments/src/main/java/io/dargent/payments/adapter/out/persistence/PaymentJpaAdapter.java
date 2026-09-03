@@ -97,4 +97,35 @@ public class PaymentJpaAdapter implements PaymentRepository {
                 .getResultStream()
                 .findFirst();
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.List<Payment> findDueExpired(java.time.Instant now, int limit) {
+        return em.createQuery(
+                        "select p from PaymentEntity p "
+                                + "where p.status = 'PENDING' and p.expiresAt < :now "
+                                + "order by p.expiresAt", PaymentEntity.class)
+                .setParameter("now", now)
+                .setMaxResults(limit)
+                .getResultStream()
+                .map(PaymentMapper::toDomain)
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public boolean expireIfDue(Payment payment, java.time.Instant now) {
+        Query update = em.createQuery(
+                "update PaymentEntity p set p.status = 'EXPIRED', p.version = p.version + 1 "
+                        + "where p.id = :id and p.status = 'PENDING' and p.expiresAt < :now");
+        int updatedRows = update
+                .setParameter("id", payment.id())
+                .setParameter("now", now)
+                .executeUpdate();
+        if (updatedRows == 0) {
+            return false;
+        }
+        em.clear();
+        return true;
+    }
 }

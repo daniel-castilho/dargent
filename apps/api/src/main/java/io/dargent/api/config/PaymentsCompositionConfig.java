@@ -16,6 +16,7 @@ import io.dargent.payments.adapter.out.psp.SimulatorChargeAdapter;
 import io.dargent.payments.application.CreatePaymentUseCase;
 import io.dargent.payments.application.EventEnvelopeFactory;
 import io.dargent.payments.application.EventSerializer;
+import io.dargent.payments.application.ExpirationUseCase;
 import io.dargent.payments.application.OutboxDeliveryUseCase;
 import io.dargent.payments.application.WebhookIntakeUseCase;
 import io.dargent.payments.domain.model.WebhookSignatureValidator;
@@ -32,7 +33,6 @@ import io.dargent.payments.domain.port.out.OutboxEventStore;
 import io.dargent.payments.domain.port.out.WebhookEventStore;
 import java.time.Clock;
 import java.time.Duration;
-import java.util.concurrent.TimeUnit;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
@@ -235,5 +235,37 @@ public class PaymentsCompositionConfig {
                 Duration.ofMillis(policy.pollMs())
         );
         return scheduler;
+    }
+
+    // --- E5 expiration scheduler beans (spec §3, §4.1) ---
+
+    @Bean
+    @ConditionalOnProperty(name = "DARGENT_EXPIRATION_ENABLED", havingValue = "true", matchIfMissing = false)
+    ExpirationUseCase expirationUseCase(PaymentRepository paymentRepository,
+            OutboxWriter outboxWriter, AuditWriter auditWriter,
+            EventEnvelopeFactory envelopeFactory,
+            TransactionTemplate transactionTemplate, Clock clock) {
+        return new ExpirationUseCase(paymentRepository, outboxWriter, auditWriter,
+                envelopeFactory, transactionTemplate, clock);
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "DARGENT_EXPIRATION_ENABLED", havingValue = "true", matchIfMissing = false)
+    ExpirationScheduler expirationScheduler(ExpirationUseCase useCase,
+            @Value("${DARGENT_EXPIRATION_BATCH:100}") int batch,
+            @Value("${DARGENT_EXPIRATION_INTERVAL_MS:60000}") long intervalMs) {
+        return new ExpirationScheduler(useCase, batch);
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "DARGENT_EXPIRATION_ENABLED", havingValue = "true", matchIfMissing = false)
+    TaskScheduler expirationSchedulerTask(ExpirationScheduler scheduler,
+            @Value("${DARGENT_EXPIRATION_INTERVAL_MS:60000}") long intervalMs) {
+        ThreadPoolTaskScheduler taskScheduler = new ThreadPoolTaskScheduler();
+        taskScheduler.setPoolSize(1);
+        taskScheduler.setThreadNamePrefix("expiration-scheduler-");
+        taskScheduler.initialize();
+        taskScheduler.scheduleWithFixedDelay(scheduler::runOnce, Duration.ofMillis(intervalMs));
+        return taskScheduler;
     }
 }

@@ -26,4 +26,17 @@ public interface PaymentRepository {
 
     /** @return true if the row updated (version consumed, aggregate bumped); false = lost race. */
     boolean updateIfVersionMatches(Payment payment, int expectedVersion);
+
+    /**
+     * Expiration scan (spec §3): PENDING payments whose deadline has passed, bounded by {@code limit}
+     * and ordered to keep the tick stable. The V111 partial index serves this predicate.
+     */
+    java.util.List<Payment> findDueExpired(java.time.Instant now, int limit);
+
+    /**
+     * Conditional PENDING→EXPIRED transition (spec §3): true only if the row is still PENDING and past
+     * its deadline — zero rows means the webhook/confirm won the race (or it already expired), so the
+     * caller must no-op without outbox/audit writes. The DB, not the domain, arbitrates this race.
+     */
+    boolean expireIfDue(Payment payment, java.time.Instant now);
 }

@@ -43,6 +43,34 @@ public class InMemoryPaymentRepository implements PaymentRepository {
         return true;
     }
 
+    @Override
+    public java.util.List<Payment> findDueExpired(java.time.Instant now, int limit) {
+        return store.values().stream()
+                .filter(p -> p.status() == io.dargent.payments.domain.model.PaymentStatus.PENDING)
+                .filter(p -> p.expiresAt().isBefore(now))
+                .sorted(java.util.Comparator.comparing(Payment::expiresAt))
+                .limit(limit)
+                .map(InMemoryPaymentRepository::cloneViaRestore)
+                .toList();
+    }
+
+    @Override
+    public boolean expireIfDue(Payment payment, java.time.Instant now) {
+        var current = store.get(payment.txid());
+        if (current == null || current.status() != io.dargent.payments.domain.model.PaymentStatus.PENDING
+                || !current.expiresAt().isBefore(now)) {
+            return false;
+        }
+        Payment expired = Payment.restore(
+                current.id(), current.txid(), current.merchantId(), current.amount(), current.description(),
+                current.expiresAt(), current.createdAt(),
+                io.dargent.payments.domain.model.PaymentStatus.EXPIRED, current.version() + 1,
+                current.endToEndId(), current.fee(), current.net(),
+                current.lateConfirmation(), current.confirmedAt(), current.refunded().cents());
+        store.put(payment.txid(), expired);
+        return true;
+    }
+
     /** Rebuilds a detached snapshot via the adapter-only {@code restore} factory. */
     private static Payment cloneViaRestore(Payment p) {
         return Payment.restore(

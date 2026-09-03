@@ -302,6 +302,15 @@ public final class Payment {
         return amount.minus(refunded);
     }
 
+    /**
+     * Pure expiration decision (spec §3): a PENDING payment is due for expiration once
+     * {@code now} is past its deadline. Clock-injected — never calls {@code Instant.now}.
+     * The persistence seam re-imposes the same predicate in the conditional UPDATE.
+     */
+    public boolean isDueForExpiration(Instant now) {
+        return status == PaymentStatus.PENDING && now != null && now.isAfter(expiresAt);
+    }
+
     private void transition(PaymentStatus to, PaymentEvent event) {
         this.status = to;
         this.version += 1;

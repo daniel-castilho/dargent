@@ -57,6 +57,37 @@ public class JdbcPaymentRepository implements PaymentRepository {
     }
 
     @Override
+    public java.util.List<Payment> findDueExpired(java.time.Instant now, int limit) {
+        return jdbc.sql("""
+                select * from payments.payments
+                where status = 'PENDING' and expires_at < :now
+                order by expires_at
+                limit :limit
+                """)
+                .param("now", now)
+                .param("limit", limit)
+                .query(PaymentEntity.class)
+                .list()
+                .stream()
+                .map(PaymentMapper::toDomain)
+                .toList();
+    }
+
+    @Override
+    public boolean expireIfDue(Payment payment, java.time.Instant now) {
+        int updated = jdbc.sql("""
+                update payments.payments set
+                    status = 'EXPIRED',
+                    version = version + 1
+                where id = :id and status = 'PENDING' and expires_at < :now
+                """)
+                .param("id", payment.id())
+                .param("now", now)
+                .update();
+        return updated != 0;
+    }
+
+    @Override
     public Optional<Payment> findByTxid(Txid txid) {
         return jdbc.sql("""
                 select * from payments.payments where txid = :txid

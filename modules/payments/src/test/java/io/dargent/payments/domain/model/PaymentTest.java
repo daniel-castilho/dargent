@@ -172,6 +172,17 @@ class PaymentTest {
         assertExpireIllegalFrom(allStatesExcept(PaymentStatus.PENDING));
     }
 
+    @Test
+    void is_due_for_expiration_true_only_for_pending_past_deadline() {
+        assertThat(create().isDueForExpiration(NOW.plusSeconds(1_801))).isTrue();
+        assertThat(create().isDueForExpiration(EXPIRES_AT)).isFalse();       // exactly at deadline
+        assertThat(create().isDueForExpiration(EXPIRES_AT.minusSeconds(1))).isFalse(); // before
+        assertThat(confirmed().isDueForExpiration(NOW.plusSeconds(9_999))).isFalse();   // CONFIRMED never expires
+        assertThat(expired().isDueForExpiration(NOW.plusSeconds(9_999))).isFalse();     // already EXPIRED (D6: may resurrect)
+        assertThat(failed().isDueForExpiration(NOW.plusSeconds(9_999))).isFalse();
+        assertThat(create().isDueForExpiration(null)).isFalse();             // Clock-injected; null now = not due
+    }
+
     // ---- markFailed ----
 
     @Test

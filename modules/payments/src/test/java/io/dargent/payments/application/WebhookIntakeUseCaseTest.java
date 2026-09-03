@@ -116,6 +116,33 @@ class WebhookIntakeUseCaseTest {
             committedVersions.put(payment.txid(), expectedVersion + 1);
             return true;
         }
+
+        @Override
+        public java.util.List<Payment> findDueExpired(java.time.Instant now, int limit) {
+            return store.values().stream()
+                    .filter(p -> p.status() == io.dargent.payments.domain.model.PaymentStatus.PENDING)
+                    .filter(p -> p.expiresAt().isBefore(now))
+                    .limit(limit)
+                    .toList();
+        }
+
+        @Override
+        public boolean expireIfDue(Payment payment, java.time.Instant now) {
+            Payment stored = store.get(payment.txid());
+            if (stored == null || stored.status() != io.dargent.payments.domain.model.PaymentStatus.PENDING
+                    || !stored.expiresAt().isBefore(now)) {
+                return false;
+            }
+            Payment expired = Payment.restore(
+                    stored.id(), stored.txid(), stored.merchantId(), stored.amount(),
+                    stored.description(), stored.expiresAt(), stored.createdAt(),
+                    io.dargent.payments.domain.model.PaymentStatus.EXPIRED, stored.version() + 1,
+                    stored.endToEndId(), stored.fee(), stored.net(), stored.lateConfirmation(),
+                    stored.confirmedAt(), stored.refunded().cents());
+            store.put(payment.txid(), expired);
+            committedVersions.put(payment.txid(), stored.version() + 1);
+            return true;
+        }
     }
 
     static class FakeOutboxWriter implements OutboxWriter {
