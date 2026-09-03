@@ -4,12 +4,12 @@ import io.dargent.api.error.RequestValidationException;
 import io.dargent.api.web.CursorCodec;
 import io.dargent.api.web.RequestIdFilter;
 import io.dargent.payments.application.CreatePaymentUseCase;
-import io.dargent.payments.application.CreatePaymentUseCase.Input;
-import io.dargent.payments.application.CreatePaymentUseCase.Output;
+import io.dargent.payments.application.RefundPaymentUseCase;
 import io.dargent.payments.domain.br.BrCode;
 import io.dargent.payments.domain.model.Payment;
 import io.dargent.payments.domain.model.Txid;
 import io.dargent.payments.domain.port.out.PaymentQueryPort;
+import io.dargent.shared.money.Money;
 import io.dargent.shared.money.Money;
 import jakarta.servlet.http.HttpServletRequest;
 import java.security.MessageDigest;
@@ -48,19 +48,22 @@ class PaymentController {
 
     private final PaymentQueryPort queryPort;
     private final CreatePaymentUseCase createUseCase;
+    private final RefundPaymentUseCase refundUseCase;
     private final Clock clock;
     private final tools.jackson.databind.ObjectMapper objectMapper;
     private final String pixKey;
     private final String receiverName;
     private final String receiverCity;
 
-    PaymentController(PaymentQueryPort queryPort, CreatePaymentUseCase createUseCase, Clock clock,
+    PaymentController(PaymentQueryPort queryPort, CreatePaymentUseCase createUseCase,
+            RefundPaymentUseCase refundUseCase, Clock clock,
             tools.jackson.databind.ObjectMapper objectMapper,
             @Value("${dargent.pix.profile.pix-key}") String pixKey,
             @Value("${dargent.pix.profile.receiver-name}") String receiverName,
             @Value("${dargent.pix.profile.receiver-city}") String receiverCity) {
         this.queryPort = queryPort;
         this.createUseCase = createUseCase;
+        this.refundUseCase = refundUseCase;
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.pixKey = pixKey;
@@ -81,7 +84,7 @@ class PaymentController {
         String idempotencyKey = idempotencyKey(request);
         String requestId = (String) request.getAttribute(RequestIdFilter.ATTRIBUTE);
 
-        Output out = createUseCase.execute(new Input(principal.merchantId(), principal.keyId(),
+        CreatePaymentUseCase.Output out = createUseCase.execute(new CreatePaymentUseCase.Input(principal.merchantId(), principal.keyId(),
                 idempotencyKey, ENDPOINT, fingerprint, requestId, Money.of(amount, BRL),
                 description, expiresIn));
 
@@ -143,6 +146,33 @@ class PaymentController {
         return ResponseEntity.ok(new PaymentListResponse(items, nextCursor));
     }
 
+    @PostMapping("/{txid}/refunds")
+    ResponseEntity<RefundPaymentResponse> refund(
+            HttpServletRequest request,
+            @AuthenticationPrincipal io.dargent.api.security.ApiKeyPrincipal principal,
+            @PathVariable String txid) {
+        byte[] rawBody = readRawBody(request);
+        String fingerprint = fingerprint(rawBody);
+        RefundRequest body = parseRefundBody(rawBody);
+        long amountCents = body.validatedAmount();
+        String idempotencyKey = idempotencyKey(request);
+        String requestId = (String) request.getAttribute(RequestIdFilter.ATTRIBUTE);
+
+        RefundPaymentUseCase.Output out = refundUseCase.execute(new RefundPaymentUseCase.Input(
+                txid, principal.merchantId(), principal.keyId(), idempotencyKey,
+                "POST /v1/payments/" + txid + "/refunds", fingerprint, requestId,
+                Money.of(amountCents, BRL)));
+
+        var response = new RefundPaymentResponse(out.id(), out.payment(), out.amount(),
+                out.feeReversal(), out.net(), out.status(), out.createdAt());
+        ResponseEntity.BodyBuilder builder = org.springframework.http.ResponseEntity.status(HttpStatus.CREATED)
+                .location(java.net.URI.create("/v1/payments/" + out.payment() + "/refunds/" + out.id()));
+        if (out.replay()) {
+            builder.header("Idempotent-Replay", "true");
+        }
+        return builder.body(response);
+    }
+
     // ------------------------------------------------------------ create helpers
 
     private byte[] readRawBody(HttpServletRequest request) {
@@ -168,6 +198,17 @@ class PaymentController {
         }
         try {
             return objectMapper.readValue(rawBody, CreatePaymentRequest.class);
+        } catch (tools.jackson.core.JacksonException e) {
+            throw new RequestValidationException(Map.of("body", "malformed JSON"));
+        }
+    }
+
+    private RefundRequest parseRefundBody(byte[] rawBody) {
+        if (rawBody.length == 0) {
+            return new RefundRequest(null);
+        }
+        try {
+            return objectMapper.readValue(rawBody, RefundRequest.class);
         } catch (tools.jackson.core.JacksonException e) {
             throw new RequestValidationException(Map.of("body", "malformed JSON"));
         }
@@ -248,4 +289,27 @@ class PaymentController {
     record PaymentListResponse(
             List<PaymentSummaryResponse> items,
             String nextCursor) {}
+
+    // ------------------------------------------------------------ refund body
+
+    record RefundRequest(Integer amount) {
+        long validatedAmount() {
+            if (amount == null) {
+                return -1; // signal: full remaining
+            }
+            if (amount <= 0) {
+                throw new RequestValidationException(Map.of("amount", "must be a positive integer"));
+            }
+            return amount;
+        }
+    }
+
+    record RefundPaymentResponse(
+            String id,
+            String payment,
+            long amount,
+            long feeReversal,
+            long net,
+            String status,
+            Instant createdAt) {}
 }

@@ -4,6 +4,8 @@ import io.dargent.api.controller.WebhookController;
 import io.dargent.api.error.ErrorResponseWriter;
 import io.dargent.api.security.ApiKeyAuthenticationFilter;
 import io.dargent.api.security.ApiKeyRepository;
+import io.dargent.ledger.adapter.out.db.JdbcLedgerStore;
+import io.dargent.ledger.domain.port.out.LedgerStore;
 import io.dargent.payments.adapter.out.messaging.SnsEventPublisher;
 import io.dargent.payments.adapter.out.persistence.JdbcAuditWriter;
 import io.dargent.payments.adapter.out.persistence.JdbcIdempotencyStore;
@@ -19,11 +21,13 @@ import io.dargent.payments.application.EventSerializer;
 import io.dargent.payments.application.ExpirationUseCase;
 import io.dargent.payments.application.OutboxDeliveryUseCase;
 import io.dargent.payments.application.ReconciliationUseCase;
+import io.dargent.payments.application.RefundPaymentUseCase;
 import io.dargent.payments.application.WebhookIntakeUseCase;
 import io.dargent.payments.domain.model.WebhookSignatureValidator;
 import io.dargent.payments.domain.port.out.AuditWriter;
 import io.dargent.payments.domain.port.out.EventPublisher;
 import io.dargent.payments.domain.port.out.IdempotencyStore;
+import io.dargent.payments.domain.port.out.MerchantBalancePort;
 import io.dargent.payments.domain.port.out.OutboxWriter;
 import io.dargent.payments.domain.port.out.PaymentQueryPort;
 import io.dargent.payments.domain.port.out.PaymentRepository;
@@ -347,5 +351,21 @@ public class PaymentsCompositionConfig {
                 .filter(s -> !s.isEmpty())
                 .map(Long::parseLong)
                 .toList();
+    }
+
+    // --- E8 refunds beans ---
+
+    @Bean
+    MerchantBalancePort merchantBalancePort(LedgerStore ledgerStore) {
+        return new LedgerMerchantBalanceAdapter(ledgerStore);
+    }
+
+    @Bean
+    RefundPaymentUseCase refundPaymentUseCase(PaymentRepository paymentRepository,
+            IdempotencyStore idempotencyStore, OutboxWriter outboxWriter, AuditWriter auditWriter,
+            MerchantBalancePort balancePort, EventEnvelopeFactory envelopeFactory,
+            TransactionTemplate transactionTemplate, Clock clock) {
+        return new RefundPaymentUseCase(paymentRepository, idempotencyStore, outboxWriter, auditWriter,
+                balancePort, envelopeFactory, transactionTemplate, clock);
     }
 }

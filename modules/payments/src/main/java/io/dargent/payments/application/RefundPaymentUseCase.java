@@ -72,7 +72,7 @@ public final class RefundPaymentUseCase {
         RefundResult result = core.result();
 
         return new Output(result.refundId(), result.txid(), result.amount(), result.feeReversal(),
-                result.net(), "SUCCEEDED", result.createdAt());
+                result.net(), "SUCCEEDED", result.createdAt(), false);
     }
 
     // ------------------------------------------------------------------ core
@@ -201,7 +201,8 @@ public final class RefundPaymentUseCase {
                 Long.parseLong(String.valueOf(body.get("feeReversal"))),
                 Long.parseLong(String.valueOf(body.get("net"))),
                 String.valueOf(body.get("status")),
-                Instant.parse(String.valueOf(body.get("createdAt"))));
+                Instant.parse(String.valueOf(body.get("createdAt"))),
+                true);
     }
 
     // ----------------------------------------------------------------- models
@@ -224,7 +225,8 @@ public final class RefundPaymentUseCase {
             long feeReversal,
             long net,
             String status,
-            Instant createdAt
+            Instant createdAt,
+            boolean replay
     ) {}
 
     private record RefundResult(

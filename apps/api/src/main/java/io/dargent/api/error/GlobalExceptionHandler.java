@@ -3,7 +3,9 @@ package io.dargent.api.error;
 import io.dargent.payments.application.IdempotencyKeyConflictException;
 import io.dargent.payments.application.IdempotencyKeyInFlightException;
 import io.dargent.payments.application.PspUnavailableException;
+import io.dargent.payments.application.RefundPaymentUseCase;
 import io.dargent.payments.domain.exception.InvalidTransitionException;
+import io.dargent.payments.domain.exception.RefundExceedsRemainingException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.LinkedHashMap;
@@ -93,6 +95,42 @@ public class GlobalExceptionHandler {
     public void pspUnavailable(HttpServletRequest request, HttpServletResponse response,
             PspUnavailableException e) {
         writer.write(request, response, ErrorCode.PSP_UNAVAILABLE, "Payment provider unavailable", e);
+    }
+
+    @ExceptionHandler(RefundPaymentUseCase.PaymentNotFoundException.class)
+    public void paymentNotFound(HttpServletRequest request, HttpServletResponse response,
+            RefundPaymentUseCase.PaymentNotFoundException e) {
+        writer.write(request, response, ErrorCode.NOT_FOUND, e.getMessage());
+    }
+
+    @ExceptionHandler(RefundPaymentUseCase.InvalidStateException.class)
+    public void invalidState(HttpServletRequest request, HttpServletResponse response,
+            RefundPaymentUseCase.InvalidStateException e) {
+        writer.write(request, response, ErrorCode.INVALID_STATE, e.getMessage());
+    }
+
+    @ExceptionHandler(RefundExceedsRemainingException.class)
+    public void refundExceedsRemaining(HttpServletRequest request, HttpServletResponse response,
+            RefundExceedsRemainingException e) {
+        writer.write(request, response, ErrorCode.REFUND_EXCEEDS_REMAINING, e.getMessage());
+    }
+
+    @ExceptionHandler(RefundPaymentUseCase.InsufficientMerchantBalanceException.class)
+    public void insufficientMerchantBalance(HttpServletRequest request, HttpServletResponse response,
+            RefundPaymentUseCase.InsufficientMerchantBalanceException e) {
+        writer.write(request, response, ErrorCode.INSUFFICIENT_MERCHANT_BALANCE, e.getMessage());
+    }
+
+    @ExceptionHandler(RefundPaymentUseCase.BalanceUnavailableException.class)
+    public void balanceUnavailable(HttpServletRequest request, HttpServletResponse response,
+            RefundPaymentUseCase.BalanceUnavailableException e) {
+        writer.write(request, response, ErrorCode.BALANCE_UNAVAILABLE, e.getMessage());
+    }
+
+    @ExceptionHandler(RefundPaymentUseCase.OptimisticLockException.class)
+    public void optimisticLock(HttpServletRequest request, HttpServletResponse response,
+            RefundPaymentUseCase.OptimisticLockException e) {
+        writer.write(request, response, ErrorCode.INVALID_STATE, e.getMessage());
     }
 
     @ExceptionHandler(Exception.class)

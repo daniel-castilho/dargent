@@ -21,7 +21,10 @@ public enum ErrorCode {
     IDEMPOTENCY_KEY_CONFLICT("idempotency_key_conflict", HttpStatus.CONFLICT, "Idempotency key conflict"),
     PAYMENT_NOT_REFUNDABLE("payment_not_refundable", HttpStatus.CONFLICT, "Payment not refundable"),
     REFUND_EXCEEDS_REMAINING("refund_exceeds_remaining", HttpStatus.CONFLICT, "Refund exceeds remaining amount"),
+    INSUFFICIENT_MERCHANT_BALANCE("insufficient_merchant_balance", HttpStatus.CONFLICT, "Insufficient merchant balance"),
+    BALANCE_UNAVAILABLE("balance_unavailable", HttpStatus.CONFLICT, "Balance service unavailable"),
     INVALID_TRANSITION("invalid_transition", HttpStatus.CONFLICT, "Invalid state transition"),
+    INVALID_STATE("invalid_state", HttpStatus.CONFLICT, "Invalid state"),
     IDEMPOTENCY_KEY_IN_FLIGHT("idempotency_key_in_flight", HttpStatus.TOO_EARLY, "Idempotency key in flight"),
     PSP_UNAVAILABLE("psp_unavailable", HttpStatus.BAD_GATEWAY, "Payment provider unavailable"),
     INTERNAL("internal", HttpStatus.INTERNAL_SERVER_ERROR, "Internal error");
