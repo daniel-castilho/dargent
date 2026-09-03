@@ -130,6 +130,14 @@ class RefundFlowIT {
         boolean refundProcessed = ingestion.processMessage(refundEnvelopeWithEventId(refundEventId, txid, 4000, 40, 3960));
         assertThat(refundProcessed).isTrue();
 
+        // Verify the refund event was actually POSTED (not IGNORED/REJECTED)
+        String eventStatus = jdbc.sql("select status from ledger.events where event_id = ?")
+                .param(UUID.fromString(refundEventId))
+                .query(String.class)
+                .optional()
+                .orElse("NOT_FOUND");
+        assertThat(eventStatus).as("refund event should be POSTED").isEqualTo("POSTED");
+
         // 6. Ledger postings [3]+[4] exact:
         //    [3] Dr available 4000 / Cr processing 4000
         //    [4] Dr fees:revenue 40 / Cr available 40
