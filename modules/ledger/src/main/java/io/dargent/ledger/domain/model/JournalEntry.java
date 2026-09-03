@@ -1,5 +1,6 @@
 package io.dargent.ledger.domain.model;
 
+import io.dargent.ledger.domain.exception.InvalidJournalEntryException;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -27,6 +28,30 @@ public final class JournalEntry {
         this.description = description;
         this.createdAt = createdAt;
         this.postings = List.copyOf(postings);
+        validate(postings);
+    }
+
+    private static void validate(List<Posting> postings) {
+        if (postings.size() < 2) {
+            throw new InvalidJournalEntryException("journal entry must have at least 2 postings, got " + postings.size());
+        }
+        long sumDebit = 0L;
+        long sumCredit = 0L;
+        for (Posting p : postings) {
+            long amt = p.amountCents();
+            if (amt <= 0) {
+                throw new InvalidJournalEntryException("posting amount must be positive, got " + amt);
+            }
+            if (p.direction() == EntryDirection.DEBIT) {
+                sumDebit += amt;
+            } else {
+                sumCredit += amt;
+            }
+        }
+        if (sumDebit != sumCredit) {
+            throw new InvalidJournalEntryException("journal entry must balance: Σ DEBIT (" + sumDebit
+                    + ") ≠ Σ CREDIT (" + sumCredit + ")");
+        }
     }
 
     public UUID id() { return id; }

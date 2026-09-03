@@ -147,11 +147,15 @@ class EventIngestionUseCaseTest {
                 eventId, "payment.confirmed", "txid-123",
                 UUID.fromString("11111111-1111-1111-1111-111111111111"),
                 raw, "POSTED", "Posted successfully"));
+        var clock = Clock.fixed(Instant.parse("2026-08-30T12:00:00Z"), java.time.ZoneOffset.UTC);
         store.postedEntries.add(new JournalEntry(
-                java.util.UUID.randomUUID(), eventId, "txid-123",
+                UUID.randomUUID(), eventId, "txid-123",
                 UUID.fromString("11111111-1111-1111-1111-111111111111"),
-                "Payment confirmed: txid-123", java.time.Instant.now(),
-                List.of()));
+                "Payment confirmed: txid-123", clock.instant(),
+                List.of(
+                        new Posting(UUID.randomUUID(), UUID.randomUUID(), "account:debit", EntryDirection.DEBIT, 1000, clock.instant()),
+                        new Posting(UUID.randomUUID(), UUID.randomUUID(), "account:credit", EntryDirection.CREDIT, 1000, clock.instant())
+                )));
 
         boolean ack = useCase.processMessage(raw);
         assertThat(ack).isTrue();
@@ -211,11 +215,15 @@ class EventIngestionUseCaseTest {
                 eventId, "payment.confirmed", "txid-123",
                 UUID.fromString("11111111-1111-1111-1111-111111111111"),
                 raw, "POSTED", "Posted successfully"));
+        var clock = Clock.fixed(Instant.parse("2026-08-30T12:00:00Z"), java.time.ZoneOffset.UTC);
         store.postedEntries.add(new JournalEntry(
-                java.util.UUID.randomUUID(), eventId, "txid-123",
+                UUID.randomUUID(), eventId, "txid-123",
                 UUID.fromString("11111111-1111-1111-1111-111111111111"),
-                "Payment confirmed: txid-123", java.time.Instant.now(),
-                List.of()));
+                "Payment confirmed: txid-123", clock.instant(),
+                List.of(
+                        new Posting(UUID.randomUUID(), UUID.randomUUID(), "account:debit", EntryDirection.DEBIT, 1000, clock.instant()),
+                        new Posting(UUID.randomUUID(), UUID.randomUUID(), "account:credit", EntryDirection.CREDIT, 1000, clock.instant())
+                )));
 
         boolean ack = useCase.processMessage(raw);
         assertThat(ack).isTrue();
