@@ -8,6 +8,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.Query;
 import java.util.Optional;
+import java.util.UUID;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -188,5 +189,36 @@ public class PaymentJpaAdapter implements PaymentRepository {
         }
         em.clear();
         return true;
+    }
+
+    @Override
+    @Transactional
+    public Optional<Payment> findByTxidForUpdate(String txid) {
+        var query = em.createQuery(
+                "select p from PaymentEntity p where p.txid = :txid", PaymentEntity.class)
+                .setParameter("txid", txid)
+                .setLockMode(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+        return query.getResultStream()
+                .findFirst()
+                .map(PaymentMapper::toDomain);
+    }
+
+    @Override
+    @Transactional
+    public void insertRefund(UUID paymentId, String txid, long amountCents, long feeReversalCents,
+            long netCents, String requestId) {
+        em.createNativeQuery("""
+                INSERT INTO payments.refunds (id, payment_id, txid, amount_cents,
+                    fee_reversal_cents, net_cents, request_id, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, now())
+                """)
+                .setParameter(1, java.util.UUID.randomUUID())
+                .setParameter(2, paymentId)
+                .setParameter(3, txid)
+                .setParameter(4, amountCents)
+                .setParameter(5, feeReversalCents)
+                .setParameter(6, netCents)
+                .setParameter(7, requestId)
+                .executeUpdate();
     }
 }

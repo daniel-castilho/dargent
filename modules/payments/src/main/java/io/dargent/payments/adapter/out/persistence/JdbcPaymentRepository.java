@@ -193,4 +193,33 @@ public class JdbcPaymentRepository implements PaymentRepository {
         // Note: in a real implementation we'd re-read to get the new version
         return true;
     }
+
+    @Override
+    public void insertRefund(UUID paymentId, String txid, long amountCents, long feeReversalCents, long netCents,
+            String requestId) {
+        jdbc.sql("""
+                insert into payments.refunds (id, payment_id, txid, amount_cents, fee_reversal_cents,
+                    net_cents, request_id, created_at)
+                values (:id, :paymentId, :txid, :amount, :feeRev, :net, :requestId, now())
+                """)
+                .param("id", java.util.UUID.randomUUID())
+                .param("paymentId", paymentId)
+                .param("txid", txid)
+                .param("amount", amountCents)
+                .param("feeRev", feeReversalCents)
+                .param("net", netCents)
+                .param("requestId", requestId)
+                .update();
+    }
+
+    @Override
+    public Optional<Payment> findByTxidForUpdate(String txid) {
+        return jdbc.sql("""
+                select * from payments.payments where txid = :txid FOR UPDATE
+                """)
+                .param("txid", txid)
+                .query(PaymentEntity.class)
+                .optional()
+                .map(PaymentMapper::toDomain);
+    }
 }

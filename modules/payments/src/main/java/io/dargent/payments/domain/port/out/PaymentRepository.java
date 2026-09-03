@@ -2,7 +2,9 @@ package io.dargent.payments.domain.port.out;
 
 import io.dargent.payments.domain.model.Payment;
 import io.dargent.payments.domain.model.Txid;
+import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Persistence seam for the payment aggregate. LOST-RACE CONTRACT (spec §6):
@@ -62,4 +64,17 @@ public interface PaymentRepository {
      * the row was updated.
      */
     boolean clearReconciliationScheduleIfPastWindow(Payment payment, java.time.Instant windowEnd, int expectedVersion);
+
+    /**
+     * Inserts a refund record for the given payment. The refund row is inserted within the same
+     * transaction as the payment status update. Returns true if inserted.
+     */
+    void insertRefund(UUID paymentId, String txid, long amountCents, long feeReversalCents, long netCents,
+            String requestId);
+
+    /**
+     * Finds the payment by txid with a pessimistic lock (SELECT FOR UPDATE).
+     * This is required for the refund use case to serialize concurrent refunds on the same payment.
+     */
+    Optional<Payment> findByTxidForUpdate(String txid);
 }

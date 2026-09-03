@@ -192,8 +192,30 @@ class WebhookIntakeUseCaseTest {
             store.put(payment.txid(), updated);
             committedVersions.put(payment.txid(), expectedVersion + 1);
             return true;
+}
+
+    @Override
+    public Optional<Payment> findByTxidForUpdate(String txid) {
+        Txid txidObj = new Txid(txid);
+        Payment stored = store.get(txidObj);
+        if (stored == null) {
+            return Optional.empty();
         }
+        // Return a copy so mutations don't affect the stored version
+        return Optional.of(Payment.restore(
+                stored.id(), stored.txid(), stored.merchantId(), stored.amount(),
+                stored.description(), stored.expiresAt(), stored.createdAt(),
+                stored.status(), stored.version(), stored.endToEndId(),
+                stored.fee(), stored.net(), stored.lateConfirmation(),
+                stored.confirmedAt(), stored.refunded().cents()));
     }
+
+    @Override
+    public void insertRefund(UUID paymentId, String txid, long amountCents, long feeReversalCents,
+            long netCents, String requestId) {
+        // No-op for test
+    }
+}
 
     static class FakeOutboxWriter implements OutboxWriter {
         final List<OutboxEntry> entries = new java.util.ArrayList<>();

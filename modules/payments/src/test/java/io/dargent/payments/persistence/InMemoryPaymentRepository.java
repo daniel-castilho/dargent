@@ -126,4 +126,20 @@ public class InMemoryPaymentRepository implements PaymentRepository {
                 current.refunded().cents(), null, 0));
         return true;
     }
+
+    @Override
+    public void insertRefund(UUID paymentId, String txid, long amountCents, long feeReversalCents,
+            long netCents, String requestId) {
+        // No-op for test
+    }
+
+    @Override
+    public Optional<Payment> findByTxidForUpdate(String txid) {
+        var txidObj = new Txid(txid);
+        var stored = store.get(txidObj);
+        if (stored == null) {
+            return Optional.empty();
+        }
+        return Optional.of(cloneViaRestore(stored));
+    }
 }
