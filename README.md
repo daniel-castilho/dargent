@@ -20,7 +20,7 @@ as its milestone closes — see *Current state* and the per-milestone acceptance
 | Guarantee | Mechanism |
 |---|---|
 | No payment is ever charged twice | Idempotency keys (request-level), webhook dedupe (`endToEndId` + type), consumer dedupe (`eventId`) |
-| No confirmed payment is lost — even without a webhook | Signed webhook intake + **future reconciliation job (E5, not started)** against the PSP |
+| No confirmed payment is lost — even without a webhook | Signed webhook intake + **live reconciler (E5)** polling the PSP for due/expired payments, with give-up past the resurrection window |
 | Every cent is traceable and balanced | Append-only **double-entry ledger** + daily balance proof + property tests |
 | Invalid states are impossible | State machine guarded by the entity **and** imposed by conditional `UPDATE`s (the database arbitrates races) |
 | No downtime deploys on bare metal | NGINX **blue-green with canary**, instant rollback, shutdown-under-load gate in CI |
@@ -71,8 +71,8 @@ POST /v1/payments (Idempotency-Key) → PENDING + dynamic QR (BR Code, EMV + CRC
 payer pays the QR at the simulator's "bank" → PSP fires signed webhook (HMAC + timestamp)
 webhook validated → dedupe → conditional UPDATE → CONFIRMED (fee computed in bps)
 outbox → SNS → SQS → ledger journals DR clearing / CR pending+fees · notifications notified
-webhook never arrived? → reconciler (E5, future) asks the PSP and confirms on its own
-QR expired but paid late? → resurrection (E5, future) with audit trail
+webhook never arrived? → reconciler (E5, live) polls the PSP and confirms on its own
+QR expired but paid late? → resurrection (E5, live) with audit trail
 POST /v1/payments/{txid}/refunds → partial/total, fee returned proportionally, ledger drains balance
 ```
 

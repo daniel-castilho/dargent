@@ -124,12 +124,18 @@ In `apps/api/src/test/java/io/dargent/api/payments/`:
 
 | Item | Deliverable | Test / Evidence | CI Run | Status |
 |---|---|---|---|---|
-| S0 | DEBT-1 rejecting-contract test | test name | pair | ◻ |
-| S1 | V111 applies + index used | IT harness | pair | ◻ |
-| S2 | expiration contract | `ExpirationSchedulerIT` | pair | ◻ |
-| S3 | reconciler confirms (sc.26) | `ReconcilerConfirmIT` | pair | ◻ |
-| S4 | resurrection exactly-once (sc.11/27) | `ReconcilerResurrectionIT` | pair | ◻ |
-| S5 | give-up window | `ReconcilerGiveUpIt` | pair | ◻ |
-| S6 | scenarios 9/10 legs | IT legs | pair | ◻ |
-| S7 | DEBT-4 coverage auditor | `JournalCoverageAuditorIT` | pair | ◻ |
-| S8 | docs + E5 row flip + citation | epics.md diff | pair | ◻ |
+| S0 | DEBT-1 rejecting-contract test | `PaymentTest.restore_rejects_*` (3 rejecting tests + legal round-trip; module unit tests)` | `242b6e3` / `33693408878` | ✅ |
+| S1 | V111 reconciliation columns + pending-expires index used | `V111__e5_reconciliation.sql` applied; `ExpirationSchedulerIT` + reconciler harness exercise the index | `46fad68` / `33694469538` | ✅ |
+| S2 | expiration contract | `ExpirationSchedulerIT` | `a7f626e` / `33700561182` | ✅ |
+| S3 | reconciler confirms (sc.26) | `ReconcilerConfirmIT` | `48ade01` / `33706674658` | ✅ |
+| S4 | resurrection exactly-once (sc.11/27) | `ReconcilerResurrectionIT` | `8128eb5` / `33707174938` | ✅ |
+| S5 | give-up window | `ReconcilerGiveUpIT` (renamed from the spec's `ReconcilerGiveUpIt` — failsafe include is case-sensitive `**/*IT.java`) | `b274493` / `33709904795` | ✅ |
+| S6 | scenarios 9/10 legs | `ReconcilerConsistencyIT` | `59a0eda` / `33710432248` | ✅ |
+| S7 | DEBT-4 coverage auditor | `JournalCoverageAuditorIT` | `470e10c` / `33711320405` | ✅ |
+| S8 | docs + E5 row flip + citation | `README.md` recast (lines 23/74/75 live), `docs/epics.md` E5 → ✅, CHANGELOG Unreleased | (this commit) / citation run | ✅ |
+
+> **§10 amendment notes (2026-09-02, executor):** S1's "V109 applies" is superseded by as-built V111
+> (`46fad68`, see §4 numbering note). S5's spec-text `ReconcilerGiveUpIt` (lowercase-It) diverges from the
+> landed `ReconcilerGiveUpIT` — the root `pom.xml` failsafe include is case-sensitive `**/*IT.java`, so a
+> lowercase `...It` surname would be silently skipped; the class was renamed to house-style and re-verified
+> green (run `33709904795`). Both are doc-level corrections; no spec behavior change.

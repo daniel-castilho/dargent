@@ -5,6 +5,25 @@ versioning: semantic, cut from annotated git tags (see [release-runbook](docs/re
 
 ## [Unreleased]
 
+### Added — E5 Expiration, Resurrection & Reconciliation (2026-09-02)
+
+- **Expiration scheduler** (V111): partial index `(expires_at) WHERE status='PENDING'`, conditional
+  `UPDATE ... WHERE status='PENDING'` to `EXPIRED` (the database arbitrates the race, DEBT-1 closed).
+- **Reconciler** (S3): polls the PSP's `GET /cob` truth for due/expired payments and confirms
+  `late=true` on its own when the PSP reports paid — signed-webhook loss is no longer a lost payment.
+- **Resurrection** (S4): an `EXPIRED` payment paid late resurrects to `CONFIRMED` (`late=true`) via the
+  shared confirm path, audited; exactly-once via conditional `UPDATE ... WHERE status IN (PENDING,EXPIRED)`.
+- **Give-up window** (S5): past `expiresAt + DARGENT_RECONCILER_GIVE_UP_HOURS` the reconciler stops
+  probing (clears `next_reconcile_at`) and audits `reconciliation_window_expired` — no endless resurrection.
+- **Consistency legs** (S6, scenarios 9 + 10): duplicate/late reconciliation delivery and replayed
+  reconciliation keep the final state consistent — one outbox `payment.confirmed` + one audit, never doubled.
+- **Journal coverage auditor** (S7, DEBT-4): composition-root detector that flags CONFIRMED payments
+  lacking a POSTED `payment.confirmed` journal event (Phase A) and vice-versa (Phase B), via two
+  per-schema SELECTs + Java set-diff (no cross-schema JOIN). Gated `DARGENT_JOURNAL_COVERAGE_ENABLED`
+  (default false). Detect-and-alarm only: writes `payments.audit_log journal_coverage_gap` rows.
+
+- **Closed:** DEBT-1, DEBT-4. **M3 remains open** for E8 (refunds) and E9 (delivery hardening).
+
 ### Added — E10 Notifications Consumer + Read API (2026-09-02)
 
 - **Notifications schema** (`modules/notifications` V101, schema-per-module): `notifications.notification`

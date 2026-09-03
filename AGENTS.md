@@ -118,9 +118,10 @@ with an owner and a target milestone.
 
 | ID | Debt | Owner | Target |
 |---|---|---|---|
-| DEBT-1 | `Payment.restore()` (persistence hydration) trusts snapshots without revalidating invariants — correct for ORM hydration, but a lying adapter could materialize an invalid aggregate. Add a rejecting-contract test (corrupt snapshot → exception) or adapter-side validation when the persistence seam is next touched. | — | E3 (persistence seam work) |
+| DEBT-1 | `Payment.restore()` (persistence hydration) trusts snapshots without revalidating invariants — correct for ORM hydration, but a lying adapter could materialize an invalid aggregate. Add a rejecting-contract test (corrupt snapshot → exception) or adapter-side validation when the persistence seam is next touched. | — | E5 (paid — `PaymentTest.restore_rejects_*`, `242b6e3`/`33693408878`) |
 | DEBT-2 | Dev-default DB credentials (`dargent`/`dargent`) present in `application.yaml`/compose defaults. Acceptable while `ConfigValidator` (which will refuse defaults in prod profile) does not exist — blocked on DEBT target of design.md §8.3. | — | E3/M4 |
 | DEBT-3 | E3/E4 closed on paper; paid by E3R. Rules prevent recurrence: (a) spec-test that cannot compile = stop-and-report; (b) inbound HTTP adapters live in boot app; (c) grep/verification output cites commit id. | — | E3R (paid) |
+| DEBT-4 | Money state can dangle: a payment confirmed yet never journaled (or a POSTED journal event with no confirmed payment) was previously undetectable. Add a coverage auditor. | — | E5 (paid — `JournalCoverageAuditor` + `JournalCoverageAuditorIT`, `470e10c`/`33711320405`) |
 
 ## 9. Governance amendments (E3R earned)
 

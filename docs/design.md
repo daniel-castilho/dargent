@@ -204,8 +204,9 @@ Domain is **pure where the money lives** (`payments`, `ledger`); pragmatism at t
 |---|---|
 | **Retryable creation (D19)** | `POST /payments` persists `PENDING` + idempotency, calls the PSP with retry/backoff; exhausted → `FAILED`. A down PSP never "loses" the merchant's request |
 | **Resurrection (D6)** | Confirmation webhook for an expired charge: accept (trust the PSP — rejecting valid money is worse), `late` flag, audit. A webhook beyond the **5-min anti-replay window** is rejected — and the reconciler saves the day |
-| **Reconciliation** | Job scans `PENDING` unconfirmed past a threshold → `GET /cob/{txid}` at the PSP → acts on its truth. Covers lost/delayed/rejected webhooks |
+| **Reconciliation** | Job scans `PENDING`/`EXPIRED` due rows (`next_reconcile_at <= now()`, conditional `UPDATE ... WHERE status IN (PENDING,EXPIRED)` — the DB arbitrates the race) → `GET /cob/{txid}` at the PSP → acts on its truth. Covers lost/delayed/rejected webhooks. Past `expires_at + DARGENT_RECONCILER_GIVE_UP_HOURS` (default 72) it **gives up** (clears `next_reconcile_at`, audits `reconciliation_window_expired`) — no endless resurrection (DARRGENT-003) |
 | **Expiration** | Scheduler with partial index (`WHERE status='PENDING' AND expires_at < now()`), conditional UPDATE. No delayed SQS messages (15-min max delay can't cover hour-long charges) |
+| **Journal coverage auditor** | Composition-root detector (gated `DARGENT_JOURNAL_COVERAGE_ENABLED`, default off): a CONFIRMED payment with no POSTED `payment.confirmed` ledger event, or a POSTED event with no CONFIRMED payment, is a dangling-money alert. Two per-schema SELECTs + Java set-diff (no cross-schema JOIN); `payments.audit_log journal_coverage_gap` rows. Detect-and-alarm only — never auto-repairs (DEBT-4) |
 | **Refunds (D17)** | N partials per payment. Rule `Σ refunds ≤ amount`. One transaction: `SELECT FOR UPDATE` on the payment row → validate remainder → insert refund → bump `version` → outbox |
 | **Fee on refund (D8)** | Returned proportionally: a 40% refund returns 40% of the fee to the merchant (revenue reversal in the ledger) |
 
