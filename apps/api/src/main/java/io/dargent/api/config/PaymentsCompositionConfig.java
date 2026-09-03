@@ -55,6 +55,9 @@ import tools.jackson.databind.ObjectMapper;
 @Configuration
 public class PaymentsCompositionConfig {
 
+    private static final org.slf4j.Logger log =
+            org.slf4j.LoggerFactory.getLogger(PaymentsCompositionConfig.class);
+
     @Bean
     ApiKeyAuthenticationFilter apiKeyAuthenticationFilter(ApiKeyRepository repository,
             ErrorResponseWriter errorWriter) {
@@ -303,6 +306,38 @@ public class PaymentsCompositionConfig {
         taskScheduler.setThreadNamePrefix("reconciler-");
         taskScheduler.initialize();
         taskScheduler.scheduleWithFixedDelay(scheduler::runOnce, Duration.ofMillis(intervalMs));
+        return taskScheduler;
+    }
+
+    // --- E5 journal coverage auditor beans (spec §6, DEBT-4); detect-and-alarm only ---
+
+    @Bean
+    @ConditionalOnProperty(name = "DARGENT_JOURNAL_COVERAGE_ENABLED", havingValue = "true", matchIfMissing = false)
+    JournalCoverageAuditor journalCoverageAuditor(JdbcClient jdbc, AuditWriter auditWriter) {
+        return new JournalCoverageAuditor(jdbc, auditWriter);
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "DARGENT_JOURNAL_COVERAGE_ENABLED", havingValue = "true", matchIfMissing = false)
+    JournalCoverageScheduler journalCoverageScheduler(JournalCoverageAuditor auditor) {
+        return new JournalCoverageScheduler(auditor);
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "DARGENT_JOURNAL_COVERAGE_ENABLED", havingValue = "true", matchIfMissing = false)
+    TaskScheduler journalCoverageSchedulerTask(JournalCoverageScheduler scheduler,
+            @Value("${DARGENT_JOURNAL_COVERAGE_SCAN_MS:60000}") long intervalMs) {
+        ThreadPoolTaskScheduler taskScheduler = new ThreadPoolTaskScheduler();
+        taskScheduler.setPoolSize(1);
+        taskScheduler.setThreadNamePrefix("journal-coverage-");
+        taskScheduler.initialize();
+        taskScheduler.scheduleWithFixedDelay(() -> {
+            try {
+                scheduler.runOnce();
+            } catch (RuntimeException ex) {
+                log.warn("Journal coverage scan failed; will retry next tick", ex);
+            }
+        }, Duration.ofMillis(intervalMs));
         return taskScheduler;
     }
 
