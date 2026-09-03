@@ -10,24 +10,25 @@ Binding. Deviation = stop-and-report (P2). Pre-adjudicated seed decisions are ma
   unknown event types correctly — proven).
 - No REST endpoints added. No new queues/topics. No delivery logic (E9).
 
-## §2 Migration V111 (`V111__e5_reconciliation.sql`, forward-only, expand-only)
-
-> **Disclosure (owner decision 2026-09-02):** the migration is **V111**, not the "V109 next free
-> slot" originally seeded. At execution time the migration dir has **no V109**, and **V110 exists**
-> (`V110__make_actor_key_id_nullable.sql`); V107 is the historical gap (never reused). V111 is the
-> next free number. The executing block-1 prompt was amended V109→V111 accordingly.
+## §2 Migration V109 (`V109__e5_reconciliation.sql`, forward-only, expand-only)
 
 ```sql
 ALTER TABLE payments.payments
     ADD COLUMN next_reconcile_at  timestamptz NULL,
     ADD COLUMN reconcile_attempts int NOT NULL DEFAULT 0;
 
+UPDATE payments.payments SET next_reconcile_at = created_at + interval '60 seconds'
+    WHERE status = 'PENDING' AND next_reconcile_at IS NULL;
+
+(As-built: landed as V111, not V109 — see §4 numbering note; also adds
+idx_payments_reconcile_due ON (next_reconcile_at) WHERE status IN ('PENDING','EXPIRED').)
+
 CREATE INDEX IF NOT EXISTS idx_payments_pending_expires
     ON payments.payments (expires_at) WHERE status = 'PENDING';
 ```
 
-Landed migrations are never edited. If V111 is taken at execution time, take the next free number
-and disclose. **[seed: V111]**
+Landed migrations are never edited. If V109 is taken at execution time, take the next free number
+and disclose. **[seed: V109]**
 
 ## §3 Expiration scheduler
 
@@ -48,7 +49,16 @@ and disclose. **[seed: V111]**
   in ITs). Response mapping follows the E2 contract fields (status + paid amount + paidAt).
 - Engine (payments module, Spring-free use case), driven by `apps/api` fixed-delay
   (`DARGENT_RECONCILER_SCAN_MS`, gate `DARGENT_RECONCILER_ENABLED` default **false**), runOnce-style:
-  scan `status='PENDING' AND next_reconcile_at <= now()` → per payment (own tx):
+  scan `status IN ('PENDING','EXPIRED') AND next_reconcile_at IS NOT NULL AND next_reconcile_at <= now()`
+  → per payment (own tx):
+  - [Amended 2026-09-02 — TD-21: §4 originally scanned PENDING only, making §7.3 resurrection
+    unsatisfiable by the reconciler. Adjudicated: EXPIRED is IN the scan — ALL locally-EXPIRED rows
+    poll within the give-up window (PIX late-payment semantics, sc.27).]
+  - [TD-21 co-amendment — initialization: create path sets `next_reconcile_at = now + first rung`
+    in the insert tx; NULL means "given up / not scheduled", never "fresh"; V-backfill for open rows.]
+  - [Numbering note 2026-09-02 — audit: the migration landed as V111 (V109 was free at execution;
+    skip undisclosed — minor §9d miss, adjudicated KEEP: never rename a landed migration; V107/V109
+    join the gap history. Spec §2's V109 reference is superseded by as-built V111.]
   - PSP **PAID** → confirm/resurrect path (§5). Confirm computes fee (100 bps) exactly like E4.
   - PSP **EXPIRED** → local conditional expire exactly as §3 (audit `expire_payment`).
   - PSP still **ACTIVE/PENDING** → ladder: `next_reconcile_at = now + backoff[min(attempts, cap)]`,
@@ -57,8 +67,8 @@ and disclose. **[seed: V111]**
   (1 m → 5 m → **15 m RPO anchor** → 1 h cap). Not E9's delivery numbers.
 - **Give-up window [seed, size = spec decision]:** when `now() > expires_at +
   DARGENT_RECONCILER_GIVE_UP_HOURS` (default **72**): conditional clear
-  `next_reconcile_at = NULL` (stops scheduling), audit `reconciliation_window_expired`. Manual
-  review territory. The PENDING row stays PENDING — no fake terminal state.
+  `next_reconcile_at = NULL` (stops scheduling; NULL = given up), audit `reconciliation_window_expired`.
+  Applies to PENDING and EXPIRED rows alike. Manual review territory. No fake terminal state.
 - **No ShedLock, no advisory lock [seed]:** every transition is conditional; a blue-green duplicate
   scheduler loses races and no-ops. Revisit only with observed duplicate PSP polling (register first).
 

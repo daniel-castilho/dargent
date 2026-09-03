@@ -510,3 +510,40 @@ as E11–E14 commissioning inputs; E10 still gated on BD-15/16 (+ now TD-15) fix
 **Owner adjudications (2026-09-02, same channel)**: TD-19 → flip lands in the owner's governance commit (patch pre-built); TD-20 → FULL rider (cross-tenant test + naming guard + merchantId restored); RAT-E10-IT → seal granted, process note accepted. Closure path: rider lands (content commit + green run + citation) AND owner's governance commit flips epics.md → E10 ✅, M2 ✅ declared by this channel.
 
 **Governance commit verified (2026-09-02 22:02Z)**: `368e76c4a8cf` — epics.md flip + patch + rider prompt landed (3 files; run #121 `33688340781`). Register + verification (this file, now MERGED: repo canonical rows + audit sections) still pending the owner's next governance commit. `internal-notes/ideias-para-roubar.md` deliberately NOT in the public repo (never committed; strategy notes — recommended to keep local).
+
+## E10/M2 CLOSURE — declared by this channel (2026-09-02)
+
+- Rider chain: `79aa8e5abb` (content, run **#123 `33690323704`** green) → `4f3e8f2c1f` (citation, matrix S6-rider row with pair). All TD-20 adjudications verified line-level (echo restored, bidirectional cross-tenant proof, naming negatives). #124 = citation run, unregistered per #57/#67 precedent.
+- Governance chain: flip `fa00eb3`/`#119` + citation `be91286`/`#120`; owner commits `368e76c4a8cf` (epics.md E10 ✅ + M2 ✅, run #121 green) and `5794f294c613` (register + merged verification, run #122 green) — API-verified.
+- **E10 CLOSED. M2 CLOSED.** Milestones: M0 ✅ · M1 ✅ · M2 ✅. Next: M3 (E5 → E8 → E9).
+- Optional one-line touch for the next governance commit: epics.md E10 row tail "TD-20 rider pending (register)" → "TD-20 rider closed (`79aa8e5`/`#123`, citation `4f3e8f2`/`#124`)". Not blocking — the row points at the register, which now says CLOSED.
+
+**E5 commissioned (2026-09-02)**: owner approved the full package — 5 artifacts emitted (`tasks/expiration-reconciliation-e5-prompt.md` + backlog + sequence + spec + block-1 execution prompt), seeded from the pre-adjudicated design seed (2026-08-29) + DEBT-1 (step-0 rider) + DEBT-4 (Block 2 coverage auditor, per its register recommendation). Rider TD-20 chain closed earlier same day (`79aa8e5`/`#123` green + citation `4f3e8f2`/`#124`).
+
+**E5 Block 1 — Q4 adjudication (2026-09-02, step-0 stop-and-report)**: DEBT-1's suspected gap CONFIRMED empirically — the rejecting-contract tests ran RED: `Payment.restore()` silently accepts 3/3 corrupt snapshots (CONFIRMED without fee/net/confirmedAt; non-positive amount; expiry-before-creation). Fix location adjudicated: validation INSIDE `Payment.restore()` — the debt's threat model is a lying adapter, so the defense cannot live in the adapter; restore() is the hydration choke point and the aggregate is the single authority (DEBT-5 philosophy consistency). Main-code widening SANCTIONED, confined to restore() + one domain exception; invariants mirror the factories' own rules, never invented; tests become the permanent contract. Recorded in the block-1 prompt addendum. DEBT-1 (AGENTS §8) closes on the rider's green pair.
+
+## E5 Block 1 — closure audit: APPROVED, all-green chain, DEBT-1 closes (2026-09-02, main `8128eb573c`)
+
+### Chain (API; 5 commits, 5 runs, ZERO reds — local pre-push iteration for the reconciled==0 fixes, no pushed reds to cite)
+
+| Step | Sha | Run | Verdict |
+|---|---|---|---|
+| 0 DEBT-1 | `242b6e3` | **#125 `33693408878` ✅** (uncited in handoff — sloppy, nothing hidden) | restore() validates by status (IAE + typed InvalidTransitionException, mirrors factories — per Q4 adjudication). DEBT-1 CLOSED |
+| 1 migration | `46fad68` | **#126 `33694469538` ✅** (uncited) | landed as **V111** (not V109 — see V-NUM-E5); content EXCEEDS spec: TD-21 index + backfill already in |
+| 2 expiration | `a7f626e` | #127 `33700561182` ✅ | scheduler + IT |
+| 3 reconciler | `48ade01` | #128 `33706674658` ✅ | scan per TD-21, `Timestamp.from` binds, PSP WireMock, amount-mismatch guard |
+| 4 resurrection | `8128eb5` | #129 `33707174938` ✅ | scenarios 11+27, exactly-once |
+
+### Line-level verified
+
+- Create-path initialization implemented (`Payment` schedules `next_reconcile_at = now + first rung` at creation — TD-21 co-amendment; no "born given-up" bug). Give-up clears to NULL. `late=true` + audit command names per spec. Scope clean (zero ledger/notifications/psp prod touches). Zero `Thread.sleep`/`@Disabled` in E5 tests. MigrationIT extended (V111 applies on real PG).
+- Engineer's 3 root-cause fixes (Instant→Timestamp binding, 25-char txid in seed, unquoted endToEndId in stub) — all plausible and consistent with the all-green chain.
+
+### Adjudications on this audit
+
+1. **V-NUM-E5** (register): KEEP V111; V107/V109 gap history; next payments migration V112; spec §2 annotated; the missed disclosure noted (minor §9d miss).
+2. **Uncited green runs** for steps 0/1: noted; P1 discipline is for reds — but pairs must be cited in full going forward (number AND id, every step).
+
+### Verdict
+
+**Block 1 APPROVED. DEBT-1 CLOSED.** Block 2 commissioned: give-up window IT, scenarios 9/10 legs, DEBT-4 coverage auditor, docs amendment (spec sync with TD-21/V111 as-built + register rows + README TD-15-sentence flip at S8) + E5 row flip + citation.
