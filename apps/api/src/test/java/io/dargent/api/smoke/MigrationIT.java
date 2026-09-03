@@ -151,6 +151,49 @@ class MigrationIT {
     }
 
     @Test
+    void v112_refunds_table_applies() {
+        // E8 S1 accept: V112 applies on real PG — refunds table with columns, CHECK, and index (spec §2).
+        List<String> refundsColumns = jdbc.sql("""
+                select column_name
+                from information_schema.columns
+                where table_schema = 'payments' and table_name = 'refunds'
+                order by ordinal_position
+                """).query(String.class).list();
+        assertThat(refundsColumns).containsExactly(
+                "id", "payment_id", "txid", "amount_cents", "fee_reversal_cents",
+                "net_cents", "request_id", "created_at");
+
+        // CHECK constraints (4: amount>0, fee_rev>=0, net>=0, net=amount-fee)
+        List<String> refundChecks = jdbc.sql("""
+                select cc.constraint_name
+                from information_schema.check_constraints cc
+                join information_schema.constraint_column_usage ccu
+                  on cc.constraint_name = ccu.constraint_name
+                where ccu.table_schema = 'payments' and ccu.table_name = 'refunds'
+                """).query(String.class).list();
+        assertThat(refundChecks).hasSizeGreaterThanOrEqualTo(3); // amount>0, fee_rev>=0, net>=0, net=amount-fee
+
+        // FK to payments
+        List<String> refundFk = jdbc.sql("""
+                select rc.constraint_name
+                from information_schema.referential_constraints rc
+                join information_schema.key_column_usage kcu
+                  on rc.constraint_name = kcu.constraint_name
+                where kcu.table_schema = 'payments' and kcu.table_name = 'refunds'
+                  and kcu.column_name = 'payment_id'
+                """).query(String.class).list();
+        assertThat(refundFk).hasSize(1);
+
+        // Index (payment_id, created_at DESC)
+        List<String> refundIndex = jdbc.sql("""
+                select indexname
+                from pg_indexes
+                where schemaname = 'payments' and indexname = 'idx_refunds_payment_created'
+                """).query(String.class).list();
+        assertThat(refundIndex).containsExactly("idx_refunds_payment_created");
+    }
+
+    @Test
     void flyway_creates_all_module_schemas() {
         List<String> schemas = jdbc
                 .sql("select schema_name from information_schema.schemata")
@@ -179,7 +222,7 @@ class MigrationIT {
                 .query(String.class)
                 .list();
 
-        assertThat(paymentTables).containsExactlyInAnyOrder("payments", "api_keys", "idempotency_keys", "outbox", "audit_log", "webhook_events", "flyway_schema_history");
+        assertThat(paymentTables).containsExactlyInAnyOrder("payments", "api_keys", "idempotency_keys", "outbox", "audit_log", "webhook_events", "refunds", "flyway_schema_history");
         assertThat(ledgerTables).containsExactlyInAnyOrder("events", "journal_entries", "postings", "balances", "settlements", "audit_log", "flyway_schema_history");
         // notifications (E10): notification table + flyway_schema_history
         assertThat(notificationTables).containsExactlyInAnyOrder("notification", "flyway_schema_history");
