@@ -142,7 +142,7 @@ In `apps/api/src/test/java/io/dargent/api/payments/`:
 | S5 | give-up window | `ReconcilerGiveUpIT` (renamed from the spec's `ReconcilerGiveUpIt` — failsafe include is case-sensitive `**/*IT.java`) | `b274493` / `33709904795` | ✅ |
 | S6 | scenarios 9/10 legs | `ReconcilerConsistencyIT` | `59a0eda` / `33710432248` | ✅ |
 | S7 | DEBT-4 coverage auditor | `JournalCoverageAuditorIT` | `470e10c` / `33711320405` | ✅ |
-| S8 | docs + E5 row flip + citation | `README.md` recast (lines 23/74/75 live), `docs/epics.md` E5 → ✅, CHANGELOG Unreleased | (this commit) / citation run | ✅ |
+| S8 | docs + E5 row flip + citation | `README.md` recast (lines 23/74/75 live), `docs/epics.md` E5 → ✅, CHANGELOG Unreleased | content `f6ede8a` / **#134 `33711990378`** ✅; citation run #136 (unregistered per #57/#67) | ✅ |
 
 > **§10 amendment notes (2026-09-02, executor):** S1's "V109 applies" is superseded by as-built V111
 > (`46fad68`, see §4 numbering note). S5's spec-text `ReconcilerGiveUpIt` (lowercase-It) diverges from the
