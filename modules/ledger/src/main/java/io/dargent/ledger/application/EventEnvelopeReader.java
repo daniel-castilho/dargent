@@ -113,4 +113,51 @@ public final class EventEnvelopeReader {
             long netCents,
             boolean late
     ) {}
+
+    /**
+     * Extracts the refund payload from a refund.created event.
+     * Validates required fields and the net = amount - feeReversal invariant.
+     */
+    public RefundPayload extractRefundPayload(EventEnvelope envelope) {
+        if (!"refund.created".equals(envelope.type())) {
+            throw new IllegalArgumentException("Expected refund.created, got " + envelope.type());
+        }
+        JsonNode p;
+        try {
+            p = mapper.readTree(envelope.payload());
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Invalid payload JSON: " + e.getMessage(), e);
+        }
+        if (!p.isObject()) {
+            throw new IllegalArgumentException("Refund payload must be a JSON object");
+        }
+
+        long amount = p.path("amount").asLong();
+        long feeRefund = p.path("feeRefund").asLong();
+        long netRefund = p.path("netRefund").asLong();
+        String txid = p.path("txid").asText();
+        String refundId = p.path("refundId").asText();
+
+        if (netRefund != amount - feeRefund) {
+            throw new IllegalArgumentException("Invariant violation: netRefund != amount - feeRefund (" + netRefund + " != " + amount + " - " + feeRefund + ")");
+        }
+
+        return new RefundPayload(
+                txid,
+                envelope.merchantId().toString(),
+                amount,
+                feeRefund,
+                netRefund,
+                refundId
+        );
+    }
+
+    public record RefundPayload(
+            String txid,
+            String merchantId,
+            long amountCents,
+            long feeReversalCents,
+            long netCents,
+            String refundId
+    ) {}
 }

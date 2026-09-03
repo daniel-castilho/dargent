@@ -3,6 +3,8 @@ package io.dargent.ledger.domain.port.out;
 import io.dargent.ledger.domain.model.Account;
 import io.dargent.ledger.domain.model.JournalEntry;
 import io.dargent.ledger.domain.model.Settlement;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -36,6 +38,16 @@ public interface LedgerStore {
      * Assumes event was already inserted and status is POSTED.
      */
     void postJournal(JournalEntry entry);
+
+    /**
+     * Posts a refund journal entry with conditional balance drain (spec §5 refund.created).
+     * Performs conditional drain on `merchant:{id}:available` for net drain = amount - feeReversal.
+     * If drain fails (0 rows), the journal is NOT posted and event is marked IGNORED with
+     * note `insufficient_merchant_balance` + audit `refund_skipped_balance`.
+     * Returns true if posted, false if drain failed (IGNORED).
+     */
+    boolean postRefund(UUID eventId, String txid, UUID merchantId, long amountCents, long feeReversalCents,
+            String description, Instant createdAt, Clock clock);
 
     /**
      * Upserts balance per account (credit-positive).

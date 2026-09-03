@@ -142,6 +142,13 @@ class LedgerReconciliationUseCaseTest {
         }
 
         @Override
+        public boolean postRefund(java.util.UUID eventId, String txid, java.util.UUID merchantId,
+                long amountCents, long feeReversalCents, String description,
+                java.time.Instant createdAt, java.time.Clock clock) {
+            return false;
+        }
+
+        @Override
         public int claimEventForResume(java.util.UUID eventId) {
             return 0;
         }

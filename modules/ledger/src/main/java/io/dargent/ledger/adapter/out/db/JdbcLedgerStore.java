@@ -1,6 +1,7 @@
 package io.dargent.ledger.adapter.out.db;
 
 import io.dargent.ledger.domain.model.Account;
+import io.dargent.ledger.domain.model.EntryDirection;
 import io.dargent.ledger.domain.model.JournalEntry;
 import io.dargent.ledger.domain.model.Posting;
 import io.dargent.ledger.domain.model.Settlement;
@@ -9,6 +10,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.sql.Timestamp;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -299,5 +302,64 @@ public final class JdbcLedgerStore implements LedgerStore {
         }
 
         return ProofResult.ok(accountsChecked, entriesChecked, postingsChecked);
+    }
+
+    @Override
+    public boolean postRefund(UUID eventId, String txid, UUID merchantId, long amountCents, long feeReversalCents,
+            String description, Instant createdAt, Clock clock) {
+        return txTemplate.execute(txStatus -> {
+            // Conditional drain on available balance: net = amount - feeReversal
+            long netDrain = amountCents - feeReversalCents;
+            int drained = jdbc.sql("""
+                    UPDATE ledger.balances
+                    SET balance_cents = balance_cents - ?, updated_at = ?, last_event_id = ?
+                    WHERE account = ? AND balance_cents >= ?
+                    """)
+                    .params(netDrain, Timestamp.from(clock.instant()), eventId,
+                            "merchant:" + merchantId + ":available", netDrain)
+                    .update();
+
+            if (drained == 0) {
+                // Drain failed — insufficient balance. Mark event IGNORED with note.
+                jdbc.sql("""
+                        UPDATE ledger.events
+                        SET status = 'IGNORED', note = 'insufficient_merchant_balance'
+                        WHERE event_id = ?
+                        """)
+                        .param(eventId)
+                        .update();
+                // Audit the skipped refund
+                recordAudit(new AuditEntry(UUID.randomUUID(), "refund_skipped_balance",
+                        null, null, "txid=" + txid + ",event=" + eventId));
+                return false;
+            }
+
+            // Build postings: [3] Dr available / Cr processing, [4] Dr fees:revenue / Cr available
+            UUID entryId = UUID.randomUUID();
+            var postings = List.of(
+                    new Posting(UUID.randomUUID(), entryId, "merchant:" + merchantId + ":available",
+                            EntryDirection.DEBIT, amountCents, clock.instant()),
+                    new Posting(UUID.randomUUID(), entryId, "payments:processing",
+                            EntryDirection.CREDIT, amountCents, clock.instant()),
+                    new Posting(UUID.randomUUID(), entryId, "fees:revenue",
+                            EntryDirection.DEBIT, feeReversalCents, clock.instant()),
+                    new Posting(UUID.randomUUID(), entryId, "merchant:" + merchantId + ":available",
+                            EntryDirection.CREDIT, feeReversalCents, clock.instant())
+            );
+
+            var entry = new JournalEntry(
+                    entryId,
+                    eventId,
+                    txid,
+                    merchantId,
+                    description,
+                    createdAt,
+                    postings
+            );
+
+            // Write journal + postings + balances
+            postJournal(entry);
+            return true;
+        });
     }
 }

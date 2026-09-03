@@ -364,5 +364,11 @@ class EventIngestionUseCaseTest {
         public ProofResult verifyProof() {
             return new ProofResult(true, null, 0, 0, 0);
         }
+
+        @Override
+        public boolean postRefund(UUID eventId, String txid, UUID merchantId, long amountCents,
+                long feeReversalCents, String description, Instant createdAt, Clock clock) {
+            return false; // No-op for test
+        }
     }
 }

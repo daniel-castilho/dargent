@@ -194,5 +194,11 @@ class SettlementUseCaseTest {
         public int claimEventForResume(UUID eventId) {
             return 0;
         }
+
+        @Override
+        public boolean postRefund(UUID eventId, String txid, UUID merchantId, long amountCents,
+                long feeReversalCents, String description, Instant createdAt, Clock clock) {
+            return false;
+        }
     }
 }
