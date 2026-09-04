@@ -23,6 +23,14 @@ import java.util.UUID;
  */
 public final class JdbcLedgerStore implements LedgerStore {
 
+    /**
+     * System actor used when the ledger initiates an audit row with no API key:
+     * the insufficient-balance refund skip (BD-14 sentinel pattern; see
+     * {@code WebhookIntakeUseCase.WEBHOOK_AUDIT_ACTOR}). {@code ledger.audit_log.actor_key}
+     * is NOT NULL, so a sentinel is required.
+     */
+    private static final UUID SYSTEM_AUDIT_ACTOR = UUID.fromString("00000000-0000-0000-0000-000000000000");
+
     private final JdbcClient jdbc;
     private final TransactionTemplate txTemplate;
 
@@ -328,9 +336,9 @@ public final class JdbcLedgerStore implements LedgerStore {
                         """)
                         .param(eventId)
                         .update();
-                // Audit the skipped refund
+                // Audit the skipped refund (system actor, real merchant; actor_key is NOT NULL)
                 recordAudit(new AuditEntry(UUID.randomUUID(), "refund_skipped_balance",
-                        null, null, "txid=" + txid + ",event=" + eventId));
+                        SYSTEM_AUDIT_ACTOR, merchantId, "txid=" + txid + ",event=" + eventId));
                 return false;
             }
 
