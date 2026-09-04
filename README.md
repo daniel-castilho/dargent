@@ -23,8 +23,8 @@ as its milestone closes — see *Current state* and the per-milestone acceptance
 | No confirmed payment is lost — even without a webhook | Signed webhook intake + **live reconciler (E5)** polling the PSP for due/expired payments, with give-up past the resurrection window |
 | Every cent is traceable and balanced | Append-only **double-entry ledger** + daily balance proof + property tests |
 | Invalid states are impossible | State machine guarded by the entity **and** imposed by conditional `UPDATE`s (the database arbitrates races) |
-| No downtime deploys on bare metal | NGINX **blue-green with canary**, instant rollback, shutdown-under-load gate in CI |
-| Quality is auditable | Acceptance matrix per milestone, security gates in CI, executable documentation as tests |
+| No downtime deploys on bare metal | NGINX **blue-green with canary (M4)**, instant rollback, shutdown-under-load gate in CI **(M4)** |
+| Quality is auditable | Acceptance matrix per milestone, security gates in CI **(M4)**, executable documentation as tests |
 
 ## Architecture
 

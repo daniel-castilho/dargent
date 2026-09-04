@@ -98,6 +98,6 @@ commit ids.
 | S1 | exhaustion contract | unit matrix + `OutboxExhaustionIT` | `d34c414` / run # | ✅ |
 | S2 | audited requeue | `OutboxRequeueIT` (sc.19 e2e) + `OutboxAdminRotationIT` (403 leg) | `8fcb2e1` / run # | ✅ |
 | S3 | republish tool | `OutboxRepublishIT` + `OutboxRepublishRotationIT` | `eb7c06d` / run # | ✅ |
-| S4 | sc.20 no-double-journal | `EventIngestionUseCase` + `hasPostedJournalForTxid` | `dd8004f` / run # | ✅ |
+| S4 | sc.20 no-double-journal | `OutboxRepublishIT.republish_re_run_produces_identical_new_ids` (deterministic `{original}-r{n}` → consumer dedupe by `event_id`) | `eb7c06d` / run # | ✅ |
 | S5 | DLQ recipes | `docs/dlq-recipes.md` + runnable queries | HEAD / run # | ✅ |
 | S6 | docs + E9 ✅ + **M3 ✅** + citation | `design.md` §13/§15, `CHANGELOG.md` 1.0.3 | HEAD / run # | ✅ |
