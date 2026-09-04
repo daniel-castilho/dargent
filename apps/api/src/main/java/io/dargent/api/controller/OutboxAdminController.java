@@ -11,10 +11,14 @@ import io.dargent.payments.domain.port.out.AuditWriter;
 import io.dargent.payments.domain.port.out.OutboxEventStore;
 import io.dargent.payments.domain.port.out.OutboxEventStore.RequeueOutcome;
 import io.dargent.payments.domain.port.out.OutboxEventStore.RequeueResult;
+import io.dargent.payments.domain.port.out.OutboxEventStore.RepublishResult;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,6 +31,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Admin outbox surface (E9 §3/§4): human recovery actions on the transactional outbox, gated by a
@@ -139,6 +145,82 @@ class OutboxAdminController {
             errorWriter.write(request, response, ErrorCode.NOT_FOUND, "Outbox row not found",
                     (java.util.Map<String, String>) null);
             return null;
+        }
+    }
+
+    /**
+     * E9 §4: republish SENT outbox rows within a time window — inserts new PENDING rows with
+     * deterministic {@code eventId = {original}-r{n}} so re-running the tool is idempotent at consumers.
+     * Bounded: max 30-day window, max 500 rows per call. Admin-gated; audited as {@code outbox_republished}.
+     * Response: {@code {"matched": N, "republished": M}} (M ≤ N; M < N only via lost races).
+     * 400 {@code invalid_window} on bad ISO-8601, inverted bounds, or window >30d.
+     */
+    @PostMapping("/republish")
+    void republish(HttpServletRequest request, HttpServletResponse response,
+            @AuthenticationPrincipal ApiKeyPrincipal principal) throws IOException {
+        if (!isAdmin(request, response, principal)) {
+            return;
+        }
+        String requestId = (String) request.getAttribute(RequestIdFilter.ATTRIBUTE);
+        final UUID adminKeyId = principal.keyId();
+        final UUID adminMerchantId = principal.merchantId();
+
+        // Parse JSON body
+        RepublishRequest req;
+        try {
+            req = parseRepublishRequest(request);
+        } catch (Exception e) {
+            errorWriter.write(request, response, ErrorCode.INVALID_WINDOW,
+                    "Invalid request body: " + e.getMessage(), (java.util.Map<String, String>) null);
+            return;
+        }
+        if (req == null) {
+            return; // error already written
+        }
+
+        RepublishResult result = txTemplate.execute(status -> {
+            RepublishResult r = store.republishSent(req.from(), req.to(), req.types(), 500, clock.instant());
+            if (r.matched() > 0) {
+                String windowMarker = "repub-" + req.from().toString().substring(0, 10);
+                auditWriter.record("outbox_republished", adminKeyId, adminMerchantId,
+                        windowMarker, requestId);
+            }
+            return r;
+        });
+
+        response.setStatus(HttpStatus.OK.value());
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+        response.getWriter().write("{\"matched\":" + result.matched() + ",\"republished\":"
+                + result.republished() + "}");
+    }
+
+    private record RepublishRequest(Instant from, Instant to, List<String> types) {}
+
+    private RepublishRequest parseRepublishRequest(HttpServletRequest request) throws IOException {
+        try (var reader = request.getReader()) {
+            String body = reader.lines().reduce("", (a, b) -> a + b);
+            if (body.isEmpty()) {
+                return null;
+            }
+            var mapper = new tools.jackson.databind.json.JsonMapper();
+            JsonNode node = mapper.readTree(body);
+            Instant from = Instant.parse(node.get("from").asText());
+            Instant to = Instant.parse(node.get("to").asText());
+            List<String> types = new java.util.ArrayList<>();
+            if (node.has("types") && node.get("types").isArray()) {
+                for (JsonNode t : node.get("types")) {
+                    types.add(t.asText());
+                }
+            }
+            // Validate window: from <= to, max 30 days
+            if (from.isAfter(to)) {
+                throw new IllegalArgumentException("from must be before or equal to to");
+            }
+            if (Duration.between(from, to).toDays() > 30) {
+                throw new IllegalArgumentException("window exceeds 30 days");
+            }
+            return new RepublishRequest(from, to, types);
         }
     }
 }

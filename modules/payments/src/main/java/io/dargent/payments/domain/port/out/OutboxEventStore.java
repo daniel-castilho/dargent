@@ -87,6 +87,25 @@ public interface OutboxEventStore {
     }
 
     /**
+     * Republishes SENT outbox rows within a time window (E9 §4): inserts new PENDING rows for each
+     * matched SENT row — new UUID id, **new deterministic event_id = {original.eventId}-r{n}** where
+     * n is the row's replay ordinal (so re-running the same republish produces identical new ids,
+     * making the tool itself idempotent at consumers), same type/payload/aggregate_id/request_id,
+     * attempt_count=0, next_attempt_at=now. Original SENT rows untouched.
+     *
+     * @param from        window start inclusive on published_at
+     * @param to          window end exclusive on published_at
+     * @param types       optional event type filter (empty = all types)
+     * @param maxRows     bounded batch cap (contract: ≤500)
+     * @param now         clock reference for next_attempt_at
+     * @return result with matched count and republished count (M ≤ N; M < N only via lost races)
+     */
+    RepublishResult republishSent(Instant from, Instant to, List<String> types, int maxRows, Instant now);
+
+    /** Result of {@link #republishSent}. */
+    record RepublishResult(int matched, int republished) {}
+
+    /**
      * Purges old SENT rows for retention (E6 §5.4).
      *
      * @param cutoff   rows with {@code published_at < cutoff} are deleted

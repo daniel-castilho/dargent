@@ -365,6 +365,12 @@ class OutboxDeliveryUseCaseTest {
         }
 
         @Override
+        public RepublishResult republishSent(Instant from, Instant to, List<String> types, int maxRows, Instant now) {
+            // Test fake: just return 0,0 (no SENT rows tracked)
+            return new RepublishResult(0, 0);
+        }
+
+        @Override
         public int purgeSent(Instant cutoff, int limit) {
             purgeCutoffs.add(cutoff);
             return 0;
