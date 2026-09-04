@@ -423,4 +423,13 @@ public final class JdbcLedgerStore implements LedgerStore {
             return null;
         });
     }
+
+    @Override
+    public boolean hasPostedJournalForTxid(String txid) {
+        return jdbc.sql("SELECT 1 FROM ledger.journal_entries WHERE txid = ?")
+                .param(txid)
+                .query(Integer.class)
+                .optional()
+                .isPresent();
+    }
 }
