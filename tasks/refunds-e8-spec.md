@@ -115,13 +115,13 @@ Unchanged set (com.fasterxml=0, AWS confinement, Spring-free module mains, no Th
 | S0 | DEBT-5 barrier | unit rejects + DB barrier test (Block 1) | Block 1 | ✅ |
 | S1 | V112 applies | MigrationIT leg (Block 1) | Block 1 | ✅ |
 | S2 | refund use case | unit matrix + D8 properties (Block 1) | Block 1 | ✅ |
-| S3/S4 | refund endpoint + balance guard | endpoint exercised via `RefundBalanceGuardIT` (real HTTP surface, S6) — `RefundEndpointIT` not separately delivered (see backlog); guard is unit-tested in `RefundPaymentUseCaseTest` + HTTP-asserted in `RefundBalanceGuardIT` | local `mvn -B verify` BUILD SUCCESS (pending push) | ✅ |
+| S3/S4 | refund endpoint + balance guard | endpoint exercised via `RefundBalanceGuardIT` (real HTTP surface, S6) — `RefundEndpointIT` not separately delivered (see backlog); guard is unit-tested in `RefundPaymentUseCaseTest` + HTTP-asserted in `RefundBalanceGuardIT` | `369b0c6` / CI `33831934579` | ✅ |
 | S5 | [3]+[4] flow | `RefundFlowIT` (golden vector) — failsafe 2/2 in full verify | Block 1 `8bad5e8`/`33827336501` | ✅ |
-| S6 | races + IGNORED path | `RefundRaceIT` — sc.12 one 201/one 409, `refunded_cents`=6000; sc.23 one POSTED/one IGNORED + `refund_skipped_balance` audit + available 4000 | local `mvn -B verify` BUILD SUCCESS (pending push) | ✅ |
-| S7 | auditor legs (c)/(d) | `JournalCoverageAuditorIT` ext — 6/6 (legs c+d + matched-silent + connection-leak fix) | local `mvn -B verify` BUILD SUCCESS (pending push) | ✅ |
-| S8 | docs + E8 flip + citation | epics.md E8 ✅, CHANGELOG, README [3]+[4], AGENTS §8 DEBT-4/DEBT-5, design.md as-built note | commit `TBD` (pending) | ✅ |
+| S6 | races + IGNORED path | `RefundRaceIT` — sc.12 one 201/one 409, `refunded_cents`=6000; sc.23 one POSTED/one IGNORED + `refund_skipped_balance` audit + available 4000 | `369b0c6` / CI `33831934579` | ✅ |
+| S7 | auditor legs (c)/(d) | `JournalCoverageAuditorIT` ext — 6/6 (legs c+d + matched-silent + connection-leak fix) | `7993f1f` / CI `33831934579` | ✅ |
+| S8 | docs + E8 flip + citation | epics.md E8 ✅, CHANGELOG, README [3]+[4], AGENTS §8 DEBT-4/DEBT-5, design.md as-built note | `c8af90b` / CI `33831934579` | ✅ |
 
-Evidence greps (E8 Block 2, commit pending; re-verify after push):
+Evidence greps (E8 Block 2 — ran at `8bad5e8`, reproducible at HEAD `c8af90b`; amend (c)):
 - Guard: `RefundBalanceGuardIT` insufficient → 409 + zero writes; guard-pass → 201 + journal `5940/−6000/60`.
 - Races: `RefundRaceIT` two concurrent 60% → `[201,409]`, `refunded_cents == 6000`; two concurrent drains → `posted==1`, `ignored==1`, `skipAudit==1`, `available==4000`.
 - Drain: `grep -rn "UPDATE ledger.balances" modules/ledger/src/main` — every mutation guarded by `balance >=` (drain) or the §5.3 lock.
