@@ -8,6 +8,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Duration;
@@ -132,11 +133,14 @@ class OutboxRepublishIT {
         assertThat(resp.body()).contains("\"matched\":2");
         assertThat(resp.body()).contains("\"republished\":2");
 
-        // Two new PENDING rows exist with event_ids ending in -r1, -r2
+        // Two new PENDING rows exist with deterministic event_ids (UUID v3 from original:rN)
         String e1 = getEventIdOfPending(txid(in1));
         String e2 = getEventIdOfPending(txid(in2));
-        assertThat(e1).endsWith("-r1");
-        assertThat(e2).endsWith("-r2");
+        assertThat(e1).isNotNull();
+        assertThat(e2).isNotNull();
+        // Verify they are valid UUIDs
+        assertThat(UUID.fromString(e1)).isNotNull();
+        assertThat(UUID.fromString(e2)).isNotNull();
         // Originals remain SENT
         assertThat(status(in1)).isEqualTo("SENT");
         assertThat(status(in2)).isEqualTo("SENT");

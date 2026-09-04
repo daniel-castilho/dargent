@@ -8,6 +8,7 @@ import io.dargent.payments.domain.port.out.OutboxEventStore;
 import io.dargent.payments.domain.port.out.OutboxEventStore.OutboxRow;
 import io.dargent.payments.domain.port.out.OutboxEventStore.RequeueResult;
 import io.dargent.payments.domain.port.out.OutboxEventStore.RepublishResult;
+import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
@@ -161,7 +162,7 @@ public class JdbcOutboxEventStore implements OutboxEventStore {
         int republished = 0;
         for (int i = 0; i < matched; i++) {
             RepublishCandidate c = candidates.get(i);
-            String newEventId = c.eventId() + "-r" + (i + 1);
+            String newEventId = UUID.nameUUIDFromBytes((c.eventId() + ":r" + (i + 1)).getBytes(StandardCharsets.UTF_8)).toString();
             try {
                 int inserted = jdbc.sql("""
                         insert into payments.outbox (id, aggregate_id, type, version, payload, request_id, status, attempt_count, next_attempt_at)

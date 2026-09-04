@@ -70,8 +70,8 @@ No other new names. `DARGENT_RELAY_BATCH/POLL_MS/WORKERS/OUTBOX_RETENTION_DAYS` 
    negatives (no key, wrong key). **Q11 rotation-window 403 leg**: `OutboxAdminRotationIT` — env points at revoked predecessor, active successor presents → 403 (validation first); revoked predecessor presents → 401.
 3. `OutboxRepublishIT` — window replay mints bounded new rows with salted ids; originals SENT;
    re-run of the same republish → consumers dedupe (zero second effects — **scenario 20** in
-   ledger). **Notifications consumer does not dedupe** — republished events re-deliver webhook (ratified limitation). Window bound enforced (400 >30d), empty window → 200/0.
-4. Scenario 20 ledger leg (replay of 1st trip ratified): republished `payment.confirmed` consumed twice-equivalently → journal count unchanged, balances unchanged (extends the RefundFlow harness pattern). Proof via `OutboxRepublishIT.republish_re_run_produces_identical_new_ids` — re-run produces identical `{original}-r{n}` eventIds → consumer dedupe by `eventId`.
+   ledger+notifications). **Notifications consumer dedupes by `eventId` (ON CONFLICT)** — re-runs of the same republish are idempotent at both consumers. Replay of first trip re-notifies (new UUID) — ratified limitation. Window bound enforced (400 >30d), empty window → 200/0.
+4. Scenario 20 ledger leg (replay of 1st trip ratified): republished `payment.confirmed` consumed twice-equivalently → journal count unchanged, balances unchanged (extends the RefundFlow harness pattern). Proof via `OutboxRepublishIT.republish_re_run_produces_identical_new_ids` — re-run produces identical deterministic UUID v3 `{original}-r{n}` eventIds → consumer dedupe by `eventId`.
 
 ## §7 Hygiene gates
 
