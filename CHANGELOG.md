@@ -5,6 +5,41 @@ versioning: semantic, cut from annotated git tags (see [release-runbook](docs/re
 
 ## [Unreleased]
 
+### Added — E9 Delivery Hardening (Block 1+2) (2026-09-04)
+
+- **Bounded outbox delivery — EXHAUSTED contract (S1)**: outbox rows failing publish after
+  `DARGENT_RELAY_MAX_ATTEMPTS` (default 3) are marked `EXHAUSTED` via conditional `UPDATE
+  ... WHERE status='PENDING'`. Ladder timings frozen (30s / 2m / 5m ceiling). `OutboxExhaustionIT`
+  asserts forced failure ×3 → EXHAUSTED, never re-claimed by relay. Unit matrix covers 1→30s,
+  2→2m, 3→EXHAUSTED, lost-race no-op.
+- **Audited requeue endpoint (S2)**: `POST /v1/outbox/{id}/requeue` admin-gated (env
+  `DARGENT_OUTBOX_ADMIN_KEY`); conditional `EXHAUSTED→PENDING` with `attempt_count=0`,
+  `next_attempt_at=now()`, audited as `outbox_requeued` with real API-key principal. Ladder:
+  env absent→404-hidden, no/unknown/revoked key→401, valid≠admin→403, valid==admin→200. Q11
+  rotation-window 403: while env points at revoked predecessor, active successor presents→403
+  (validation first); revoked predecessor presents→401. `OutboxRequeueIT` + `OutboxAdminRotationIT`.
+- **Republish tool with deterministic salted IDs (S3)**: `POST /v1/outbox/republish` body
+  `{from, to, types?}` (≤30d window, ≤500 rows). For each matched SENT row: inserts new PENDING
+  row with `eventId={original}-r{n}` where n is the replay ordinal — **re-running the same
+  republish produces identical new IDs**, making the tool itself idempotent at consumers.
+  Originals untouched (stay SENT). Admin-gated, audited as `outbox_republished` with window
+  marker. `OutboxRepublishIT` + `OutboxRepublishRotationIT` cover basic, re-run (scenario 20
+  foundation), window bounds, type filter, empty window, auth ladder.
+- **Scenario-20 no-double-journaling guard (S4)**: ledger consumer (`EventIngestionUseCase`)
+  checks `store.hasPostedJournalForTxid(txid)` before posting `payment.confirmed`. If a POSTED
+  journal already exists for the txid (republished event), marks event POSTED with note
+  `Republished — already journaled` and **skips journal creation**. Journal count and balances
+  unchanged. Core logic in `EventIngestionUseCase.processMessage()` +
+  `JdbcLedgerStore.hasPostedJournalForTxid()`.
+- **DLQ recipes doc (S5)**: `docs/dlq-recipes.md` with inspection, peeking, common failure
+  patterns (invalid payload, insufficient balance, relay timeout, webhook failure), requeue
+  procedures (republish via admin endpoint preferred, manual fallback), purge, forensics SQL
+  queries (IGNORED/REJECTED events, double-journal check, stale outbox, admin audit trail),
+  and Prometheus alerting thresholds.
+- **M3 ✅ Suffering complete**: Refunds + expiration + resurrection + reconciler + D+1 settlement
+  + **DLQ + backoff + EXHAUSTED + requeue + republish** now fully implemented. All catalog
+  scenarios 6–12, 19–20, 23–24, 26–27 green.
+
 ### Added — E8 Refunds, Block 2: balance guard, refund races, auditor refund legs (2026-09-03)
 
 - **Refund balance guard IT over HTTP** (S6, scenario 23): `POST /v1/refunds` returns `409

@@ -626,7 +626,7 @@ Each milestone closes with: green tests in the full pipeline, **filled acceptanc
 | **M0** | Skeleton | Maven multi-module + empty modules with ArchUnit passing, compose (postgres/localstack/nginx/psp-simulator stub), CI running build gates, Flyway per schema, AGENTS.md + docs base | CI green on a real PR; ArchUnit rejects an illegal import (proving test) |
 | **M1** | Happy path | Create cob (PSP + BR Code) → PENDING → webhook → CONFIRMED; full idempotency; API keys; canonical errors | Catalog 1–5, 13, 15, 25 green; two identical requests → one payment; duplicate webhook → one confirmation |
 | **M2** | Events | Outbox + relay + SNS/SQS FIFO; ledger consuming (entry [1]); balance projection; basic notifications | Catalog 14, 16–18, 21–22 green; queue duplicate → one journal; `ΣDR=ΣCR` after every scenario |
-| **M3** | Suffering | Refunds (partial/total/concurrent), expiration, resurrection, reconciler, D+1 settlement, DLQ + backoff + EXHAUSTED + requeue | Catalog 6–12, 19–20, 23–24, 26–27 green; signature scenario (11) and reconciler (26) in CI |
+| **M3** | Suffering ✅ | Refunds (partial/total/concurrent), expiration, resurrection, reconciler, D+1 settlement, **DLQ + backoff + EXHAUSTED + requeue + republish** (E9) | Catalog 6–12, 19–20, 23–24, 26–27 green; signature scenario (11), reconciler (26), **E9: OutboxExhaustionIT, OutboxRequeueIT, OutboxRepublishIT, Scenario20NoDoubleJournalIT, DLQ recipes** in CI |
 | **M4** | Finish | Metrics + JSON logs + correlation; blue-green with canary + rollback; runtime-smoke in CI; tag releases + SBOM; README with diagram + final ADRs; full acceptance matrix; restore drill; full quality gates (SpotBugs/OWASP/JaCoCo/Trivy/CodeQL) | v1→v2 deploy with proven zero downtime; instant rollback exercised; GitHub Release with SBOM |
 | **M5** | Stretch | Simulated card (2nd Strategy), k6 as hard gate, Redis read cache, webhook reprocessing via admin | Card added **without touching** the PIX domain (abstraction proof) |
 
@@ -702,6 +702,7 @@ Patterns and habits consciously stolen (full notebook: internal reference analys
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.0.3 | 2026-09-04 | **E9 Delivery Hardening complete (Block 1+2)**: bounded outbox delivery (EXHAUSTED at maxAttempts, ladder frozen), audited admin requeue (EXHAUSTED→PENDING, real actor), republish tool with deterministic salted event_ids (idempotent re-runs), scenario-20 no-double-journaling guard in ledger consumer, DLQ recipes doc. M3 ✅ — Suffering scope (refunds, DLQ, backoff, EXHAUSTED/requeue, republish) now fully implemented. |
 | 1.0.2 | 2026-08-28 | English becomes canonical (repo is 100% EN); pt-BR original archived at `design-ptbr.md`; M0 note added to §11.1 |
 | 1.0.1 | 2026-08-28 | Official naming: **Dargent** (D22) — rename sweep across all artifacts (package `io.dargent`, metrics `dargent_*`, `DARGENT_API_KEY`, `dargent-api` images) |
 | 1.0.0 | 2026-08-28 | Initial version — full consolidation of the brainstorm (architecture, domain, data, API, events, security, testing, CI/CD, runtime, roadmap, risks, ADRs) |

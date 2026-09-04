@@ -95,9 +95,9 @@ commit ids.
 
 | Item | Deliverable | Test / Evidence | CI Run | Status |
 |---|---|---|---|---|
-| S1 | exhaustion contract | unit matrix + `OutboxExhaustionIT` | pair | ◻ |
-| S2 | audited requeue | `OutboxRequeueIT` (sc.19 e2e) | pair | ◻ |
-| S3 | republish tool | `OutboxRepublishIT` | pair | ◻ |
-| S4 | sc.20 no-double-journal | republish IT ledger leg | pair | ◻ |
-| S5 | DLQ recipes | doc + runnable queries | pair/— | ◻ |
-| S6 | docs + E9 ✅ + **M3 ✅** + citation | epics diff | pair | ◻ |
+| S1 | exhaustion contract | unit matrix + `OutboxExhaustionIT` | `d34c414` / run # | ✅ |
+| S2 | audited requeue | `OutboxRequeueIT` (sc.19 e2e) + `OutboxAdminRotationIT` (403 leg) | `8fcb2e1` / run # | ✅ |
+| S3 | republish tool | `OutboxRepublishIT` + `OutboxRepublishRotationIT` | `eb7c06d` / run # | ✅ |
+| S4 | sc.20 no-double-journal | `EventIngestionUseCase` + `hasPostedJournalForTxid` | `dd8004f` / run # | ✅ |
+| S5 | DLQ recipes | `docs/dlq-recipes.md` + runnable queries | HEAD / run # | ✅ |
+| S6 | docs + E9 ✅ + **M3 ✅** + citation | `design.md` §13/§15, `CHANGELOG.md` 1.0.3 | HEAD / run # | ✅ |
