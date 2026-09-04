@@ -43,6 +43,18 @@ public interface OutboxEventStore {
     boolean markFailed(OutboxId id, int attemptCount, Instant nextAttemptAt);
 
     /**
+     * Marks a row as EXHAUSTED (E9 §2): the retry ceiling was reached.
+     * Conditional on {@code status='PENDING'} so a lost race (another worker already advanced the
+     * row) is a no-op — the caller re-reads and decides; EXHAUSTED rows never re-enter
+     * {@link #claimPending}.
+     *
+     * @param id            row id
+     * @param attemptCount  final attempt count (the app attempts the ladder before exhausting)
+     * @return true if row was updated (lost race if 0 rows)
+     */
+    boolean markExhausted(OutboxId id, int attemptCount);
+
+    /**
      * Purges old SENT rows for retention (E6 §5.4).
      *
      * @param cutoff   rows with {@code published_at < cutoff} are deleted

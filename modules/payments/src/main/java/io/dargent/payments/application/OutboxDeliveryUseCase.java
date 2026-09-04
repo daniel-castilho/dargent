@@ -20,6 +20,8 @@ import tools.jackson.databind.ObjectMapper;
  * One worker, one pass: claim → parse → publish → mark (conditional).
  * Runs inside a TransactionTemplate so claim+mark are atomic; publish runs inside the tx
  * (at-least-once semantics: crash after publish but before mark → duplicate, collapsed by FIFO dedup).
+ * A row whose publish failures reach {@link Policy#maxAttempts()} (E9 §2) is marked EXHAUSTED
+ * instead of scheduling another backoff; EXHAUSTED rows are never re-claimed.
  * Every {@link #PURGE_EVERY_CYCLES} cycles the SENT retention purge runs (spec §5.4) — the purge
  * and the relay touch disjoint statuses, so they never contend.
  */
@@ -106,10 +108,19 @@ public final class OutboxDeliveryUseCase {
             try {
                 publisher.publish(row.type(), row.payload(), eventId, row.aggregateId());
             } catch (Exception e) {
-                // Publish failed — increment attempt, schedule backoff, leave PENDING
-                Instant nextAttempt = clock.instant().plus(backoff(row.attemptCount() + 1));
-                store.markFailed(row.id(), row.attemptCount() + 1, nextAttempt);
-                log.error("OUTBOX publish failed id={} type={} error={}", row.id(), row.type(), e.getMessage());
+                int attempts = row.attemptCount() + 1;
+                if (attempts >= policy.maxAttempts()) {
+                    // Retry ceiling reached (E9 §2): EXHAUSTED, conditional — lost race → no-op.
+                    boolean exhausted = store.markExhausted(row.id(), attempts);
+                    log.error("OUTBOX publish failed id={} type={} attempts={} exhausted={} error={}",
+                            row.id(), row.type(), attempts, exhausted, e.getMessage());
+                } else {
+                    // Schedule the next ladder attempt, leave PENDING
+                    Instant nextAttempt = clock.instant().plus(backoff(attempts));
+                    store.markFailed(row.id(), attempts, nextAttempt);
+                    log.error("OUTBOX publish failed id={} type={} attempts={} next={} error={}",
+                            row.id(), row.type(), attempts, nextAttempt, e.getMessage());
+                }
                 continue;
             }
 
@@ -156,14 +167,14 @@ public final class OutboxDeliveryUseCase {
             int batchSize,          // DARGENT_RELAY_BATCH (default 32)
             int workers,            // DARGENT_RELAY_WORKERS (default 2)
             long pollMs,            // DARGENT_RELAY_POLL_MS (default 1000)
-            int maxAttempts,        // unbounded in E6 (E9 owns EXHAUSTED)
+            int maxAttempts,        // DARGENT_RELAY_MAX_ATTEMPTS (E9 §4.1, default 3): ladder runs then EXHAUSTED
             Duration baseBackoff,   // 30 s (1st retry)
             Duration maxBackoff,    // 5 min (cap)
             int retentionDays       // DARGENT_OUTBOX_RETENTION_DAYS (default 7)
     ) {
         public static Policy fromEnv() {
-            // Defaults per §5.7 BoE
-            return new Policy(32, 2, 1000, Integer.MAX_VALUE,
+            // Defaults per §5.7 BoE; maxAttempts default 3 per E9 §4.1
+            return new Policy(32, 2, 1000, 3,
                     java.time.Duration.ofSeconds(30), java.time.Duration.ofMinutes(5), 7);
         }
     }

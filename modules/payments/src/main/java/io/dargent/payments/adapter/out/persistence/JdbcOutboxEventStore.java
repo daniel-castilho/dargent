@@ -77,6 +77,19 @@ public class JdbcOutboxEventStore implements OutboxEventStore {
     }
 
     @Override
+    public boolean markExhausted(OutboxId id, int attemptCount) {
+        int updated = jdbc.sql("""
+                update payments.outbox
+                set status = 'EXHAUSTED', attempt_count = :attemptCount
+                where id = :id and status = 'PENDING'
+                """)
+                .param("id", id.value())
+                .param("attemptCount", attemptCount)
+                .update();
+        return updated > 0;
+    }
+
+    @Override
     public int purgeSent(Instant cutoff, int limit) {
         return jdbc.sql("""
                 delete from payments.outbox

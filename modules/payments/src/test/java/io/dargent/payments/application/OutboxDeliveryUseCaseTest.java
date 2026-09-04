@@ -133,6 +133,125 @@ class OutboxDeliveryUseCaseTest {
         assertThat(backoff(uc, 4)).isEqualTo(Duration.ofMinutes(5));
     }
 
+    // ------------------------------------------------------- exhaustion matrix (E9 §2)
+
+    /**
+     * E9 §2 matrix row 1: at default maxAttempts=3, a publish failure on the first attempt
+     * schedules the 30 s backoff and leaves the row PENDING — never EXHAUSTED yet.
+     */
+    @Test
+    void first_failure_schedules_30s_backoff_and_stays_pending() {
+        OutboxId id = OutboxId.generate(Clock.systemUTC());
+        ((FakeOutboxEventStore) store).insert(
+                id, "tx-1", "payment.created", 1, "{\"eventId\":\"evt-1\"}", "req-1", 0, FIXED_NOW);
+        OutboxDeliveryUseCase uc = useCase(store, new FailingEventPublisher(), 3, advancer);
+
+        int published = uc.runOnce(10);
+
+        assertThat(published).isZero();
+        assertThat(store.markExhaustedCalls).isEmpty();
+        assertThat(store.markFailedCalls).hasSize(1);
+        assertThat(store.markFailedCalls.get(0).id()).isEqualTo(id);
+        assertThat(store.markFailedCalls.get(0).attemptCount()).isEqualTo(1);
+        assertThat(store.markFailedCalls.get(0).nextAttemptAt()).isEqualTo(FIXED_NOW.plus(Duration.ofSeconds(30)));
+        assertThat(store.status(id)).isEqualTo("PENDING");
+    }
+
+    /**
+     * E9 §2 matrix row 2: the second failure (after the 30 s ladder rung) schedules the 2 min
+     * backoff and still stays PENDING.
+     */
+    @Test
+    void second_failure_schedules_2m_backoff_and_stays_pending() {
+        OutboxId id = OutboxId.generate(Clock.systemUTC());
+        ((FakeOutboxEventStore) store).insert(
+                id, "tx-1", "payment.created", 1, "{\"eventId\":\"evt-1\"}", "req-1", 0, FIXED_NOW);
+        OutboxDeliveryUseCase uc = useCase(store, new FailingEventPublisher(), 3, advancer);
+
+        uc.runOnce(10); // attempt 1 -> 30s backoff, still PENDING
+        advancer.advance(Duration.ofSeconds(30)); // ladder rung 1 (30 s) elapses
+        uc.runOnce(10); // attempt 2 -> 2m backoff, still PENDING
+
+        assertThat(store.markExhaustedCalls).isEmpty();
+        assertThat(store.markFailedCalls).hasSize(2);
+        assertThat(store.markFailedCalls.get(1).attemptCount()).isEqualTo(2);
+        assertThat(store.markFailedCalls.get(1).nextAttemptAt()).isEqualTo(FIXED_NOW.plus(Duration.ofMinutes(2)).plus(Duration.ofSeconds(30)));
+        assertThat(store.status(id)).isEqualTo("PENDING");
+    }
+
+    /**
+     * E9 §2 matrix row 3: at default maxAttempts=3, the third failure (after both ladder rungs)
+     * marks the row EXHAUSTED (no further backoff) and it is never reclaimed.
+     */
+    @Test
+    void third_failure_marks_exhausted_and_never_reclaims() {
+        OutboxId id = OutboxId.generate(Clock.systemUTC());
+        ((FakeOutboxEventStore) store).insert(
+                id, "tx-1", "payment.created", 1, "{\"eventId\":\"evt-1\"}", "req-1", 0, FIXED_NOW);
+        OutboxDeliveryUseCase uc = useCase(store, new FailingEventPublisher(), 3, advancer);
+
+        uc.runOnce(10); // attempt 1 -> 30s backoff
+        advancer.advance(Duration.ofSeconds(30));
+        uc.runOnce(10); // attempt 2 -> 2m backoff
+        advancer.advance(Duration.ofMinutes(2));
+        uc.runOnce(10); // attempt 3 -> EXHAUSTED
+
+        assertThat(store.markFailedCalls).hasSize(2); // only the two ladder rungs
+        assertThat(store.markExhaustedCalls).hasSize(1);
+        assertThat(store.markExhaustedCalls.get(0).id()).isEqualTo(id);
+        assertThat(store.markExhaustedCalls.get(0).attemptCount()).isEqualTo(3);
+        assertThat(store.status(id)).isEqualTo("EXHAUSTED");
+
+        // EXHAUSTED rows are never claimed again
+        advancer.advance(Duration.ofMinutes(5)); // the 5m ceiling would have elapsed — still not claimed
+        int published = uc.runOnce(10);
+        assertThat(published).isZero();
+    }
+
+    /**
+     * E9 §2 lost race: {@code markExhausted} is conditional on {@code status='PENDING'} — if the fake
+     * already advanced the row (returns false), the relay logs and moves on without double-marking.
+     */
+    @Test
+    void exhaustion_lost_race_is_a_noop() {
+        OutboxId id = OutboxId.generate(Clock.systemUTC());
+        ((FakeOutboxEventStore) store).insert(
+                id, "tx-1", "payment.created", 1, "{\"eventId\":\"evt-1\"}", "req-1", 0, FIXED_NOW);
+        // Pre-advance the row so markExhausted's conditional finds no matching PENDING row
+        store.forceAdvance(id);
+        OutboxDeliveryUseCase uc = useCase(store, new FailingEventPublisher(), 3, advancer);
+
+        int published = uc.runOnce(10);
+
+        assertThat(published).isZero();
+        assertThat(store.markExhaustedCalls).isEmpty(); // never reached the ceiling
+    }
+
+    /** A clock whose instant can be advanced between relay calls (ladder timings, no sleeps). */
+    private final MutableClock advancer = new MutableClock(FIXED_NOW);
+
+    private OutboxDeliveryUseCase useCase(OutboxEventStore store, EventPublisher publisher, int maxAttempts,
+            Clock clock) {
+        var txTemplate = new org.springframework.transaction.support.TransactionTemplate(null) {
+            @Override
+            public <T> T execute(org.springframework.transaction.support.TransactionCallback<T> action) {
+                return action.doInTransaction(null);
+            }
+        };
+        return new OutboxDeliveryUseCase(store, publisher, new tools.jackson.databind.json.JsonMapper(),
+                clock, new OutboxDeliveryUseCase.Policy(32, 2, 1000, maxAttempts,
+                        Duration.ofSeconds(30), Duration.ofMinutes(5), 7), txTemplate);
+    }
+
+    static final class MutableClock extends Clock {
+        private Instant now;
+        MutableClock(Instant now) { this.now = now; }
+        void advance(Duration d) { now = now.plus(d); }
+        @Override public Instant instant() { return now; }
+        @Override public java.time.ZoneId getZone() { return ZoneOffset.UTC; }
+        @Override public Clock withZone(java.time.ZoneId zone) { return this; }
+    }
+
     // Access private method via reflection
     private java.time.Duration backoff(OutboxDeliveryUseCase uc, int attempt) {
         try {
@@ -149,6 +268,12 @@ class OutboxDeliveryUseCaseTest {
     static class FakeOutboxEventStore implements OutboxEventStore {
         private final java.util.Map<OutboxId, Row> rows = new java.util.concurrent.ConcurrentHashMap<>();
         final java.util.List<Instant> purgeCutoffs = new java.util.ArrayList<>();
+        final java.util.List<MarkFailed> markFailedCalls = new java.util.ArrayList<>();
+        final java.util.List<MarkExhausted> markExhaustedCalls = new java.util.ArrayList<>();
+        private int claims;
+
+        record MarkFailed(OutboxId id, int attemptCount, Instant nextAttemptAt) {}
+        record MarkExhausted(OutboxId id, int attemptCount) {}
 
         record Row(
                 OutboxId id,
@@ -157,27 +282,42 @@ class OutboxDeliveryUseCaseTest {
                 int version,
                 String payload,
                 String requestId,
+                String status,
                 int attemptCount,
                 Instant nextAttemptAt
         ) {}
 
-        /**
-         * Insert a row with nextAttemptAt tracking (test helper).
-         * The OutboxEventStore.OutboxRow record doesn't include nextAttemptAt,
-         * but the fake tracks it internally for claim filtering.
-         */
+        /** Insert a PENDING row tracked by nextAttemptAt (test helper). */
         void insert(OutboxId id, String aggregateId, String type, int version,
                     String payload, String requestId, int attemptCount, Instant nextAttemptAt) {
             rows.put(id, new Row(id, aggregateId, type, version,
-                    payload, requestId, 0, // attemptCount starts at 0
-                    nextAttemptAt));
+                    payload, requestId, "PENDING", attemptCount, nextAttemptAt));
+        }
+
+        /** Pre-advance a row (simulate a lost race: markExhausted's conditional finds no PENDING row). */
+        void forceAdvance(OutboxId id) {
+            Row r = rows.get(id);
+            if (r == null) throw new IllegalStateException("no row " + id);
+            rows.put(id, new Row(r.id(), r.aggregateId(), r.type(), r.version(),
+                    r.payload(), r.requestId(), "SENT", r.attemptCount() + 1, r.nextAttemptAt()));
+        }
+
+        int claimCount() {
+            return claims;
+        }
+
+        String status(OutboxId id) {
+            Row r = rows.get(id);
+            return r == null ? "GONE" : r.status();
         }
 
         @Override
         public List<OutboxEventStore.OutboxRow> claimPending(int batch, Instant now) {
+            claims++;
             return rows.values().stream()
+                    .filter(r -> "PENDING".equals(r.status()))
                     .filter(r -> r.nextAttemptAt() != null && !r.nextAttemptAt().isAfter(now))
-                    .limit(10)
+                    .limit(batch)
                     .map(r -> new OutboxEventStore.OutboxRow(
                             r.id(), r.aggregateId(), r.type(), r.version(),
                             r.payload(), r.requestId(), r.attemptCount()
@@ -187,17 +327,30 @@ class OutboxDeliveryUseCaseTest {
 
         @Override
         public boolean markSent(OutboxId id, int attemptCount, Instant publishedAt) {
-            return rows.remove(id) != null;
+            Row r = rows.get(id);
+            if (r == null || !"PENDING".equals(r.status())) return false;
+            rows.put(id, new Row(r.id(), r.aggregateId(), r.type(), r.version(),
+                    r.payload(), r.requestId(), "SENT", attemptCount, r.nextAttemptAt()));
+            return true;
         }
 
         @Override
         public boolean markFailed(OutboxId id, int attemptCount, Instant nextAttemptAt) {
             Row r = rows.get(id);
-            if (r == null) return false;
-            rows.put(id, new Row(
-                    r.id(), r.aggregateId(), r.type(), r.version(),
-                    r.payload(), r.requestId(), attemptCount, nextAttemptAt
-            ));
+            if (r == null || !"PENDING".equals(r.status())) return false;
+            rows.put(id, new Row(r.id(), r.aggregateId(), r.type(), r.version(),
+                    r.payload(), r.requestId(), "PENDING", attemptCount, nextAttemptAt));
+            markFailedCalls.add(new MarkFailed(id, attemptCount, nextAttemptAt));
+            return true;
+        }
+
+        @Override
+        public boolean markExhausted(OutboxId id, int attemptCount) {
+            Row r = rows.get(id);
+            if (r == null || !"PENDING".equals(r.status())) return false;
+            rows.put(id, new Row(r.id(), r.aggregateId(), r.type(), r.version(),
+                    r.payload(), r.requestId(), "EXHAUSTED", attemptCount, r.nextAttemptAt()));
+            markExhaustedCalls.add(new MarkExhausted(id, attemptCount));
             return true;
         }
 
@@ -212,6 +365,13 @@ class OutboxDeliveryUseCaseTest {
         @Override
         public void publish(String type, String payload, String eventId, String aggregateId) {
             // Simulate success
+        }
+    }
+
+    static class FailingEventPublisher implements EventPublisher {
+        @Override
+        public void publish(String type, String payload, String eventId, String aggregateId) {
+            throw new RuntimeException("publish failed (forced)");
         }
     }
 

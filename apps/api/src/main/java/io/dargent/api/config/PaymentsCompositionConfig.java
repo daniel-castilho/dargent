@@ -227,9 +227,10 @@ public class PaymentsCompositionConfig {
             @Value("${DARGENT_RELAY_BATCH}") int batch,
             @Value("${DARGENT_RELAY_WORKERS}") int workers,
             @Value("${DARGENT_RELAY_POLL_MS}") long pollMs,
-            @Value("${DARGENT_OUTBOX_RETENTION_DAYS}") int retentionDays) {
+            @Value("${DARGENT_OUTBOX_RETENTION_DAYS}") int retentionDays,
+            @Value("${DARGENT_RELAY_MAX_ATTEMPTS:3}") int maxAttempts) {
         return new OutboxDeliveryUseCase.Policy(batch, workers, pollMs,
-                Integer.MAX_VALUE, Duration.ofSeconds(30), Duration.ofMinutes(5), retentionDays);
+                maxAttempts, Duration.ofSeconds(30), Duration.ofMinutes(5), retentionDays);
     }
 
     @Bean
