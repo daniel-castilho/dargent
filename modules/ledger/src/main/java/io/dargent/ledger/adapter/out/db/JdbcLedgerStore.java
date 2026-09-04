@@ -6,6 +6,8 @@ import io.dargent.ledger.domain.model.JournalEntry;
 import io.dargent.ledger.domain.model.Posting;
 import io.dargent.ledger.domain.model.Settlement;
 import io.dargent.ledger.domain.port.out.LedgerStore;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -22,6 +24,8 @@ import java.util.UUID;
  * Uses Spring JdbcClient — zero JPA, zero Hibernate.
  */
 public final class JdbcLedgerStore implements LedgerStore {
+
+    private static final Logger log = LoggerFactory.getLogger(JdbcLedgerStore.class);
 
     private final JdbcClient jdbc;
     private final TransactionTemplate txTemplate;
@@ -310,6 +314,18 @@ public final class JdbcLedgerStore implements LedgerStore {
         return txTemplate.execute(txStatus -> {
             // Conditional drain on available balance: net = amount - feeReversal
             long netDrain = amountCents - feeReversalCents;
+            String drainAccount = "merchant:" + merchantId + ":available";
+            String observed = jdbc.sql("""
+                    SELECT count(*), coalesce(max(balance_cents), -1)
+                    FROM ledger.balances
+                    WHERE account = ?
+                    """)
+                    .param(drainAccount)
+                    .query((rs, rowNum) -> "count=" + rs.getLong(1)
+                            + ",balance_cents=" + rs.getLong(2))
+                    .single();
+            log.info("[E8-REFUND-PROBE] merchant={} account={} netDrain={} observed={}",
+                    merchantId, drainAccount, netDrain, observed);
             int drained = jdbc.sql("""
                     UPDATE ledger.balances
                     SET balance_cents = balance_cents - ?, updated_at = ?, last_event_id = ?
@@ -334,6 +350,30 @@ public final class JdbcLedgerStore implements LedgerStore {
                 return false;
             }
 
+            // Update processing and fees:revenue balances directly (available already drained)
+            // [3] Cr payments:processing amount (CREDIT increases processing balance toward zero)
+            jdbc.sql("""
+                    INSERT INTO ledger.balances (account, balance_cents, updated_at, last_event_id)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT (account) DO UPDATE SET
+                        balance_cents = ledger.balances.balance_cents + EXCLUDED.balance_cents,
+                        updated_at = EXCLUDED.updated_at,
+                        last_event_id = EXCLUDED.last_event_id
+                    """)
+                    .params("payments:processing", amountCents, Timestamp.from(createdAt), eventId)
+                    .update();
+            // [4] Dr fees:revenue feeReversal (DEBIT decreases fees revenue)
+            jdbc.sql("""
+                    INSERT INTO ledger.balances (account, balance_cents, updated_at, last_event_id)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT (account) DO UPDATE SET
+                        balance_cents = ledger.balances.balance_cents + EXCLUDED.balance_cents,
+                        updated_at = EXCLUDED.updated_at,
+                        last_event_id = EXCLUDED.last_event_id
+                    """)
+                    .params("fees:revenue", -feeReversalCents, Timestamp.from(createdAt), eventId)
+                    .update();
+
             // Build postings: [3] Dr available / Cr processing, [4] Dr fees:revenue / Cr available
             UUID entryId = UUID.randomUUID();
             var postings = List.of(
@@ -357,9 +397,38 @@ public final class JdbcLedgerStore implements LedgerStore {
                     postings
             );
 
-            // Write journal + postings + balances
-            postJournal(entry);
+            // Write journal + postings WITHOUT balance updates (already done above)
+            postJournalWithoutBalances(entry);
             return true;
+        });
+    }
+
+    /**
+     * Posts journal entry and postings without updating balances.
+     * Used by postRefund where balances are updated atomically with the conditional drain.
+     */
+    private void postJournalWithoutBalances(JournalEntry entry) {
+        txTemplate.execute(status -> {
+            // 1) Journal entry
+            jdbc.sql("""
+                    INSERT INTO ledger.journal_entries (id, event_id, txid, merchant_id, description, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """)
+                    .params(entry.id(), entry.eventId(), entry.txid(), entry.merchantId(),
+                            entry.description(), Timestamp.from(entry.createdAt()))
+                    .update();
+
+            // 2) Postings only (no balance upserts)
+            for (Posting p : entry.postings()) {
+                jdbc.sql("""
+                        INSERT INTO ledger.postings (id, entry_id, account, direction, amount_cents, created_at)
+                        VALUES (?, ?, ?, ?::text, ?, ?)
+                        """)
+                        .params(p.id(), p.entryId(), p.account(), p.direction().name(), p.amountCents(),
+                                Timestamp.from(p.createdAt()))
+                        .update();
+            }
+            return null;
         });
     }
 }
