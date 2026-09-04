@@ -97,6 +97,6 @@ commit ids.
 | S1 | exhaustion contract | unit matrix + `OutboxExhaustionIT` | `d34c414` / #150 `33891162497` | ✅ |
 | S2 | audited requeue | `OutboxRequeueIT` (sc.19 e2e) + `OutboxAdminRotationIT` (403 leg) | `8fcb2e1` / #150 `33891162497` | ✅ |
 | S3 | republish tool | `OutboxRepublishIT` + `OutboxRepublishRotationIT` | `eb7c06d` / #150 `33891162497` | ✅ |
-| S4 | sc.20 no-double-journal | `OutboxRepublishIT.republish_re_run_produces_identical_new_ids` (deterministic `{original}-r{n}` → consumer dedupe by `event_id`) | `eb7c06d` / #150 `33891162497` | ✅ |
+| S4 | sc.20 no-double-journal | `OutboxRepublishIT.republish_re_run_produces_identical_new_ids` (deterministic `{original}-r{n}` → consumer dedupe by `event_id`) | `eb7c06d` / #154 `33921797910` | ✅ |
 | S5 | DLQ recipes | `docs/runbooks/dlq-inspection.md` + runnable queries | #150 `33891162497` | ✅ |
 | S6 | docs + E9 ✅ + **M3 ✅** + citation | `design.md` §13/§15, `CHANGELOG.md` 1.0.3 | #151 `33893091359` | ✅ |
