@@ -105,6 +105,44 @@ class JournalCoverageAuditorIT {
         assertThat(auditRows()).isZero();
     }
 
+    // ========================================== refund coverage legs (E8 S7, spec §6 (c)/(d))
+
+    @Test
+    void phase_c_refunded_payment_without_posted_refund_journal_is_audited_as_gap() {
+        String txid = txid("RC");
+        UUID paymentId = insertRefundedPayment(txid);
+        insertRefundRow(paymentId, txid);
+
+        assertThat(auditor.runOnce()).isEqualTo(1);
+        assertThat(auditRows()).isEqualTo(1);
+        assertThat(jdbc.sql("select aggregate_id from payments.audit_log")
+                .query(String.class).single()).isEqualTo(txid);
+        assertThat(jdbc.sql("select request_id from payments.audit_log")
+                .query(String.class).single()).startsWith("PHASE_C:");
+    }
+
+    @Test
+    void phase_d_posted_refund_journal_without_refunded_payment_is_audited_as_gap() {
+        String txid = txid("RD");
+        insertPostedRefundEvent(txid);
+
+        assertThat(auditor.runOnce()).isEqualTo(1);
+        assertThat(auditRows()).isEqualTo(1);
+        assertThat(jdbc.sql("select request_id from payments.audit_log")
+                .query(String.class).single()).startsWith("PHASE_D:");
+    }
+
+    @Test
+    void matched_refund_and_posted_refund_event_is_silent_clean_scan() {
+        String txid = txid("RM");
+        UUID paymentId = insertRefundedPayment(txid);
+        insertRefundRow(paymentId, txid);
+        insertPostedRefundEvent(txid);
+
+        assertThat(auditor.runOnce()).isZero();
+        assertThat(auditRows()).isZero();
+    }
+
     // ========================================================================== helpers
 
     private void insertConfirmedPayment(String txid) {
@@ -134,6 +172,52 @@ class JournalCoverageAuditorIT {
                 .param("txid", txid)
                 .param("merchant", MERCHANT)
                 .param("payload", "{\"type\":\"payment.confirmed\"}")
+                .param("received", java.sql.Timestamp.from(Instant.parse("2026-09-02T10:00:00Z")))
+                .update();
+    }
+
+    /** Inserts a FULLY refunded payment row and returns its id. REFUNDED is not CONFIRMED, so it
+     * never triggers the Phase A leg — keeping the refund gap assertion isolated. */
+    private UUID insertRefundedPayment(String txid) {
+        UUID id = UUID.randomUUID();
+        jdbc.sql("""
+                insert into payments.payments (id, txid, merchant_id, description, amount_cents, status, version,
+                    expires_at, end_to_end_id, fee_cents, net_cents, late_confirmation, refunded_cents,
+                    created_at, confirmed_at)
+                values (:id, :txid, :merchant, 'auditor-it', 10000, 'REFUNDED', 0,
+                    :expiresAt, null, null, null, false, 10000, :created, :confirmed)
+                """)
+                .param("id", id)
+                .param("txid", txid)
+                .param("merchant", MERCHANT)
+                .param("expiresAt", java.sql.Timestamp.from(Instant.parse("2026-09-02T10:00:00Z")))
+                .param("created", java.sql.Timestamp.from(Instant.parse("2026-09-01T10:00:00Z")))
+                .param("confirmed", java.sql.Timestamp.from(Instant.parse("2026-09-02T09:59:00Z")))
+                .update();
+        return id;
+    }
+
+    private void insertRefundRow(UUID paymentId, String txid) {
+        jdbc.sql("""
+                insert into payments.refunds (id, payment_id, txid, amount_cents, fee_reversal_cents,
+                    net_cents, request_id)
+                values (:id, :paymentId, :txid, 4000, 40, 3960, 'auditor-it')
+                """)
+                .param("id", UUID.randomUUID())
+                .param("paymentId", paymentId)
+                .param("txid", txid)
+                .update();
+    }
+
+    private void insertPostedRefundEvent(String txid) {
+        jdbc.sql("""
+                insert into ledger.events (event_id, type, txid, merchant_id, payload, status, note, received_at)
+                values (:id, 'refund.created', :txid, :merchant, :payload::jsonb, 'POSTED', null, :received)
+                """)
+                .param("id", UUID.randomUUID())
+                .param("txid", txid)
+                .param("merchant", MERCHANT)
+                .param("payload", "{\"type\":\"refund.created\"}")
                 .param("received", java.sql.Timestamp.from(Instant.parse("2026-09-02T10:00:00Z")))
                 .update();
     }
