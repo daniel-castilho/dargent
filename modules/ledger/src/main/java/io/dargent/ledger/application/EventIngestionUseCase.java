@@ -109,6 +109,20 @@ public final class EventIngestionUseCase {
             final var finalEnvelope = envelope;
             final var finalClock = clock;
             return txTemplate.execute(txStatus -> {
+                // Scenario 20 / E9 §6.4: prevent double-journaling of republished events.
+                // If a POSTED journal entry already exists for this txid, the event is a
+                // republish — mark as POSTED but skip journal creation.
+                if (store.hasPostedJournalForTxid(finalPaymentPayload.txid())) {
+                    jdbc.sql("""
+                            UPDATE ledger.events
+                            SET status = 'POSTED', note = 'Republished — already journaled'
+                            WHERE event_id = ?
+                            """)
+                            .param(finalEnvelope.eventId())
+                            .update();
+                    return true;
+                }
+
                 // Update event to POSTED
                 jdbc.sql("""
                         UPDATE ledger.events
