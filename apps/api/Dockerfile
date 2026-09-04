@@ -14,5 +14,5 @@ COPY --from=build /workspace/apps/api/target/dargent-api.jar /app/app.jar
 USER 10001
 EXPOSE 8080
 HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=10 \
-  CMD wget -qO- http://127.0.0.1:8080/actuator/health | grep -q '"status":"UP"'
+  CMD wget -qO- http://127.0.0.1:9090/actuator/health | grep -q '"status":"UP"'
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

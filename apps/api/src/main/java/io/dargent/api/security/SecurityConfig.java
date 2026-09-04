@@ -13,7 +13,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  * <ul>
  *   <li>{@code /v1/**} — authenticated (API key required)</li>
  *   <li>{@code /webhooks/psp} — open (HMAC validated in a future filter, E4)</li>
- *   <li>{@code /actuator/health, /actuator/info} — open</li>
+ *   <li>Actuator (health, info, prometheus) — management port only (isolated)</li>
  *   <li>everything else — 401</li>
  * </ul>
  */
@@ -32,7 +32,6 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         .requestMatchers("/webhooks/psp").permitAll()
                         // Ledger routes explicit (E7 §5.6; AGENTS §4.1) — API key required
                         .requestMatchers("/v1/ledger/accounts/*/balance").authenticated()

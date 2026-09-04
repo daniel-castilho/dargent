@@ -29,10 +29,23 @@ dargent:
       receiver-city: ${DARGENT_RECEIVER_CITY:SAO PAULO}
 
 management:
+  server:
+    port: ${DARGENT_MANAGEMENT_PORT:9090}
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
   endpoint:
     health:
       show-details: never
+
+---
+
+spring:
+  config:
+    activate:
+      on-profile: prod
+logging:
+  structured:
+    format:
+      console: ecs
