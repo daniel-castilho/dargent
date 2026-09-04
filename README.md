@@ -104,9 +104,9 @@ one wins, the loser is 409 (payments lock) or IGNORED + refund_skipped_balance a
 | Persistence | PostgreSQL 16 · Flyway (forward-only, expand/contract) · JPA/Hibernate (payments) · `JdbcClient` (ledger) |
 | Messaging | SNS/SQS FIFO on LocalStack via AWS SDK v2, behind our own channel adapters |
 | Auth | Stripe-style API keys (`psp_test_…`, SHA-256 at rest) + HMAC-SHA256 webhooks with anti-replay |
-| Observability | Boot 4 structured JSON logs, Micrometer + Prometheus |
+| Observability | Boot 4 structured JSON logs, Micrometer + Prometheus **(M4)** |
 | Tests | JUnit 6, Testcontainers 2.0, WireMock, Awaitility, jqwik, ArchUnit |
-| Runtime | Docker Compose, NGINX blue-green with canary — no k8s |
+| Runtime | Docker Compose, NGINX blue-green with canary **(M4)** — no k8s |
 
 ## Getting started
 

@@ -109,6 +109,8 @@ curl -X POST https://api.dargent.local/v1/outbox/republish \
 ```
 This mints new PENDING rows with `{original}-r{n}` eventIds, which the relay will deliver fresh.
 
+> **⚠️ Operational limitation (ratified E9 §4 / §6.4):** Republish mints new events that re-notify already-notified consumers. The ledger consumer dedupes by `eventId` (scenario 20), but the **notifications consumer does not dedupe** — it will re-deliver the webhook. Use republish only for events that genuinely failed delivery (DLQ), not for already-delivered events. Re-runs of the same republish are idempotent at both consumers (deterministic `{original}-r{n}` eventIds).
+
 ### Option B: Manual Requeue to Main Queue (If Outbox Row Gone)
 ```bash
 # 1. Receive message from DLQ (delete it)
