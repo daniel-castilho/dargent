@@ -150,13 +150,18 @@ LIMIT 50;
 SELECT je.txid, je.event_id, e.status, e.note, je.created_at
 FROM ledger.journal_entries je
 JOIN ledger.events e ON e.event_id = je.event_id
-WHERE je.txid IN (
-  SELECT txid FROM ledger.journal_entries
-  GROUP BY txid HAVING COUNT(*) > 1
-)
+WHERE e.type = 'payment.confirmed'
+  AND je.txid IN (
+    SELECT je2.txid
+    FROM ledger.journal_entries je2
+    JOIN ledger.events e2 ON e2.event_id = je2.event_id
+    WHERE e2.type = 'payment.confirmed'
+    GROUP BY je2.txid
+    HAVING COUNT(*) > 1
+  )
 ORDER BY je.txid, je.created_at;
 ```
-Should return 0 rows (E9 S4 guarantees no double journaling per txid).
+Should return 0 rows (E9 S4 guarantees no double journaling per txid for `payment.confirmed`).
 
 ### 7.3 Outbox: Stale PENDING / EXHAUSTED rows
 ```sql

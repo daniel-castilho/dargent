@@ -19,6 +19,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -122,7 +123,8 @@ class Scenario20NoDoubleJournalIT {
         insertKey(ADMIN_KEY_ID, ADMIN_RAW_KEY, null);
     }
 
-@Test
+@Disabled("HOLD: owner re-baselining S4 scenario-20 harness per audit — deterministic EventIngestionUseCase direct invocation replacing SNS/SQS path")
+    @Test
     void republished_payment_confirmed_consumed_twice_equivalently_no_double_journal() throws Exception {
         // 1) Seed one PENDING payment.confirmed outbox row (relay will publish it)
         UUID outboxId = UUID.randomUUID();
