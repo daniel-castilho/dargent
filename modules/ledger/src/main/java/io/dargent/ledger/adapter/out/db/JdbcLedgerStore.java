@@ -6,8 +6,6 @@ import io.dargent.ledger.domain.model.JournalEntry;
 import io.dargent.ledger.domain.model.Posting;
 import io.dargent.ledger.domain.model.Settlement;
 import io.dargent.ledger.domain.port.out.LedgerStore;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -24,8 +22,6 @@ import java.util.UUID;
  * Uses Spring JdbcClient — zero JPA, zero Hibernate.
  */
 public final class JdbcLedgerStore implements LedgerStore {
-
-    private static final Logger log = LoggerFactory.getLogger(JdbcLedgerStore.class);
 
     private final JdbcClient jdbc;
     private final TransactionTemplate txTemplate;
@@ -314,18 +310,6 @@ public final class JdbcLedgerStore implements LedgerStore {
         return txTemplate.execute(txStatus -> {
             // Conditional drain on available balance: net = amount - feeReversal
             long netDrain = amountCents - feeReversalCents;
-            String drainAccount = "merchant:" + merchantId + ":available";
-            String observed = jdbc.sql("""
-                    SELECT count(*), coalesce(max(balance_cents), -1)
-                    FROM ledger.balances
-                    WHERE account = ?
-                    """)
-                    .param(drainAccount)
-                    .query((rs, rowNum) -> "count=" + rs.getLong(1)
-                            + ",balance_cents=" + rs.getLong(2))
-                    .single();
-            log.info("[E8-REFUND-PROBE] merchant={} account={} netDrain={} observed={}",
-                    merchantId, drainAccount, netDrain, observed);
             int drained = jdbc.sql("""
                     UPDATE ledger.balances
                     SET balance_cents = balance_cents - ?, updated_at = ?, last_event_id = ?

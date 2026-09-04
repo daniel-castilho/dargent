@@ -1,5 +1,6 @@
 package io.dargent.ledger.application;
 
+import io.dargent.ledger.application.EventEnvelopeReader;
 import io.dargent.ledger.domain.model.EntryDirection;
 import io.dargent.ledger.domain.model.JournalEntry;
 import io.dargent.ledger.domain.model.Posting;
@@ -57,14 +58,11 @@ public final class EventIngestionUseCase {
 
         String status;
         String note;
-        EventEnvelopeReader.PaymentPayload payload = null;
-        if (!"payment.confirmed".equals(envelope.type())) {
-            // Non-posting event: terminal state is IGNORED from birth.
-            status = "IGNORED";
-            note = "Non-confirmed type: " + envelope.type();
-        } else {
+        EventEnvelopeReader.PaymentPayload paymentPayload = null;
+        EventEnvelopeReader.RefundPayload refundPayload = null;
+        if ("payment.confirmed".equals(envelope.type())) {
             try {
-                payload = reader.extractPaymentPayload(envelope);
+                paymentPayload = reader.extractPaymentPayload(envelope);
                 status = "RECEIVED";
                 note = "Initial receipt";
             } catch (IllegalArgumentException e) {
@@ -72,6 +70,19 @@ public final class EventIngestionUseCase {
                 status = "REJECTED";
                 note = e.getMessage();
             }
+        } else if ("refund.created".equals(envelope.type())) {
+            try {
+                refundPayload = reader.extractRefundPayload(envelope);
+                status = "RECEIVED";
+                note = "Initial receipt";
+            } catch (IllegalArgumentException e) {
+                status = "REJECTED";
+                note = e.getMessage();
+            }
+        } else {
+            // Non-posting event: terminal state is IGNORED from birth.
+            status = "IGNORED";
+            note = "Non-posting type: " + envelope.type();
         }
 
         // Single idempotent insert; a duplicate (event_id already present) is an at-least-once retry.
@@ -86,55 +97,88 @@ public final class EventIngestionUseCase {
 
             if ("RECEIVED".equals(storedStatus)) {
                 // Resume posting in ONE transaction: claim + journal + postings + balances
-                return resumePosting(envelope, payload);
+                return resumePosting(envelope, paymentPayload, refundPayload);
             }
             // POSTED / IGNORED / REJECTED → ack + skip
             return true;
         }
 
-        final EventEnvelopeReader.PaymentPayload postedPayload = payload;
-        if (postedPayload == null) {
-            // IGNORED or REJECTED — no postings.
-            return true;
+        // payment.confirmed path
+        if (paymentPayload != null) {
+            final var finalPaymentPayload = paymentPayload;
+            final var finalEnvelope = envelope;
+            final var finalClock = clock;
+            return txTemplate.execute(txStatus -> {
+                // Update event to POSTED
+                jdbc.sql("""
+                        UPDATE ledger.events
+                        SET status = 'POSTED', note = 'Posted successfully'
+                        WHERE event_id = ?
+                        """)
+                        .param(finalEnvelope.eventId())
+                        .update();
+
+                // Build postings (spec §5.3)
+                UUID entryId = UUID.randomUUID();
+                var postings = List.of(
+                        new Posting(UUID.randomUUID(), entryId, "payments:processing",
+                                EntryDirection.DEBIT, finalPaymentPayload.amountCents(), finalClock.instant()),
+                        new Posting(UUID.randomUUID(), entryId, "fees:revenue",
+                                EntryDirection.CREDIT, finalPaymentPayload.feeCents(), finalClock.instant()),
+                        new Posting(UUID.randomUUID(), entryId,
+                                "merchant:" + finalPaymentPayload.merchantId() + ":available",
+                                EntryDirection.CREDIT, finalPaymentPayload.netCents(), finalClock.instant())
+                );
+
+                var entry = new JournalEntry(
+                        entryId,
+                        finalEnvelope.eventId(),
+                        finalPaymentPayload.txid(),
+                        UUID.fromString(finalPaymentPayload.merchantId()),
+                        "Payment confirmed: " + finalPaymentPayload.txid(),
+                        finalEnvelope.occurredAt(),
+                        postings
+                );
+
+                // Write journal + postings + balances
+                store.postJournal(entry);
+                return true;
+            });
         }
 
-        // Single transaction: update event status, journal + postings + balances
-        return txTemplate.execute(txStatus -> {
-            // Update event to POSTED
-            jdbc.sql("""
-                    UPDATE ledger.events
-                    SET status = 'POSTED', note = 'Posted successfully'
-                    WHERE event_id = ?
-                    """)
-                    .param(envelope.eventId())
-                    .update();
+        // refund.created path
+        if (refundPayload != null) {
+            final var finalRefundPayload = refundPayload;
+            final var finalEnvelope = envelope;
+            final var finalClock = clock;
+            return txTemplate.execute(txStatus -> {
+                boolean posted = store.postRefund(
+                        finalEnvelope.eventId(),
+                        finalRefundPayload.txid(),
+                        UUID.fromString(finalRefundPayload.merchantId()),
+                        finalRefundPayload.amountCents(),
+                        finalRefundPayload.feeReversalCents(),
+                        "Refund: " + finalRefundPayload.txid(),
+                        finalEnvelope.occurredAt(),
+                        finalClock);
+                // Update event status based on result
+                String finalStatus = posted ? "POSTED" : "IGNORED";
+                String finalNote = posted ? "Posted successfully" : "Insufficient merchant balance";
+                jdbc.sql("""
+                        UPDATE ledger.events
+                        SET status = ?, note = ?
+                        WHERE event_id = ?
+                        """)
+                        .param(finalStatus)
+                        .param(finalNote)
+                        .param(envelope.eventId())
+                        .update();
+                return true;
+            });
+        }
 
-            // Build postings (spec §5.3)
-            UUID entryId = UUID.randomUUID();
-            var postings = List.of(
-                    new Posting(UUID.randomUUID(), entryId, "payments:processing",
-                            EntryDirection.DEBIT, postedPayload.amountCents(), clock.instant()),
-                    new Posting(UUID.randomUUID(), entryId, "fees:revenue",
-                            EntryDirection.CREDIT, postedPayload.feeCents(), clock.instant()),
-                    new Posting(UUID.randomUUID(), entryId,
-                            "merchant:" + postedPayload.merchantId() + ":available",
-                            EntryDirection.CREDIT, postedPayload.netCents(), clock.instant())
-            );
-
-            var entry = new JournalEntry(
-                    entryId,
-                    envelope.eventId(),
-                    postedPayload.txid(),
-                    UUID.fromString(postedPayload.merchantId()),
-                    "Payment confirmed: " + postedPayload.txid(),
-                    envelope.occurredAt(),
-                    postings
-            );
-
-            // Write journal + postings + balances
-            store.postJournal(entry);
-            return true;
-        });
+        // IGNORED or REJECTED — no postings.
+        return true;
     }
 
     /**
@@ -144,56 +188,96 @@ public final class EventIngestionUseCase {
      * Belt-and-suspenders: if journal insert still collides (UNIQUE on journal_entries.event_id),
      * re-read status and ack as already-posted.
      */
-    private boolean resumePosting(EventEnvelope envelope, EventEnvelopeReader.PaymentPayload payload) {
-        if (payload == null) {
-            // Should not happen for RECEIVED status, but defensive
-            return true;
-        }
-
-        return txTemplate.execute(txStatus -> {
-            // Conditional claim: only this consumer wins the race
-            int claimed = store.claimEventForResume(envelope.eventId());
-            if (claimed == 0) {
-                // Another consumer won the resume — ack + skip, zero writes
-                return true;
-            }
-
-            try {
-                // Build postings (spec §5.3)
-                UUID entryId = UUID.randomUUID();
-                var postings = List.of(
-                        new Posting(UUID.randomUUID(), entryId, "payments:processing",
-                                EntryDirection.DEBIT, payload.amountCents(), clock.instant()),
-                        new Posting(UUID.randomUUID(), entryId, "fees:revenue",
-                                EntryDirection.CREDIT, payload.feeCents(), clock.instant()),
-                        new Posting(UUID.randomUUID(), entryId,
-                                "merchant:" + payload.merchantId() + ":available",
-                                EntryDirection.CREDIT, payload.netCents(), clock.instant())
-                );
-
-                var entry = new JournalEntry(
-                        entryId,
-                        envelope.eventId(),
-                        payload.txid(),
-                        UUID.fromString(payload.merchantId()),
-                        "Payment confirmed: " + payload.txid(),
-                        envelope.occurredAt(),
-                        postings
-                );
-
-                // Write journal + postings + balances
-                store.postJournal(entry);
-                return true;
-            } catch (DataIntegrityViolationException e) {
-                // Belt-and-suspenders: journal_entries.event_id UNIQUE collision
-                // Re-read status; if POSTED, ack as already-posted; else rethrow
-                String status = store.findEventStatus(envelope.eventId())
-                        .orElseThrow(() -> new IllegalStateException("Event " + envelope.eventId() + " vanished"));
-                if ("POSTED".equals(status)) {
+    private boolean resumePosting(EventEnvelope envelope,
+            EventEnvelopeReader.PaymentPayload paymentPayload,
+            EventEnvelopeReader.RefundPayload refundPayload) {
+        // payment.confirmed resume
+        if (paymentPayload != null) {
+            final var finalPaymentPayload = paymentPayload;
+            final var finalEnvelope = envelope;
+            final var finalClock = clock;
+            return txTemplate.execute(txStatus -> {
+                // Conditional claim: only this consumer wins the race
+                int claimed = store.claimEventForResume(finalEnvelope.eventId());
+                if (claimed == 0) {
+                    // Another consumer won the resume — ack + skip, zero writes
                     return true;
                 }
-                throw e;
-            }
-        });
+
+                try {
+                    // Build postings (spec §5.3)
+                    UUID entryId = UUID.randomUUID();
+                    var postings = List.of(
+                            new Posting(UUID.randomUUID(), entryId, "payments:processing",
+                                    EntryDirection.DEBIT, finalPaymentPayload.amountCents(), finalClock.instant()),
+                            new Posting(UUID.randomUUID(), entryId, "fees:revenue",
+                                    EntryDirection.CREDIT, finalPaymentPayload.feeCents(), finalClock.instant()),
+                            new Posting(UUID.randomUUID(), entryId,
+                                    "merchant:" + finalPaymentPayload.merchantId() + ":available",
+                                    EntryDirection.CREDIT, finalPaymentPayload.netCents(), finalClock.instant())
+                    );
+
+                    var entry = new JournalEntry(
+                            entryId,
+                            finalEnvelope.eventId(),
+                            finalPaymentPayload.txid(),
+                            UUID.fromString(finalPaymentPayload.merchantId()),
+                            "Payment confirmed: " + finalPaymentPayload.txid(),
+                            finalEnvelope.occurredAt(),
+                            postings
+                    );
+
+                    // Write journal + postings + balances
+                    store.postJournal(entry);
+                    return true;
+                } catch (DataIntegrityViolationException e) {
+                    // Belt-and-suspenders: journal_entries.event_id UNIQUE collision
+                    // Re-read status; if POSTED, ack as already-posted; else rethrow
+                    String status = store.findEventStatus(finalEnvelope.eventId())
+                            .orElseThrow(() -> new IllegalStateException("Event " + finalEnvelope.eventId() + " vanished"));
+                    if ("POSTED".equals(status)) {
+                        return true;
+                    }
+                    throw e;
+                }
+            });
+        }
+
+        // refund.created resume
+        if (refundPayload != null) {
+            final var finalRefundPayload = refundPayload;
+            final var finalEnvelope = envelope;
+            final var finalClock = clock;
+            return txTemplate.execute(txStatus -> {
+                int claimed = store.claimEventForResume(finalEnvelope.eventId());
+                if (claimed == 0) {
+                    return true;
+                }
+
+                boolean posted = store.postRefund(
+                        finalEnvelope.eventId(),
+                        finalRefundPayload.txid(),
+                        UUID.fromString(finalRefundPayload.merchantId()),
+                        finalRefundPayload.amountCents(),
+                        finalRefundPayload.feeReversalCents(),
+                        "Refund: " + finalRefundPayload.txid(),
+                        finalEnvelope.occurredAt(),
+                        finalClock);
+                String finalStatus = posted ? "POSTED" : "IGNORED";
+                String finalNote = posted ? "Posted successfully" : "Insufficient merchant balance";
+                jdbc.sql("""
+                        UPDATE ledger.events
+                        SET status = ?, note = ?
+                        WHERE event_id = ?
+                        """)
+                        .param(finalStatus)
+                        .param(finalNote)
+                        .param(envelope.eventId())
+                        .update();
+                return true;
+            });
+        }
+
+        return true;
     }
 }
