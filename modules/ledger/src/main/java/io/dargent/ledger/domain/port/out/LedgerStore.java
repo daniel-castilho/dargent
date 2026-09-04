@@ -95,12 +95,6 @@ public interface LedgerStore {
     void recordAudit(AuditEntry audit);
 
     /**
-     * Checks if a POSTED journal entry already exists for the given txid (payment.confirmed).
-     * Used to prevent double-journaling of republished events (scenario 20 / E9 §6.4).
-     */
-    boolean hasPostedJournalForTxid(String txid);
-
-    /**
      * Verifies proof: global Σ DEBIT = Σ CREDIT and per-account balance = Σ credits - Σ debits.
      * Returns divergence details if proof fails.
      */

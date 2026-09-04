@@ -294,12 +294,6 @@ class EventIngestionUseCaseTest {
         }
 
         @Override
-        public boolean hasPostedJournalForTxid(String txid) {
-            return insertedEvents.values().stream()
-                    .anyMatch(r -> "POSTED".equals(r.status()) && r.txid().equals(txid));
-        }
-
-        @Override
         public int claimEventForResume(UUID eventId) {
             EventRecord record = insertedEvents.get(eventId);
             if (record != null && "RECEIVED".equals(record.status())) {

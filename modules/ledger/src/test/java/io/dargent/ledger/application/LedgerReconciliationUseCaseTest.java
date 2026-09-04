@@ -102,11 +102,6 @@ class LedgerReconciliationUseCaseTest {
         }
 
         @Override
-        public boolean hasPostedJournalForTxid(String txid) {
-            return false;
-        }
-
-        @Override
         public long availableBalance(java.util.UUID merchantId) {
             return findAccount("merchant:" + merchantId + ":available").map(Account::balanceCents).orElse(0L);
         }
