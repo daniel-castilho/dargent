@@ -12,6 +12,7 @@ public enum ErrorCode {
 
     INVALID_REQUEST("invalid_request", HttpStatus.BAD_REQUEST, "Invalid request"),
     UNAUTHORIZED("unauthorized", HttpStatus.UNAUTHORIZED, "Unauthorized"),
+    FORBIDDEN("forbidden", HttpStatus.FORBIDDEN, "Forbidden"),
     INVALID_SIGNATURE("invalid_signature", HttpStatus.UNAUTHORIZED, "Invalid signature"),
     SIGNATURE_EXPIRED("signature_expired", HttpStatus.UNAUTHORIZED, "Signature expired"),
     NOT_FOUND("not_found", HttpStatus.NOT_FOUND, "Resource not found"),
@@ -25,6 +26,8 @@ public enum ErrorCode {
     BALANCE_UNAVAILABLE("balance_unavailable", HttpStatus.CONFLICT, "Balance service unavailable"),
     INVALID_TRANSITION("invalid_transition", HttpStatus.CONFLICT, "Invalid state transition"),
     INVALID_STATE("invalid_state", HttpStatus.CONFLICT, "Invalid state"),
+    NOT_EXHAUSTIBLE("not_exhaustible", HttpStatus.CONFLICT, "Outbox row is not exhausted"),
+    INVALID_WINDOW("invalid_window", HttpStatus.BAD_REQUEST, "Invalid republish window"),
     IDEMPOTENCY_KEY_IN_FLIGHT("idempotency_key_in_flight", HttpStatus.TOO_EARLY, "Idempotency key in flight"),
     PSP_UNAVAILABLE("psp_unavailable", HttpStatus.BAD_GATEWAY, "Payment provider unavailable"),
     INTERNAL("internal", HttpStatus.INTERNAL_SERVER_ERROR, "Internal error");

@@ -90,6 +90,30 @@ public class JdbcOutboxEventStore implements OutboxEventStore {
     }
 
     @Override
+    public RequeueResult requeueExhausted(OutboxId id, Instant now) {
+        String aggregateId = jdbc.sql("""
+                update payments.outbox
+                set status = 'PENDING', attempt_count = 0, next_attempt_at = :now
+                where id = :id and status = 'EXHAUSTED'
+                returning aggregate_id
+                """)
+                .param("id", id.value())
+                .param("now", Timestamp.from(now))
+                .query(String.class)
+                .optional()
+                .orElse(null);
+        if (aggregateId != null) {
+            return RequeueResult.requeued(aggregateId);
+        }
+        Integer found = jdbc.sql("select 1 from payments.outbox where id = :id")
+                .param("id", id.value())
+                .query(Integer.class)
+                .optional()
+                .orElse(null);
+        return found == null ? RequeueResult.notFound() : RequeueResult.notExhaustible();
+    }
+
+    @Override
     public int purgeSent(Instant cutoff, int limit) {
         return jdbc.sql("""
                 delete from payments.outbox

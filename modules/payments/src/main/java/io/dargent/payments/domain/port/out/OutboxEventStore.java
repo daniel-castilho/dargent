@@ -55,6 +55,38 @@ public interface OutboxEventStore {
     boolean markExhausted(OutboxId id, int attemptCount);
 
     /**
+     * Requeues an EXHAUSTED outbox row back to PENDING (E9 §3): resets {@code attempt_count}=0 and
+     * {@code next_attempt_at}=now so the relay claims it on the next poll. Human admin action —
+     * the caller audits with the real API-key principal.
+     *
+     * @param id  outbox row id
+     * @param now clock reference for {@code next_attempt_at}
+     * @return the outcome; on {@code REQUEUED} also the row's payment {@code aggregateId} (the txid)
+     *         so the audit can correlate against {@code payments.audit_log.aggregate_id varchar(25)}
+     */
+    RequeueResult requeueExhausted(OutboxId id, Instant now);
+
+    /** Result of {@link #requeueExhausted}. */
+    record RequeueResult(RequeueOutcome outcome, String aggregateId) {
+        public static RequeueResult notFound() {
+            return new RequeueResult(RequeueOutcome.NOT_FOUND, null);
+        }
+
+        public static RequeueResult notExhaustible() {
+            return new RequeueResult(RequeueOutcome.NOT_EXHAUSTIBLE, null);
+        }
+
+        public static RequeueResult requeued(String aggregateId) {
+            return new RequeueResult(RequeueOutcome.REQUEUED, aggregateId);
+        }
+    }
+
+    /** Outcome of {@link #requeueExhausted}. */
+    enum RequeueOutcome {
+        REQUEUED, NOT_EXHAUSTIBLE, NOT_FOUND
+    }
+
+    /**
      * Purges old SENT rows for retention (E6 §5.4).
      *
      * @param cutoff   rows with {@code published_at < cutoff} are deleted

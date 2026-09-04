@@ -355,6 +355,16 @@ class OutboxDeliveryUseCaseTest {
         }
 
         @Override
+        public RequeueResult requeueExhausted(OutboxId id, Instant now) {
+            Row r = rows.get(id);
+            if (r == null) return RequeueResult.notFound();
+            if (!"EXHAUSTED".equals(r.status())) return RequeueResult.notExhaustible();
+            rows.put(id, new Row(r.id(), r.aggregateId(), r.type(), r.version(),
+                    r.payload(), r.requestId(), "PENDING", 0, now));
+            return RequeueResult.requeued(r.aggregateId());
+        }
+
+        @Override
         public int purgeSent(Instant cutoff, int limit) {
             purgeCutoffs.add(cutoff);
             return 0;

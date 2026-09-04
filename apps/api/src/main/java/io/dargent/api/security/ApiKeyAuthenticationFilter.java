@@ -27,6 +27,9 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
     private static final String BEARER_PREFIX = "Bearer ";
     private static final String AUTH_HEADER = "Authorization";
 
+    /** Request attribute holding the raw API key value (post-auth) for admin-gate comparison. */
+    public static final String RAW_KEY_ATTRIBUTE = ApiKeyAuthenticationFilter.class.getName() + ".rawKey";
+
     private final ApiKeyRepository repository;
     private final ErrorResponseWriter errorWriter;
 
@@ -85,6 +88,10 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
         ApiKeyPrincipal principal = new ApiKeyPrincipal(keyRecord.merchantId(), keyRecord.id());
         var authToken = new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
         SecurityContextHolder.getContext().setAuthentication(authToken);
+
+        // Expose the raw key value so admin-gated routes (E9 §3/§4) can compare it constant-time
+        // against DARGENT_OUTBOX_ADMIN_KEY without re-reading the request body.
+        request.setAttribute(RAW_KEY_ATTRIBUTE, rawKey);
 
         try {
             filterChain.doFilter(request, response);
