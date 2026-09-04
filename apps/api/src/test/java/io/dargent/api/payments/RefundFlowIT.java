@@ -127,6 +127,10 @@ class RefundFlowIT {
         // 5. Drive the ledger refund.created consumer (mirrors the stub consumer driving processMessage).
         // Use a fixed eventId so redelivery tests work correctly.
         String refundEventId = UUID.randomUUID().toString();
+
+        // Verify the confirmed payment actually seeded the ledger (CI guard)
+        assertThat(balance("merchant:" + MERCHANT + ":available")).as("available after confirm").isEqualTo(9900);
+
         boolean refundProcessed = ingestion.processMessage(refundEnvelopeWithEventId(refundEventId, txid, 4000, 40, 3960));
         assertThat(refundProcessed).isTrue();
 
