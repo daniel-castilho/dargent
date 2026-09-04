@@ -307,6 +307,16 @@ Indexes: unique(`txid`), partial `WHERE status='PENDING' AND expires_at < now()`
 Merchant final balance: 59.40 available | net fees: 0.60 | clearing: 60.00 ✓
 ```
 
+> **As-built account naming (E7/E8).** The ledger implementation names the accounts `payments:processing`
+> (DEBIT target of `payment.confirmed`/CREDIT target of refund), `fees:revenue` (REVENUE, D8 reversal),
+> and `merchant:{id}:available` (LIABILITY:AVAILABLE), with `balance_cents = credits − debits` per account.
+> For a 40% refund of 100.00/fee 1.00 the verified postings are `available −5940` / `processing +6000` /
+> `fees −100`. The refund is applied inside `postRefund` under a conditional
+> `UPDATE ledger.balances ... WHERE balance_cents >= :drain` — zero rows means the race was lost and the
+> `refund.created` becomes `IGNORED` with a `refund_skipped_balance` audit row (scenario 23). The
+> `JournalCoverageAuditor` also detects, per scan, (c) a refund row with no POSTED `refund.created` and
+> (d) a POSTED `refund.created` with no refund row (DEBT-4 legs, E8 S7).
+
 ---
 
 ## 6. API Contracts

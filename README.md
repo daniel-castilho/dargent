@@ -73,7 +73,9 @@ webhook validated → dedupe → conditional UPDATE → CONFIRMED (fee computed 
 outbox → SNS → SQS → ledger journals DR clearing / CR pending+fees · notifications notified
 webhook never arrived? → reconciler (E5, live) polls the PSP and confirms on its own
 QR expired but paid late? → resurrection (E5, live) with audit trail
-POST /v1/payments/{txid}/refunds → partial/total, fee returned proportionally, ledger drains balance
+POST /v1/payments/{txid}/refunds → partial/total, fee returned proportionally (entry [3]+[4]),
+ledger drains the merchant :available balance; concurrent refunds race is DB-arbitrated — exactly
+one wins, the loser is 409 (payments lock) or IGNORED + refund_skipped_balance audit (ledger drain)
 ```
 
 ## Documentation
@@ -161,12 +163,13 @@ shipped image. Deployment is **blue-green by immutable tag** with a 10%/30s cana
 
 ## Current state
 
-**E6 + E7 ledger (S1–S5) + E10 notifications (S0–S7) complete on `main` (E7 S5 `33462467004` #59 green;**
-**E10 loop/poison `33674334484` #113 / `33675295464` #114; E10 read API `33683261976` green). Ledger**
+**E6 + E7 ledger (S1–S5) + E10 notifications (S0–S7) + E8 refunds (S2–S7) complete on `main`. Ledger**
 **consumes `payment.confirmed`, journals double-entry postings, maintains balance proof + rebuild, and**
 **settles the full available balance behind `DARGENT_LEDGER_CONSUMER_ENABLED` (off by default).**
-**Notifications consume events into `notifications.notification` behind `DARGENT_NOTIFS_CONSUMER_ENABLED`**
-**(off by default) and expose `GET /v1/notifications` (tenant-scoped read API). M2 is now ✅.**
+**`POST /v1/payments/{txid}/refunds` drives partial/total refunds with fee reversal and a ledger-backed**
+**merchant balance guard; concurrent refunds are DB-arbitrated (payments lock → one 201 / one 409;**
+**ledger drain → one POSTED / one IGNORED with `refund_skipped_balance`). The journal coverage auditor**
+**now also detects refund-vs-POSTED discrepancies. M2 is ✅; M3 refunds are built, M3 completes with E9.**
 
 | Milestone | Scope | Status |
 |---|---|---|
@@ -175,7 +178,7 @@ shipped image. Deployment is **blue-green by immutable tag** with a 10%/30s cana
 | M2 (E4) — Webhook intake | `POST /webhooks/psp` fail-closed HMAC, anti-replay, dedupe, conditional confirm | ✅ |
 | M2 (E6) — Events backbone | Outbox relay → SNS/SQS FIFO with DLQ + retention (at-least-once, `runOnce`-driven ITs incl. E2E anchor) | ✅ |
 | M2 (E7/E10) — Events ledger/consumer | Ledger journaling + balance proof/rebuild + settlement (E7 S1–S5 ✓); notifications consumer + `GET /v1/notifications` read API (E10 S0–S7 ✓) | ✅ |
-| M3 — Suffering | Refunds, expiration, resurrection, reconciler, settlement, DLQ/backoff/EXHAUSTED/requeue | ☐ |
+| M3 — Suffering | Refunds (✓), expiration, resurrection, reconciler, settlement, DLQ/backoff/EXHAUSTED/requeue (E9) | ☐ |
 | M4 — Finish | Metrics, blue-green deploy, runtime smoke in CI, tag releases + SBOM, restore drill | ☐ |
 | M5 — Stretch | Card as second Strategy, k6 as hard gate, Redis read cache, webhook reprocessing | ☐ |
 

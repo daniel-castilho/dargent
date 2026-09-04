@@ -5,6 +5,28 @@ versioning: semantic, cut from annotated git tags (see [release-runbook](docs/re
 
 ## [Unreleased]
 
+### Added — E8 Refunds, Block 2: balance guard, refund races, auditor refund legs (2026-09-03)
+
+- **Refund balance guard IT over HTTP** (S6, scenario 23): `POST /v1/refunds` returns `409
+  insufficient_merchant_balance` with zero writes when the merchant `:available` ledger balance is
+  below the requested net refund; a guard-pass refund posts entry [3]+[4] exactly (`5940/−6000/60`
+  golden vector for a 40% refund of 100.00/fee 1.00).
+- **Concurrent refund races** (S6, scenarios 12 + 23): two concurrent 60% refunds (sc.12) are
+  serialized by the `FOR UPDATE` payment lock + version guard — exactly one `201`, the other
+  `409 refund_exceeds_remaining`, `refunded_cents` stays exactly 6000. Two concurrent `refund.created`
+  ledger events draining the same `:available` account (sc.23) are arbitrated by the conditional
+  `UPDATE ... WHERE balance_cents >= :drain` — one POSTED, the other IGNORED with a
+  `refund_skipped_balance` audit row; ledger proof stays balanced.
+- **Skip-audit actor fix** (S6): the `postRefund` skip-audit path now writes the
+  `SYSTEM_AUDIT_ACTOR` sentinel + the real `merchant_id` into the `refund_skipped_balance` audit row,
+  satisfying `ledger.audit_log.actor_key uuid NOT NULL`.
+- **Journal coverage auditor refund legs** (S7, DEBT-4 extended): `PHASE_C` flags a refund row with no
+  matching POSTED `refund.created`; `PHASE_D` flags a POSTED `refund.created` with no matching refund
+  row. Uses `payments.refunds ⋈ payments.payments` (same-schema, AGENTS §2.4).
+- **Auditor connection-leak fix** (S7, DEBT-5 paid): `runOnce()` now materializes all four queries with
+  `.list()` instead of `.stream().collect(...)`, which leaked one DB connection per query per scan and
+  exhausted the Hikari pool under IT load; the auditor now passes 6/6 including the two new legs.
+
 ### Added — E5 Expiration, Resurrection & Reconciliation (2026-09-02)
 
 - **Expiration scheduler** (V111): partial index `(expires_at) WHERE status='PENDING'`, conditional
