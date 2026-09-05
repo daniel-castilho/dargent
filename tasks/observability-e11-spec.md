@@ -78,9 +78,9 @@ pasted with commit ids. DOD §2 self-audit pasted in the handoff.
 
 | Item | Deliverable | Test / Evidence | CI Run | Status |
 |---|---|---|---|---|
-| S0 | port+registry+ECS+healthchecks | `ManagementPortIT` | pair | ◻ |
-| S1 | JSON logs + scrubbing | `JsonLogCorrelationIT` | pair | ◻ |
-| S2 | on-call drill | `OnCallTxidDrillIT` + runbook | pair | ◻ |
-| S3 | lockdown | `ProductionLockdownIT` | pair | ◻ |
-| S4 | 8 metrics | `MetricsScrapeIT` | pair | ◻ |
-| S5 | docs truth + E11 ✅ (M4 ◐) + citation | epics diff | pair | ◻ |
+| S0 | port+registry+ECS+healthchecks | `ManagementPortIT` 3/3 | #160 `33942554113` (head `8da0fc8`) | ✅ |
+| S1 | JSON logs + scrubbing | `JsonLogCorrelationIT` 3/3 | #160 `33942554113` + wire remediation #161 `33945666982` (head `d7eade9`) | ✅ |
+| S2 | on-call drill | `OnCallTxidDrillIT` 1/1 + runbook | #160 `33942554113` (head `8da0fc8`) | ✅ |
+| S3 | lockdown | `ProductionLockdownIT` 6/6 | #160 `33942554113` (head `8da0fc8`) | ✅ |
+| S4 | 8 metrics | `MetricsScrapeIT` 1/1 | #162 `33987573655` (head `a98a8d0`) | ✅ |
+| S5 | docs truth + E11 ✅ (M4 ◐) + citation | epics diff `ea2fdfc` | flip run #163 `33993224689`; this citation cites #163 | ✅ |
