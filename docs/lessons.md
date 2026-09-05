@@ -10,7 +10,20 @@ When a lesson repeats three times, promote it to [coding-standards.md](coding-st
 
 ---
 
-## 14. Green CI ≠ right tests ≠ code exists — the first act of remediation is enabling the disabled spec and watching it fail; audit beats attestation (2026-08-30)
+## 15. A test that "hangs" on 100% CPU is usually your own non-terminating loop, not the framework — and a constant prefix can make a "re-generate until different" loop permanent (2026-09-04)
+
+`ProductionLockdownIT` (E11 S3) seemed to hang during context startup — no Spring banner, no container logs, timeouts up to 600–900 s. The suspect was the management port setup (`management.server.port=9090` fixed vs `=0` + `@LocalManagementPort`, RestAssured), and the fix was copied from `spotpobre-api`. Minutes of stabbing at it got nowhere.
+
+The actual culprit was **not** Spring: a `while (prefix(other) == prefix(raw)) other = generate()` fixture loop. `ApiKeyHasher.prefix()` returns the *constant* `psp_test_` (11 chars), so the condition was always true and the loop re-generated keys forever. `jstack <surefire-pid>` on the "hung" JVM showed it instantly: `main RUNNABLE` at `ApiKeyHasher$Base62.encode` (100% CPU) called from the fixture's `setUp()`. One instrumented run with `jstack` replaced every built-in assumption.
+
+**Golden rules:**
+
+1. **A "hang" is a busy loop until proven otherwise** — `jstack` the forked surefire JVM (`jps -l` → `jstack <pid>`) *before* touching frameworks. It turns a 600 s mystery into a 10 s answer.
+2. **`ApiKeyHasher.prefix()` is the fixed prefix** — you cannot make two generated keys differ by prefix. The correct way to seat two active keys under the partial unique index `uq_api_keys_key_prefix_active` (one active key per `key_prefix`) is the proven `CreatePaymentIT` order: **revoke the owner key, then insert the second key with the SAME shared prefix**.
+3. **Secret-keeping helpers are a minefield**: `configValidator` (prod profile) requires `PSP_BASE_URL` (a real endpoint) and `PSP_WEBHOOK_SECRET` (strong) — dropping them from a prod-profile test fails fast at startup, not in the assertion. The two proven prod tests (`ManagementPortIT`, `JsonLogCorrelationIT`) carry both; copy their full property block, don't "simplify" it.
+4. **`management.server.port` is configurable by design** (`DARGENT_MANAGEMENT_PORT`). A matcher that hardcodes 9090 is a real prod bug (custom port ⇒ health checks denied). Inject the configured port; assert the management port on a *different* port than the sibling IT's 9090 to keep contexts independent.
+
+---
 
 The E3R epic began with a repo that claimed "E3 complete: 73 tests pass" (commit `a979c80`) and "E4 complete: full loop proven" (commit `47d2440`). Both claims were false — the `POST /v1/payments` endpoint never existed over HTTP, `CreatePaymentUseCase` violated spec §5.7/§5.8, `CreatePaymentScenarioIT` was `.disabled`, `POST /webhooks/psp` never existed, and the E4 acceptance matrix cited test classes that never existed. CI was green (113 tests) because it ran a suite that exercised nothing the spec required.
 
