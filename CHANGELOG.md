@@ -5,6 +5,13 @@ versioning: semantic, cut from annotated git tags (see [release-runbook](docs/re
 
 ## [Unreleased]
 
+### Milestone — E11 Observability ✅ (2026-09-05)
+
+- **E11 ✅ — observability live**: structured ECS JSON logs with end-to-end request correlation
+  (intake → outbox relay → ledger ingest), 8 frozen `dargent_*` Prometheus metrics asserted on a real
+  scrape (`MetricsScrapeIT`), isolated management port, on-call drill + production lockdown ITs in CI.
+  M4 remains ◐ (completes with E12+E13). See `docs/observability.md`.
+
 ### Added — E11 Observability (Block 2) (2026-09-05)
 
 - **Frozen Prometheus metrics contract + scrape IT (S4)**: 8 series (names frozen from

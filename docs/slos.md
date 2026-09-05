@@ -14,8 +14,8 @@ budget converts "slow down and fix reliability" from opinion into policy.
 | S2 | Latency — `GET /v1/payments/{txid}` | **p95 < 100 ms** | 7 days | Prometheus histograms | (M4) |
 | S3 | Latency — `POST /v1/payments` | **p95 < 250 ms** | 7 days | Prometheus histograms (chaos off) | (M4) |
 | S4 | Latency — webhook intake | **p95 < 150 ms** | 7 days | Prometheus histograms | (M4) |
-| S5 | Confirmation propagation — a payment the PSP knows is confirmed is visible as `CONFIRMED` (webhook or reconciler) | **≥ 99.9% within 10 min** | 30 days | `dargent_reconciler_confirmations_total` + payment state audit query | (M4) |
-| S6 | Event delivery — outbox lag | **p95 < 30 s**; no event `PENDING` > 5 min | 7 days | `dargent_outbox_lag_seconds` | (M4) |
+| S5 | Confirmation propagation — a payment the PSP knows is confirmed is visible as `CONFIRMED` (webhook or reconciler) | **≥ 99.9% within 10 min** | 30 days | `dargent_reconciler_confirmations_total` + payment state audit query | *(live, E11)* |
+| S6 | Event delivery — outbox lag | **p95 < 30 s**; no event `PENDING` > 5 min | 7 days | `dargent_outbox_lag_seconds` | *(live, E11)* |
 | S7 | Ledger integrity — daily balance proof passes (`Σ DR = Σ CR`, projection == lines) | **100%** | daily job | proof job exit status (recorded in drill log) | (M4) |
 | S8 | Money durability — a `CONFIRMED` payment, once journaled, is never lost | **100% (invariant, no budget)** | forever | restore drills + proof jobs | (M4) |
 

@@ -28,6 +28,10 @@ healthy"), distributed tracing deliberately out (a modular monolith with correla
 
 ## 3. Metrics (Micrometer → Prometheus at `/actuator/prometheus`)
 
+**Status: live (E11).** All 8 series below are wired end-to-end and asserted — with their frozen tag
+vocabularies and non-zero values — on a real `/actuator/prometheus` scrape of a prod-profile boot by
+`MetricsScrapeIT` (CI). Names are FROZEN: renaming any series is a contract break.
+
 | Metric | Type | Labels | Question it answers |
 |---|---|---|---|
 | `dargent_payments_transitions_total` | counter | `from`, `to`, `outcome` | Are payments flowing? How many resurrections/failures? |
