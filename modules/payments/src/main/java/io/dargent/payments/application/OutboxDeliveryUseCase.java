@@ -132,18 +132,36 @@ public final class OutboxDeliveryUseCase {
                 continue;
             }
             published++;
+            log.atInfo()
+                    .setMessage("OUTBOX publish ok")
+                    .addKeyValue("request_id", extractRequestId(row.payload()))
+                    .addKeyValue("event_id", eventId)
+                    .addKeyValue("type", row.type())
+                    .addKeyValue("aggregate_id", row.aggregateId())
+                    .log();
         }
         return published;
     }
 
-    private String extractEventId(String payload) {
-        // Strict Jackson parse using the injected mapper; missing/blank eventId = writer bug
-        JsonNode node;
+    private JsonNode parseEnvelope(String payload) {
         try {
-            node = mapper.readTree(payload);
+            return mapper.readTree(payload);
         } catch (Exception e) {
             throw new IllegalArgumentException("invalid payload JSON: " + e.getMessage(), e);
         }
+    }
+
+    private String extractRequestId(String payload) {
+        try {
+            return parseEnvelope(payload).path("requestId").asText(null);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private String extractEventId(String payload) {
+        // Strict Jackson parse using the injected mapper; missing/blank eventId = writer bug
+        JsonNode node = parseEnvelope(payload);
         String eventId = node.path("eventId").asText(null);
         if (eventId == null || eventId.isBlank()) {
             throw new IllegalArgumentException("missing or blank eventId");

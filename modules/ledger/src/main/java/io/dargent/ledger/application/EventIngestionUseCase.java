@@ -6,6 +6,8 @@ import io.dargent.ledger.domain.model.JournalEntry;
 import io.dargent.ledger.domain.model.Posting;
 import io.dargent.ledger.domain.port.out.LedgerStore;
 import io.dargent.shared.events.EventEnvelope;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -21,6 +23,8 @@ import java.util.UUID;
  * At-least-once + local dedupe by event_id; posting exactly-one-per-event by construction.
  */
 public final class EventIngestionUseCase {
+
+    private static final Logger log = LoggerFactory.getLogger(EventIngestionUseCase.class);
 
     private final EventEnvelopeReader reader;
     private final LedgerStore store;
@@ -55,6 +59,15 @@ public final class EventIngestionUseCase {
             // Poison: invalid JSON or envelope structure — do NOT ack
             return false;
         }
+
+        log.atInfo()
+                .setMessage("LEDGER ingest")
+                .addKeyValue("request_id", envelope.requestId())
+                .addKeyValue("event_id", envelope.eventId().toString())
+                .addKeyValue("type", envelope.type())
+                .addKeyValue("aggregate_id", envelope.aggregateId())
+                .addKeyValue("merchant_id", envelope.merchantId().toString())
+                .log();
 
         String status;
         String note;

@@ -2,6 +2,7 @@ package io.dargent.api.controller;
 
 import io.dargent.api.error.ErrorCode;
 import io.dargent.api.error.ErrorResponseWriter;
+import io.dargent.api.web.RequestIdFilter;
 import io.dargent.payments.application.WebhookIntakeUseCase;
 import io.dargent.payments.domain.model.WebhookSignatureValidator;
 import io.dargent.payments.domain.port.out.WebhookEventRecord;
@@ -94,13 +95,19 @@ public class WebhookController {
 
         String providerEventId = endToEndId + "|" + type;
 
+        log.info("Webhook intake type={} provider_event_id={} txid={}",
+                type, providerEventId, txid);
+
+        String requestId = (String) request.getAttribute(RequestIdFilter.ATTRIBUTE);
+
         var outcome = useCase.execute(new WebhookIntakeUseCase.Input(
                 providerEventId,
                 eventId,
                 type,
                 txid,
                 new String(rawBody, StandardCharsets.UTF_8),
-                true
+                true,
+                requestId
         ));
 
         switch (outcome) {

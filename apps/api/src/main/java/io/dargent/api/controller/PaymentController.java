@@ -21,6 +21,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -43,6 +46,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/v1/payments")
 class PaymentController {
 
+    private static final Logger log = LoggerFactory.getLogger(PaymentController.class);
     private static final String ENDPOINT = "POST /v1/payments";
     private static final String BRL = "BRL";
 
@@ -84,9 +88,17 @@ class PaymentController {
         String idempotencyKey = idempotencyKey(request);
         String requestId = (String) request.getAttribute(RequestIdFilter.ATTRIBUTE);
 
+        log.info("Payment create request endpoint={} merchant_id={} amount_cents={} expires_in={}",
+                ENDPOINT, principal.merchantId(), amount, expiresIn);
+
         CreatePaymentUseCase.Output out = createUseCase.execute(new CreatePaymentUseCase.Input(principal.merchantId(), principal.keyId(),
                 idempotencyKey, ENDPOINT, fingerprint, requestId, Money.of(amount, BRL),
                 description, expiresIn));
+
+        MDC.put("txid", out.txid().value());
+        log.info("Payment create result status={} idempotent_replay={}",
+                out.status().name(), out.replay());
+        MDC.remove("txid");
 
         var response = new CreatePaymentResponse(out.txid().value(), out.status().name(), amount,
                 BRL, out.expiresAt(), out.brcode(), Duration.between(clock.instant(), out.expiresAt()));

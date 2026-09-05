@@ -17,6 +17,10 @@ public class CapturingAppender extends AppenderBase<ILoggingEvent> {
 
     @Override
     protected void append(ILoggingEvent event) {
+        // Snapshot threadName + MDC on the emitting thread (the AsyncAppender pattern).
+        // Without this the event stays lazy: a post-hoc encoder reading it from another
+        // thread would see the ASSERTING thread's name/empty MDC instead of the request's.
+        event.prepareForDeferredProcessing();
         EVENTS.add(event);
     }
 

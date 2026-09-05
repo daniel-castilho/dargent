@@ -29,7 +29,7 @@ public final class EventEnvelopeFactory {
      * @param version    event version (≥ 1)
      * @param aggregateId the txid
      * @param merchantId owner
-     * @param requestId  correlation id (null for PSP callbacks — webhook has none)
+     * @param requestId  correlation id (null when the source carries none, e.g. the reconciler leg)
      * @param payload    domain payload (nested object)
      * @param occurredAt event time
      */

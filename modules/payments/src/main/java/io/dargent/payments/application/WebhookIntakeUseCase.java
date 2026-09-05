@@ -97,16 +97,17 @@ public final class WebhookIntakeUseCase {
                 return Outcome.duplicate();
             }
             if ("RECEIVED".equals(prior.status())) {
-                // Reprocess from payload_raw (playbook 10)
-                return txTemplate.execute(status -> processFromPayload(prior.payloadRaw(), prior.providerEventId()));
+                // Reprocess from payload_raw (playbook 10) — the original request id is not
+                // recoverable on a re-delivery, so the confirm envelope carries null here.
+                return txTemplate.execute(status -> processFromPayload(prior.payloadRaw(), prior.providerEventId(), null));
             }
             return Outcome.ignored("prior status: " + prior.status());
         }
 
-        return txTemplate.execute(status -> processFromPayload(input.payloadRaw(), input.providerEventId()));
+        return txTemplate.execute(status -> processFromPayload(input.payloadRaw(), input.providerEventId(), input.requestId()));
     }
 
-    private Outcome processFromPayload(String payloadRaw, String providerEventId) {
+    private Outcome processFromPayload(String payloadRaw, String providerEventId, String requestId) {
         // 2. Parse payload_raw
         ParsedPayload payload;
         try {
@@ -173,15 +174,16 @@ public final class WebhookIntakeUseCase {
             return Outcome.duplicate();
         }
 
-        // 6. Append outbox payment.confirmed (full E3 §5.6 envelope; requestId is null — PSP callback)
+        // 6. Append outbox payment.confirmed (full E3 §5.6 envelope; requestId carries the
+        //    webhook request's X-Request-Id so end-to-end correlation survives the relay)
         Map<String, Object> outboxPayload = new LinkedHashMap<>();
         outboxPayload.put("amount", payment.amount().cents());
         outboxPayload.put("fee", payment.fee().cents());
         outboxPayload.put("net", payment.net().cents());
         outboxPayload.put("late", false);
         String envelope = envelopeFactory.envelope("payment.confirmed", 1, payment.txid().value(),
-                payment.merchantId(), null, outboxPayload, clock.instant());
-        outboxWriter.append(payment.txid().value(), "payment.confirmed", 1, envelope, null);
+                payment.merchantId(), requestId, outboxPayload, clock.instant());
+        outboxWriter.append(payment.txid().value(), "payment.confirmed", 1, envelope, requestId);
 
         // 7. Audit log — webhook has no API key; use sentinel system actor (BD-14)
         auditWriter.record("confirm_from_webhook", WEBHOOK_AUDIT_ACTOR, payment.merchantId(),
@@ -235,7 +237,8 @@ public final class WebhookIntakeUseCase {
             String type,
             String txid,
             String payloadRaw,
-            boolean signatureValid
+            boolean signatureValid,
+            String requestId
     ) {}
 
     public record ParsedPayload(

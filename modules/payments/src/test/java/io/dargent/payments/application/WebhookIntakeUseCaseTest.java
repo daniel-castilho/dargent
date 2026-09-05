@@ -296,6 +296,7 @@ class WebhookIntakeUseCaseTest {
     private static final String PROVIDER_EVENT_ID = END_TO_END_ID.value() + "|payment.confirmed";
     private static final String PSP_EVENT_ID = "psp-evt-test-001";
     private static final String TYPE = "payment.confirmed";
+    private static final String CORRELATION_ID = "req-webhook-intake-test-1";
     private static final String PAYLOAD_RAW = "{\"eventId\":\"psp-evt-test-001\",\"type\":\"payment.confirmed\",\"txid\":\"8KD4Z9X2Q7W1M5T3R6Y0A1B2C\",\"endToEndId\":\"E9040381234567890123456789012345\",\"amount\":10000,\"paidAt\":\"2026-08-29T00:00:00Z\"}";
 
     @BeforeEach
@@ -333,7 +334,7 @@ class WebhookIntakeUseCaseTest {
     }
 
     private WebhookIntakeUseCase.Input input() {
-        return new WebhookIntakeUseCase.Input(PROVIDER_EVENT_ID, PSP_EVENT_ID, TYPE, TXID.value(), PAYLOAD_RAW, true);
+        return new WebhookIntakeUseCase.Input(PROVIDER_EVENT_ID, PSP_EVENT_ID, TYPE, TXID.value(), PAYLOAD_RAW, true, CORRELATION_ID);
     }
 
     // ============================================================================ TESTS
@@ -363,7 +364,7 @@ class WebhookIntakeUseCaseTest {
         assertThat(envelope).containsEntry("aggregateId", TXID.value());
         assertThat(envelope).containsEntry("merchantId", MERCHANT.toString());
         assertThat(envelope).containsEntry("occurredAt", FIXED_CLOCK.instant().toString());
-        assertThat(envelope).containsEntry("requestId", null);
+        assertThat(envelope).containsEntry("requestId", CORRELATION_ID);
         assertThat(envelope.get("eventId")).isInstanceOf(String.class);
         @SuppressWarnings("unchecked")
         Map<String, Object> nested = (Map<String, Object>) envelope.get("payload");
@@ -414,7 +415,7 @@ class WebhookIntakeUseCaseTest {
         String badProviderId = END_TO_END_ID.value() + "|" + badType;
         String badPayload = PAYLOAD_RAW.replace("\"payment.confirmed\"", "\"payment.unknown\"");
 
-        var input = new WebhookIntakeUseCase.Input(badProviderId, PSP_EVENT_ID, badType, TXID.value(), badPayload, true);
+        var input = new WebhookIntakeUseCase.Input(badProviderId, PSP_EVENT_ID, badType, TXID.value(), badPayload, true, null);
         var outcome = useCase.execute(input);
 
         assertThat(outcome).isInstanceOf(WebhookIntakeUseCase.Outcome.Ignored.class);
@@ -428,7 +429,7 @@ class WebhookIntakeUseCaseTest {
         String badProviderId = END_TO_END_ID.value() + "|" + TYPE;
         String badPayload = PAYLOAD_RAW.replace(TXID.value(), badTxid);
 
-        var input = new WebhookIntakeUseCase.Input(badProviderId, PSP_EVENT_ID, TYPE, badTxid, badPayload, true);
+        var input = new WebhookIntakeUseCase.Input(badProviderId, PSP_EVENT_ID, TYPE, badTxid, badPayload, true, null);
         var outcome = useCase.execute(input);
 
         assertThat(outcome).isInstanceOf(WebhookIntakeUseCase.Outcome.Ignored.class);
@@ -442,7 +443,7 @@ class WebhookIntakeUseCaseTest {
         String badPayload = PAYLOAD_RAW.replace("10000", "9999");
         String badProviderId = END_TO_END_ID.value() + "|" + TYPE;
 
-        var input = new WebhookIntakeUseCase.Input(badProviderId, PSP_EVENT_ID, TYPE, TXID.value(), badPayload, true);
+        var input = new WebhookIntakeUseCase.Input(badProviderId, PSP_EVENT_ID, TYPE, TXID.value(), badPayload, true, null);
         var outcome = useCase.execute(input);
 
         assertThat(outcome).isInstanceOf(WebhookIntakeUseCase.Outcome.Ignored.class);
@@ -474,7 +475,7 @@ class WebhookIntakeUseCaseTest {
         String badPayload = PAYLOAD_RAW.replace(TXID.value(), badTxid);
         String badProviderId = END_TO_END_ID.value() + "|" + TYPE;
 
-        var input = new WebhookIntakeUseCase.Input(badProviderId, PSP_EVENT_ID, TYPE, badTxid, badPayload, true);
+        var input = new WebhookIntakeUseCase.Input(badProviderId, PSP_EVENT_ID, TYPE, badTxid, badPayload, true, null);
         var outcome = useCase.execute(input);
 
         assertThat(outcome).isInstanceOf(WebhookIntakeUseCase.Outcome.Ignored.class);
