@@ -6,13 +6,15 @@ import io.dargent.api.security.ApiKeyAuthenticationFilter;
 import io.dargent.api.security.ApiKeyRepository;
 import io.dargent.ledger.adapter.out.db.JdbcLedgerStore;
 import io.dargent.ledger.domain.port.out.LedgerStore;
+import io.dargent.payments.adapter.out.messaging.DlqDepthPoller;
 import io.dargent.payments.adapter.out.messaging.SnsEventPublisher;
 import io.dargent.payments.adapter.out.persistence.JdbcAuditWriter;
 import io.dargent.payments.adapter.out.persistence.JdbcIdempotencyStore;
+import io.dargent.payments.adapter.out.persistence.JdbcOutboxEventStore;
 import io.dargent.payments.adapter.out.persistence.JdbcOutboxWriter;
 import io.dargent.payments.adapter.out.persistence.JdbcPaymentQueryPort;
 import io.dargent.payments.adapter.out.persistence.JdbcWebhookEventStore;
-import io.dargent.payments.adapter.out.persistence.JdbcOutboxEventStore;
+import io.dargent.payments.adapter.out.persistence.OutboxLagGauge;
 import io.dargent.payments.adapter.out.persistence.PaymentJpaAdapter;
 import io.dargent.payments.adapter.out.psp.SimulatorChargeAdapter;
 import io.dargent.payments.application.CreatePaymentUseCase;
@@ -20,6 +22,7 @@ import io.dargent.payments.application.EventEnvelopeFactory;
 import io.dargent.payments.application.EventSerializer;
 import io.dargent.payments.application.ExpirationUseCase;
 import io.dargent.payments.application.OutboxDeliveryUseCase;
+import io.dargent.payments.application.PaymentsMetrics;
 import io.dargent.payments.application.ReconciliationUseCase;
 import io.dargent.payments.application.RefundPaymentUseCase;
 import io.dargent.payments.application.WebhookIntakeUseCase;
@@ -36,8 +39,11 @@ import io.dargent.payments.domain.port.out.SecureRandomTxidGenerator;
 import io.dargent.payments.domain.port.out.TxidGenerator;
 import io.dargent.payments.domain.port.out.OutboxEventStore;
 import io.dargent.payments.domain.port.out.WebhookEventStore;
+import io.micrometer.core.instrument.MeterRegistry;
+import java.net.URI;
 import java.time.Clock;
 import java.time.Duration;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
@@ -46,6 +52,10 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.support.TransactionTemplate;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.sqs.SqsClient;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -123,6 +133,18 @@ public class PaymentsCompositionConfig {
         return new tools.jackson.databind.json.JsonMapper();
     }
 
+    // --- E11 metrics beans (spec §5) ---
+
+    @Bean
+    PaymentsMetrics paymentsMetrics(MeterRegistry meterRegistry) {
+        return new PaymentsMetrics(meterRegistry);
+    }
+
+    @Bean
+    OutboxLagGauge outboxLagGauge(JdbcClient jdbc, Clock clock, MeterRegistry meterRegistry) {
+        return new OutboxLagGauge(jdbc, clock, meterRegistry);
+    }
+
     // --- webhook beans (E4 MS-3) ---
 
     @Bean
@@ -141,9 +163,10 @@ public class PaymentsCompositionConfig {
             AuditWriter auditWriter, WebhookSignatureValidator webhookSignatureValidator,
             TransactionTemplate transactionTemplate,
             EventEnvelopeFactory envelopeFactory, Clock clock,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper, PaymentsMetrics paymentsMetrics) {
         return new WebhookIntakeUseCase(webhookEventStore, paymentRepository, outboxWriter, auditWriter,
-                webhookSignatureValidator, transactionTemplate, envelopeFactory, clock, objectMapper);
+                webhookSignatureValidator, transactionTemplate, envelopeFactory, clock, objectMapper,
+                paymentsMetrics);
     }
 
     @Bean
@@ -153,9 +176,10 @@ public class PaymentsCompositionConfig {
             ErrorResponseWriter errorWriter,
             ObjectMapper objectMapper,
             Clock clock,
+            MeterRegistry meterRegistry,
             @Value("${dargent.psp.webhook-secret}") String secret) {
         return new WebhookController(webhookIntakeUseCase, webhookSignatureValidator,
-                webhookEventStore, errorWriter, objectMapper, clock, secret);
+                webhookEventStore, errorWriter, objectMapper, clock, meterRegistry, secret);
     }
 
     @Bean
@@ -171,6 +195,7 @@ public class PaymentsCompositionConfig {
             IdempotencyStore idempotencyStore, OutboxWriter outboxWriter, AuditWriter auditWriter,
             PspPort pspPort, TxidGenerator txidGenerator, TransactionTemplate transactionTemplate,
             EventEnvelopeFactory envelopeFactory, Clock clock,
+            PaymentsMetrics paymentsMetrics,
             @Value("${dargent.pix.profile.pix-key}") String pixKey,
             @Value("${dargent.pix.profile.receiver-name}") String receiverName,
             @Value("${dargent.pix.profile.receiver-city}") String receiverCity,
@@ -179,7 +204,7 @@ public class PaymentsCompositionConfig {
         return new CreatePaymentUseCase(paymentRepository, idempotencyStore, outboxWriter, auditWriter,
                 pspPort, txidGenerator, transactionTemplate, envelopeFactory, pixKey, receiverName,
                 receiverCity, pspCallbackUrl, clock,
-                Duration.ofMillis(parseBackoffRungs(backoffRungs).get(0)));
+                Duration.ofMillis(parseBackoffRungs(backoffRungs).get(0)), paymentsMetrics);
     }
 
     // --- E6 outbox relay beans ---
@@ -217,8 +242,10 @@ public class PaymentsCompositionConfig {
     OutboxDeliveryUseCase outboxDeliveryUseCase(OutboxEventStore store,
             EventPublisher publisher, ObjectMapper mapper, Clock clock,
             OutboxDeliveryUseCase.Policy policy,
-            TransactionTemplate transactionTemplate) {
-        return new OutboxDeliveryUseCase(store, publisher, mapper, clock, policy, transactionTemplate);
+            TransactionTemplate transactionTemplate,
+            PaymentsMetrics paymentsMetrics) {
+        return new OutboxDeliveryUseCase(store, publisher, mapper, clock, policy, transactionTemplate,
+                paymentsMetrics);
     }
 
     @Bean
@@ -248,6 +275,47 @@ public class PaymentsCompositionConfig {
         return scheduler;
     }
 
+    // --- E11 DLQ depth gauge poller (spec §5) ---
+
+    @Bean
+    @ConditionalOnProperty(name = "dargent.relay.enabled", havingValue = "true", matchIfMissing = false)
+    SqsClient dlqPollerSqsClient(
+            @Value("${AWS_ENDPOINT_URL}") String endpointUrl,
+            @Value("${AWS_REGION}") String region,
+            @Value("${AWS_ACCESS_KEY_ID:test}") String accessKey,
+            @Value("${AWS_SECRET_ACCESS_KEY:test}") String secretKey) {
+        return SqsClient.builder()
+                .endpointOverride(URI.create(endpointUrl))
+                .region(Region.of(region))
+                .credentialsProvider(StaticCredentialsProvider.create(
+                        AwsBasicCredentials.create(accessKey, secretKey)))
+                .build();
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "dargent.relay.enabled", havingValue = "true", matchIfMissing = false)
+    DlqDepthPoller dlqDepthPoller(@Qualifier("dlqPollerSqsClient") SqsClient sqsClient,
+            ObjectMapper objectMapper, MeterRegistry meterRegistry,
+            @Value("${DARGENT_LEDGER_QUEUE_URL:}") String ledgerQueueUrl,
+            @Value("${DARGENT_NOTIFS_QUEUE_URL:}") String notifsQueueUrl) {
+        return new DlqDepthPoller(sqsClient,
+                java.util.stream.Stream.of(ledgerQueueUrl, notifsQueueUrl)
+                        .filter(s -> !s.isBlank())
+                        .toList(),
+                objectMapper, meterRegistry);
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "dargent.relay.enabled", havingValue = "true", matchIfMissing = false)
+    TaskScheduler dlqPollerScheduler(DlqDepthPoller poller) {
+        ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
+        scheduler.setPoolSize(1);
+        scheduler.setThreadNamePrefix("dlq-poller-");
+        scheduler.initialize();
+        scheduler.scheduleAtFixedRate(poller::poll, Duration.ofSeconds(60));
+        return scheduler;
+    }
+
     // --- E5 expiration scheduler beans (spec §3, §4.1) ---
 
     @Bean
@@ -255,9 +323,10 @@ public class PaymentsCompositionConfig {
     ExpirationUseCase expirationUseCase(PaymentRepository paymentRepository,
             OutboxWriter outboxWriter, AuditWriter auditWriter,
             EventEnvelopeFactory envelopeFactory,
-            TransactionTemplate transactionTemplate, Clock clock) {
+            TransactionTemplate transactionTemplate, Clock clock,
+            PaymentsMetrics paymentsMetrics) {
         return new ExpirationUseCase(paymentRepository, outboxWriter, auditWriter,
-                envelopeFactory, transactionTemplate, clock);
+                envelopeFactory, transactionTemplate, clock, paymentsMetrics);
     }
 
     @Bean
@@ -287,12 +356,13 @@ public class PaymentsCompositionConfig {
     ReconciliationUseCase reconciliationUseCase(PaymentRepository paymentRepository, PspPort pspPort,
             OutboxWriter outboxWriter, AuditWriter auditWriter,
             EventEnvelopeFactory envelopeFactory, TransactionTemplate transactionTemplate, Clock clock,
+            PaymentsMetrics paymentsMetrics,
             @Value("${DARGENT_RECONCILER_BACKOFF_MS:60000,300000,900000,3600000}") String backoffRungs,
             @Value("${DARGENT_RECONCILER_GIVE_UP_HOURS:72}") long giveUpHours) {
         return new ReconciliationUseCase(paymentRepository, pspPort, outboxWriter, auditWriter,
                 envelopeFactory, transactionTemplate, clock,
                 parseBackoffRungs(backoffRungs).stream().map(Duration::ofMillis).toList(),
-                Duration.ofHours(giveUpHours));
+                Duration.ofHours(giveUpHours), paymentsMetrics);
     }
 
     @Bean
@@ -365,8 +435,9 @@ public class PaymentsCompositionConfig {
     RefundPaymentUseCase refundPaymentUseCase(PaymentRepository paymentRepository,
             IdempotencyStore idempotencyStore, OutboxWriter outboxWriter, AuditWriter auditWriter,
             MerchantBalancePort balancePort, EventEnvelopeFactory envelopeFactory,
-            TransactionTemplate transactionTemplate, Clock clock) {
+            TransactionTemplate transactionTemplate, Clock clock,
+            PaymentsMetrics paymentsMetrics) {
         return new RefundPaymentUseCase(paymentRepository, idempotencyStore, outboxWriter, auditWriter,
-                balancePort, envelopeFactory, transactionTemplate, clock);
+                balancePort, envelopeFactory, transactionTemplate, clock, paymentsMetrics);
     }
 }

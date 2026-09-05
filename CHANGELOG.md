@@ -5,6 +5,29 @@ versioning: semantic, cut from annotated git tags (see [release-runbook](docs/re
 
 ## [Unreleased]
 
+### Added — E11 Observability (Block 2) (2026-09-05)
+
+- **Frozen Prometheus metrics contract + scrape IT (S4)**: 8 series (names frozen from
+  `observability.md` §3) wired through the payments use cases and boot app:
+  `dargent_payments_transitions_total{from,to,outcome}` (create/webhook_confirm/reconciler_confirm/
+  reconciler_expire/expiry/refund), `dargent_outbox_lag_seconds` (scrape-time gauge over due
+  PENDING/EXHAUSTED rows), `dargent_outbox_attempts_total{result=sent|failed|exhausted}`,
+  `dargent_dlq_messages{queue}` (60s poller resolving RedrivePolicy → DLQ depth),
+  `dargent_reconciler_confirmations_total{outcome=confirm|resurrect}`,
+  `dargent_webhook_signature_failures_total{reason=invalid|expired}`,
+  `dargent_idempotency_events_total{kind=replayed|conflict|in_flight}`,
+  `dargent_refunds_rejected_total{code=not_refundable|exceeds_remaining}`.
+  `PaymentsMetrics` (Spring-free holder, payments application) injected into all 6 use cases;
+  `OutboxLagGauge` (pulled binder, no scheduler thread); `DlqDepthPoller` (stable gauge holders —
+  weak-ref bug fixed pre-merge; per-queue cached `AtomicLong`). `MetricsScrapeIT` boots the real
+  app (LocalStack SNS+SQS with DLQ redrive topology, PSP stub with per-txid state, fixed clock,
+  background schedulers at huge intervals) and drives every series through the real HTTP surface
+  and `runOnce()` house pattern, then scrapes `/actuator/prometheus` on the management port and
+  asserts all 8 series with frozen tags, non-zero, lag ≥ 600s, DLQ depth = 1. One env knob only:
+  existing `DARGENT_MANAGEMENT_PORT`. Also fixes latent wiring: `SqsEventConsumer`/
+  `SqsNotificationConsumer` now take `@Qualifier` clients (relay-enabled + consumer-enabled boots
+  previously had an ambiguous `SqsClient` bean pair — production-boot breaker found by the IT).
+
 ### Added — E9 Delivery Hardening (Block 1+2) (2026-09-04)
 
 - **Bounded outbox delivery — EXHAUSTED contract (S1)**: outbox rows failing publish after

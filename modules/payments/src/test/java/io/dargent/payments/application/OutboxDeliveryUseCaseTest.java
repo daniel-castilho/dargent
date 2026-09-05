@@ -53,7 +53,8 @@ class OutboxDeliveryUseCaseTest {
                 FIXED_CLOCK, new OutboxDeliveryUseCase.Policy(
                         32, 2, 1000, Integer.MAX_VALUE, Duration.ofSeconds(30), Duration.ofMinutes(5), 7
                 ),
-                txTemplate
+                txTemplate,
+                new PaymentsMetrics(new io.micrometer.core.instrument.simple.SimpleMeterRegistry())
         );
     }
 
@@ -125,7 +126,8 @@ class OutboxDeliveryUseCaseTest {
     void backoff_schedule() {
         var uc = new OutboxDeliveryUseCase(null, null, null, FIXED_CLOCK,
                 new OutboxDeliveryUseCase.Policy(1, 1, 1, 3, java.time.Duration.ofSeconds(30), java.time.Duration.ofMinutes(5), 7),
-                null);
+                null,
+                new PaymentsMetrics(new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
 
         assertThat(backoff(uc, 1)).isEqualTo(Duration.ofSeconds(30));
         assertThat(backoff(uc, 2)).isEqualTo(Duration.ofMinutes(2));
@@ -240,7 +242,8 @@ class OutboxDeliveryUseCaseTest {
         };
         return new OutboxDeliveryUseCase(store, publisher, new tools.jackson.databind.json.JsonMapper(),
                 clock, new OutboxDeliveryUseCase.Policy(32, 2, 1000, maxAttempts,
-                        Duration.ofSeconds(30), Duration.ofMinutes(5), 7), txTemplate);
+                        Duration.ofSeconds(30), Duration.ofMinutes(5), 7), txTemplate,
+                new PaymentsMetrics(new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
     }
 
     static final class MutableClock extends Clock {

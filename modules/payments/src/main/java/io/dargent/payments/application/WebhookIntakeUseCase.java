@@ -3,6 +3,7 @@ package io.dargent.payments.application;
 import io.dargent.payments.domain.model.EndToEndId;
 import io.dargent.payments.domain.model.FeeBreakdown;
 import io.dargent.payments.domain.model.Payment;
+import io.dargent.payments.domain.model.PaymentStatus;
 import io.dargent.payments.domain.model.Txid;
 import io.dargent.payments.domain.model.WebhookSignatureValidator;
 import io.dargent.payments.domain.port.out.AuditWriter;
@@ -52,6 +53,7 @@ public final class WebhookIntakeUseCase {
     private final EventEnvelopeFactory envelopeFactory;
     private final Clock clock;
     private final ObjectMapper objectMapper;
+    private final PaymentsMetrics metrics;
 
     public WebhookIntakeUseCase(WebhookEventStore webhookEventStore,
             PaymentRepository paymentRepository,
@@ -61,7 +63,8 @@ public final class WebhookIntakeUseCase {
             TransactionTemplate txTemplate,
             EventEnvelopeFactory envelopeFactory,
             Clock clock,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            PaymentsMetrics metrics) {
         this.webhookEventStore = webhookEventStore;
         this.paymentRepository = paymentRepository;
         this.outboxWriter = outboxWriter;
@@ -71,6 +74,7 @@ public final class WebhookIntakeUseCase {
         this.envelopeFactory = envelopeFactory;
         this.clock = clock;
         this.objectMapper = objectMapper;
+        this.metrics = metrics;
     }
 
     public Outcome execute(Input input) {
@@ -158,6 +162,7 @@ public final class WebhookIntakeUseCase {
         FeeBreakdown feeBreakdown = FeeBreakdown.of(payment.amount().cents(), new io.dargent.payments.domain.model.BpsRate((int) FEE_BPS));
 
         int expectedVersion = payment.version();
+        PaymentStatus priorStatus = payment.status();
         try {
             payment.confirm(endToEndId, feeBreakdown, paidAt);
         } catch (IllegalArgumentException | io.dargent.payments.domain.exception.InvalidTransitionException e) {
@@ -173,6 +178,8 @@ public final class WebhookIntakeUseCase {
             webhookEventStore.markProcessed(providerEventId);
             return Outcome.duplicate();
         }
+
+        metrics.transition(priorStatus.name(), "CONFIRMED", "webhook_confirm");
 
         // 6. Append outbox payment.confirmed (full E3 §5.6 envelope; requestId carries the
         //    webhook request's X-Request-Id so end-to-end correlation survives the relay)

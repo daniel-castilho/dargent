@@ -7,6 +7,7 @@ import io.dargent.payments.application.WebhookIntakeUseCase;
 import io.dargent.payments.domain.model.WebhookSignatureValidator;
 import io.dargent.payments.domain.port.out.WebhookEventRecord;
 import io.dargent.payments.domain.port.out.WebhookEventStore;
+import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
@@ -45,6 +46,7 @@ public class WebhookController {
     private final ErrorResponseWriter errorWriter;
     private final ObjectMapper objectMapper;
     private final Clock clock;
+    private final MeterRegistry metrics;
     private final String secret;
 
     public WebhookController(WebhookIntakeUseCase useCase,
@@ -53,6 +55,7 @@ public class WebhookController {
             ErrorResponseWriter errorWriter,
             ObjectMapper objectMapper,
             Clock clock,
+            MeterRegistry metrics,
             @Value("${dargent.psp.webhook-secret}") String secret) {
         this.useCase = useCase;
         this.validator = validator;
@@ -60,6 +63,7 @@ public class WebhookController {
         this.errorWriter = errorWriter;
         this.objectMapper = objectMapper;
         this.clock = clock;
+        this.metrics = metrics;
         this.secret = secret;
     }
 
@@ -77,11 +81,13 @@ public class WebhookController {
                 secret);
 
         if (verdict == WebhookSignatureValidator.Verdict.INVALID) {
+            metrics.counter("dargent.webhook.signature.failures", "reason", "invalid").increment();
             persistRawAndRespond(request, response, rawBody, false,
                     "INVALID_SIGNATURE", "Invalid signature");
             return;
         }
         if (verdict == WebhookSignatureValidator.Verdict.EXPIRED) {
+            metrics.counter("dargent.webhook.signature.failures", "reason", "expired").increment();
             persistRawAndRespond(request, response, rawBody, false,
                     "SIGNATURE_EXPIRED", "Signature expired");
             return;

@@ -31,16 +31,18 @@ public final class ExpirationUseCase {
     private final EventEnvelopeFactory envelopeFactory;
     private final TransactionTemplate txTemplate;
     private final Clock clock;
+    private final PaymentsMetrics metrics;
 
     public ExpirationUseCase(PaymentRepository paymentRepository, OutboxWriter outboxWriter,
             AuditWriter auditWriter, EventEnvelopeFactory envelopeFactory,
-            TransactionTemplate txTemplate, Clock clock) {
+            TransactionTemplate txTemplate, Clock clock, PaymentsMetrics metrics) {
         this.paymentRepository = paymentRepository;
         this.outboxWriter = outboxWriter;
         this.auditWriter = auditWriter;
         this.envelopeFactory = envelopeFactory;
         this.txTemplate = txTemplate;
         this.clock = clock;
+        this.metrics = metrics;
     }
 
     /**
@@ -71,6 +73,7 @@ public final class ExpirationUseCase {
                 // 0 rows: webhook/confirm won the race (or already expired) — no outbox, no audit
                 return false;
             }
+            metrics.transition("PENDING", "EXPIRED", "expiry");
             appendExpiredOutbox(current, now);
             auditWriter.record("expire_payment", null, current.merchantId(), current.txid().value(), null);
             return true;

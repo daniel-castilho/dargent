@@ -49,7 +49,8 @@ class ReconciliationUseCaseTest {
         return new ReconciliationUseCase(repo, psp, outbox, audit,
                 new EventEnvelopeFactory(new EventSerializer()),
                 new DirectTransactionTemplate(), Clock.fixed(NOW, OFFSET),
-                LADDER, Duration.ofHours(72));
+                LADDER, Duration.ofHours(72),
+                new PaymentsMetrics(new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
     }
 
     @Test

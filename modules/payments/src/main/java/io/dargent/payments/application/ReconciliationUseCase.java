@@ -52,11 +52,13 @@ public final class ReconciliationUseCase {
     private final Clock clock;
     private final List<Duration> backoffLadder;
     private final Duration giveUpWindow;
+    private final PaymentsMetrics metrics;
 
     public ReconciliationUseCase(PaymentRepository paymentRepository, PspPort pspPort,
             OutboxWriter outboxWriter, AuditWriter auditWriter,
             EventEnvelopeFactory envelopeFactory, TransactionTemplate txTemplate,
-            Clock clock, List<Duration> backoffLadder, Duration giveUpWindow) {
+            Clock clock, List<Duration> backoffLadder, Duration giveUpWindow,
+            PaymentsMetrics metrics) {
         this.paymentRepository = paymentRepository;
         this.pspPort = pspPort;
         this.outboxWriter = outboxWriter;
@@ -66,6 +68,7 @@ public final class ReconciliationUseCase {
         this.clock = clock;
         this.backoffLadder = backoffLadder;
         this.giveUpWindow = giveUpWindow;
+        this.metrics = metrics;
     }
 
     /**
@@ -139,6 +142,7 @@ public final class ReconciliationUseCase {
         }
         int expectedVersion = payment.version();
         Payment working = payment;
+        PaymentStatus priorStatus = payment.status();
         try {
             FeeBreakdown feeBreakdown = FeeBreakdown.of(payment.amount().cents(),
                     new io.dargent.payments.domain.model.BpsRate((int) FEE_BPS));
@@ -151,6 +155,8 @@ public final class ReconciliationUseCase {
         if (!paymentRepository.updateIfVersionMatches(working, expectedVersion)) {
             return false; // lost race (already confirmed) → no-op, zero writes
         }
+        metrics.transition(priorStatus.name(), "CONFIRMED", "reconciler_confirm");
+        metrics.reconcilerConfirmation(priorStatus == PaymentStatus.EXPIRED ? "resurrect" : "confirm");
         appendConfirmedOutbox(working, now);
         auditWriter.record("confirm_from_reconciliation", null, payment.merchantId(),
                 payment.txid().value(), null);
@@ -177,6 +183,7 @@ public final class ReconciliationUseCase {
         if (!paymentRepository.expireIfDue(working, now)) {
             return false; // 0 rows: confirm won, or already expired
         }
+        metrics.transition("PENDING", "EXPIRED", "reconciler_expire");
         appendExpiredOutbox(working, now);
         auditWriter.record("expire_payment", null, payment.merchantId(), payment.txid().value(), null);
         return true;

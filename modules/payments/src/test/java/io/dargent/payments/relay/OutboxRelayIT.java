@@ -114,7 +114,9 @@ class OutboxRelayIT {
         TransactionTemplate txTemplate =
                 new TransactionTemplate(new DataSourceTransactionManager(dataSource));
         useCase = new OutboxDeliveryUseCase(new JdbcOutboxEventStore(jdbc),
-                publisher(topicArn), MAPPER, FIXED_CLOCK, policy, txTemplate);
+                publisher(topicArn), MAPPER, FIXED_CLOCK, policy, txTemplate,
+                new io.dargent.payments.application.PaymentsMetrics(
+                        new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
     }
 
     @AfterAll
@@ -188,7 +190,9 @@ class OutboxRelayIT {
                 new JdbcOutboxEventStore(jdbc), publisher(brokenArn), MAPPER, FIXED_CLOCK,
                 new OutboxDeliveryUseCase.Policy(32, 2, 1000, Integer.MAX_VALUE,
                         java.time.Duration.ofSeconds(30), java.time.Duration.ofMinutes(5), 7),
-                new TransactionTemplate(new DataSourceTransactionManager(dataSource)));
+                new TransactionTemplate(new DataSourceTransactionManager(dataSource)),
+                new io.dargent.payments.application.PaymentsMetrics(
+                        new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
 
         int published = broken.runOnce(32);
 

@@ -38,7 +38,8 @@ class ExpirationUseCaseTest {
 
     private ExpirationUseCase useCase() {
         return new ExpirationUseCase(repo, outbox, audit, new EventEnvelopeFactory(new EventSerializer()),
-                new DirectTransactionTemplate(), Clock.fixed(NOW, OFFSET));
+                new DirectTransactionTemplate(), Clock.fixed(NOW, OFFSET),
+                new PaymentsMetrics(new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
     }
 
     @Test

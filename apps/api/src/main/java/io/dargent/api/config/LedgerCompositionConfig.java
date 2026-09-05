@@ -4,6 +4,7 @@ import io.dargent.ledger.adapter.out.messaging.SqsEventConsumer;
 import io.dargent.ledger.application.EventIngestionUseCase;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -45,7 +46,7 @@ public class LedgerCompositionConfig {
 
     @Bean
     SqsEventConsumer sqsEventConsumer(
-            SqsClient sqsClient,
+            @Qualifier("ledgerSqsClient") SqsClient sqsClient,
             @Value("${DARGENT_LEDGER_QUEUE_URL}") String queueUrl,
             @Value("${DARGENT_LEDGER_BATCH:10}") int batchSize,
             @Value("${DARGENT_LEDGER_POLL_MS:1000}") long pollMs,

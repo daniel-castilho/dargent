@@ -311,7 +311,8 @@ class WebhookIntakeUseCaseTest {
         testMapper = new JsonMapper();
 
         useCase = new WebhookIntakeUseCase(webhookStore, paymentRepo, outboxWriter, auditWriter,
-                signatureValidator, new DirectTransactionTemplate(), envelopeFactory, clock, testMapper);
+                signatureValidator, new DirectTransactionTemplate(), envelopeFactory, clock, testMapper,
+                new PaymentsMetrics(new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
     }
 
     // ---- helper to seed a PENDING payment ----
@@ -512,7 +513,8 @@ class WebhookIntakeUseCaseTest {
 
         WebhookIntakeUseCase atomicUseCase = new WebhookIntakeUseCase(
                 webhookStore, paymentRepo, failingOutbox, auditWriter,
-                signatureValidator, rollbackTx, envelopeFactory, clock, new tools.jackson.databind.json.JsonMapper());
+                signatureValidator, rollbackTx, envelopeFactory, clock, new tools.jackson.databind.json.JsonMapper(),
+                new PaymentsMetrics(new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
 
         assertThatThrownBy(() -> atomicUseCase.execute(input()))
                 .isInstanceOf(RuntimeException.class)

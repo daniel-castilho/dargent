@@ -121,7 +121,9 @@ class OutboxExhaustionIT {
                 new JdbcOutboxEventStore(jdbc), publisher(brokenArn), MAPPER, CLOCK,
                 new OutboxDeliveryUseCase.Policy(32, 2, 1000, 3,
                         Duration.ofSeconds(30), Duration.ofMinutes(5), 7),
-                new TransactionTemplate(new DataSourceTransactionManager(dataSource)));
+                new TransactionTemplate(new DataSourceTransactionManager(dataSource)),
+                new io.dargent.payments.application.PaymentsMetrics(
+                        new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
 
         // ---- attempt 1 ---- ladder rung 1 (30 s), still PENDING
         assertThat(broken.runOnce(32)).isZero();

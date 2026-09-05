@@ -40,6 +40,7 @@ public final class OutboxDeliveryUseCase {
     private final Clock clock;
     private final Policy policy;
     private final TransactionTemplate txTemplate;
+    private final PaymentsMetrics metrics;
     private int cyclesSincePurge;
 
     public OutboxDeliveryUseCase(OutboxEventStore store,
@@ -47,13 +48,15 @@ public final class OutboxDeliveryUseCase {
             ObjectMapper mapper,
             Clock clock,
             Policy policy,
-            TransactionTemplate txTemplate) {
+            TransactionTemplate txTemplate,
+            PaymentsMetrics metrics) {
         this.store = store;
         this.publisher = publisher;
         this.mapper = mapper;
         this.clock = clock;
         this.policy = policy;
         this.txTemplate = txTemplate;
+        this.metrics = metrics;
     }
 
     /**
@@ -112,12 +115,18 @@ public final class OutboxDeliveryUseCase {
                 if (attempts >= policy.maxAttempts()) {
                     // Retry ceiling reached (E9 §2): EXHAUSTED, conditional — lost race → no-op.
                     boolean exhausted = store.markExhausted(row.id(), attempts);
+                    if (exhausted) {
+                        metrics.outboxAttempt("exhausted");
+                    }
                     log.error("OUTBOX publish failed id={} type={} attempts={} exhausted={} error={}",
                             row.id(), row.type(), attempts, exhausted, e.getMessage());
                 } else {
                     // Schedule the next ladder attempt, leave PENDING
                     Instant nextAttempt = clock.instant().plus(backoff(attempts));
-                    store.markFailed(row.id(), attempts, nextAttempt);
+                    boolean failed = store.markFailed(row.id(), attempts, nextAttempt);
+                    if (failed) {
+                        metrics.outboxAttempt("failed");
+                    }
                     log.error("OUTBOX publish failed id={} type={} attempts={} next={} error={}",
                             row.id(), row.type(), attempts, nextAttempt, e.getMessage());
                 }
@@ -132,6 +141,7 @@ public final class OutboxDeliveryUseCase {
                 continue;
             }
             published++;
+            metrics.outboxAttempt("sent");
             log.atInfo()
                     .setMessage("OUTBOX publish ok")
                     .addKeyValue("request_id", extractRequestId(row.payload()))

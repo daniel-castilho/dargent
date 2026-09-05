@@ -34,6 +34,12 @@
       <groupId>org.springframework</groupId>
       <artifactId>spring-web</artifactId>
     </dependency>
+    <!-- Micrometer for the E11 metric counters (transitions/idempotency/refunds at use-case level,
+         gauges at the adapter edge). Version managed by the Boot parent BOM. -->
+    <dependency>
+      <groupId>io.micrometer</groupId>
+      <artifactId>micrometer-core</artifactId>
+    </dependency>
     <!-- Jackson for adapter JSON serialization (compile scope needed for adapter) -->
     <dependency>
       <groupId>tools.jackson.core</groupId>
@@ -102,8 +108,9 @@
       <artifactId>spring-boot-testcontainers</artifactId>
       <scope>test</scope>
     </dependency>
-    <!-- AWS SDK v2 for SNS/SQS (E6 outbox relay); SQS used by ITs to create the
-         topology + assert delivery (E6 spec §4: sns + sqs are the only authorized modules). -->
+    <!-- AWS SDK v2 for SNS/SQS (E6 outbox relay); SQS is also compile-scope for the E11 DLQ-depth
+         gauge poller (payments adapter), SNS+LocalStack used by ITs to create the topology and
+         assert delivery (E6 spec §4: sns + sqs are the only authorized modules). -->
     <dependency>
       <groupId>software.amazon.awssdk</groupId>
       <artifactId>sns</artifactId>
@@ -113,7 +120,6 @@
       <groupId>software.amazon.awssdk</groupId>
       <artifactId>sqs</artifactId>
       <version>2.25.17</version>
-      <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>software.amazon.awssdk</groupId>

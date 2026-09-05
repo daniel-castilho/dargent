@@ -87,7 +87,8 @@ class RefundPaymentUseCaseTest {
         };
 
         useCase = new RefundPaymentUseCase(paymentRepo, idempotencyStore, outboxWriter, auditWriter,
-                balancePort, mock(EventEnvelopeFactory.class), txTemplate, Clock.systemUTC());
+                balancePort, mock(EventEnvelopeFactory.class), txTemplate, Clock.systemUTC(),
+                new PaymentsMetrics(new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
     }
 
     // ---------------------------------------------------------------- status gate

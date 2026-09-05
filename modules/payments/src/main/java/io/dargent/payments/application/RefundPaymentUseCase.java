@@ -40,10 +40,12 @@ public final class RefundPaymentUseCase {
     private final EventEnvelopeFactory envelopeFactory;
     private final TransactionTemplate txTemplate;
     private final Clock clock;
+    private final PaymentsMetrics metrics;
 
     public RefundPaymentUseCase(PaymentRepository paymentRepo, IdempotencyStore idempotencyStore,
             OutboxWriter outboxWriter, AuditWriter auditWriter, MerchantBalancePort balancePort,
-            EventEnvelopeFactory envelopeFactory, TransactionTemplate txTemplate, Clock clock) {
+            EventEnvelopeFactory envelopeFactory, TransactionTemplate txTemplate, Clock clock,
+            PaymentsMetrics metrics) {
         this.paymentRepo = paymentRepo;
         this.idempotencyStore = idempotencyStore;
         this.outboxWriter = outboxWriter;
@@ -52,6 +54,7 @@ public final class RefundPaymentUseCase {
         this.envelopeFactory = envelopeFactory;
         this.txTemplate = txTemplate;
         this.clock = clock;
+        this.metrics = metrics;
     }
 
     /**
@@ -94,6 +97,7 @@ public final class RefundPaymentUseCase {
         // Status gate: CONFIRMED or PARTIALLY_REFUNDED only
         if (payment.status() != PaymentStatus.CONFIRMED
                 && payment.status() != PaymentStatus.PARTIALLY_REFUNDED) {
+            metrics.refundRejected("not_refundable");
             throw new InvalidStateException(input.txid(), payment.status().name());
         }
 
@@ -101,6 +105,7 @@ public final class RefundPaymentUseCase {
         Money refundAmount = input.amount();
         long remainingCents = payment.amount().cents() - payment.refunded().cents();
         if (refundAmount.cents() > remainingCents) {
+            metrics.refundRejected("exceeds_remaining");
             throw new RefundExceedsRemainingException(payment.txid(), remainingCents, refundAmount.cents());
         }
 
@@ -130,6 +135,7 @@ public final class RefundPaymentUseCase {
 
         // Perform the refund in the domain (bumps version via transition)
         Instant refundWhen = clock.instant();
+        PaymentStatus priorStatus = payment.status();
         payment.refund(
                 Money.of(refundAmount.cents(), "BRL"),
                 Money.of(feeReversalCents, "BRL"),
@@ -146,6 +152,7 @@ public final class RefundPaymentUseCase {
         if (!paymentRepo.updateIfVersionMatches(payment, payment.version() - 1)) {
             throw new OptimisticLockException(payment.txid().value());
         }
+        metrics.transition(priorStatus.name(), payment.status().name(), "refund");
 
         // Outbox: refund.created
         appendRefundOutbox(payment, refundAmount, feeReversalCents2, clock.instant());

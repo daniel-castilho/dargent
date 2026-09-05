@@ -59,12 +59,13 @@ public final class CreatePaymentUseCase {
     private final String pspCallbackUrl;
     private final Clock clock;
     private final Duration firstReconcileBackoff;
+    private final PaymentsMetrics metrics;
 
     public CreatePaymentUseCase(PaymentRepository paymentRepo, IdempotencyStore idempotencyStore,
             OutboxWriter outboxWriter, AuditWriter auditWriter, PspPort pspPort,
             TxidGenerator txidGenerator, TransactionTemplate txTemplate, EventEnvelopeFactory envelopeFactory,
             String pixKey, String receiverName, String receiverCity, String pspCallbackUrl, Clock clock,
-            Duration firstReconcileBackoff) {
+            Duration firstReconcileBackoff, PaymentsMetrics metrics) {
         this.paymentRepo = paymentRepo;
         this.idempotencyStore = idempotencyStore;
         this.outboxWriter = outboxWriter;
@@ -79,6 +80,7 @@ public final class CreatePaymentUseCase {
         this.pspCallbackUrl = pspCallbackUrl;
         this.clock = clock;
         this.firstReconcileBackoff = firstReconcileBackoff;
+        this.metrics = metrics;
     }
 
     public Output execute(Input input) {
@@ -118,6 +120,7 @@ public final class CreatePaymentUseCase {
             return CoreOutcome.existing(existing.get()); // PK race loser: never creates a payment
         }
         Payment payment = createAndPersistPayment(input, now, expiresAtRequested);
+        metrics.transition("none", "PENDING", "create");
         appendCreatedOutbox(payment, input, now);
         auditWriter.record("create_payment", input.apiKeyId(), input.merchantId(),
                 payment.txid().value(), input.requestId());
@@ -159,12 +162,15 @@ public final class CreatePaymentUseCase {
     private Output handleExisting(IdempotencyRecord rec, Input input) {
         boolean sameFingerprint = rec.requestFingerprint().equals(input.requestFingerprint());
         if (!sameFingerprint) {
+            metrics.idempotencyEvent("conflict");
             throw new IdempotencyKeyConflictException(
                     "Idempotency key conflict for key " + input.idempotencyKey());
         }
         if ("COMPLETED".equals(rec.state())) {
+            metrics.idempotencyEvent("replayed");
             return replay(rec); // zero side effects, byte-equal snapshot (BD-6)
         }
+        metrics.idempotencyEvent("in_flight");
         throw new IdempotencyKeyInFlightException(
                 "Idempotency key in flight for key " + input.idempotencyKey());
     }
@@ -211,6 +217,7 @@ public final class CreatePaymentUseCase {
             }
             appendFailedOutbox(failed, input, now);
             idempotencyStore.delete(input.merchantId(), input.idempotencyKey(), input.endpoint());
+            metrics.transition("PENDING", "FAILED", "create_exhaustion");
         });
     }
 

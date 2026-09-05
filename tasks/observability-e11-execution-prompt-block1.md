@@ -70,3 +70,44 @@ is commissioned only after this channel's audit.
 
 STOP conditions: P1 security-regression pressure · P2 logging dep/async temptation · P3 rename
 pressure · P4 scope creep · P5 docs-vs-config divergence · P6 evidence discipline (DOD).
+## Addenda (§9d — engineer questions, adjudicated by owner channel)
+
+1. **Log capture for S1 (Q12):** `OutputCaptureExtension` (Boot-native stdout capture,
+   `org.springframework.boot.test.system.CapturedOutput` — ships in spring-boot-test, ZERO new deps).
+   Rationale: `ListAppender` hooks the logger context PRE-encoder — it would capture `ILoggingEvent`s
+   and test the MDC, not the wire. The contract being proven is the EMITTED ECS line; only stdout
+   capture tests the real encoder output. Say "OutputCaptureExtension" in the handoff. Parse captured
+   stdout line-by-line as JSON (skip non-JSON noise lines).
+2. **Scrubbing DB-password leg (Q13):** NO deliberately-failing boot with `dargent/dargent` — that
+   tests failure plumbing, not scrubbing, and pollutes the suite with a broken-context leg. Instead:
+   run the NORMAL context (ServiceConnection container generates REAL credentials), read the in-use
+   password from the container's resolved properties, and assert ZERO occurrences of that actual
+   secret across ALL captured lines. Stronger than default-credential theater: proves "the password
+   in use never reaches the logs". The `dargent/dargent` prod fail-fast is the E13 rider (N3),
+   explicitly out of E11 scope.
+3. **Drill seed (Q14):** hybrid — deterministic where state must be forced, real where the trail must
+   exist: create the payment VIA THE API (real request_id + intake lines are part of the trail);
+   force due-state by direct UPDATE of the reconciliation schedule/expires columns (house precedent —
+   every IT seeds/adjusts rows directly); then run ONE real reconciliation cycle against a PSP stub
+   returning OPEN (no confirm) → the ladder-advance lines are emitted by the real use case. Do NOT
+   drive publisher-failure loops (that is E9's exhaustion IT territory — coupling the drill to
+   exhaustion semantics buys nothing for the operator's search problem).
+4. **Management port test boot (Q15):** real dual-port boot — main on `RANDOM_PORT`, management via
+   `management.server.port=0`, inject with `@LocalManagementPort` IF the annotation exists in Boot
+   4.1 (grep the classpath first — zero-from-memory; package moved across Boot versions). If absent,
+   resolve the management port from the Environment after startup. Assert EXACT statuses as-built and
+   NAME them in the test (e.g., denyAll-on-anonymous resolves through the authentication entry point →
+   whatever the chain produces — assert what IS, per house rule).
+
+Plan confirmed: S0→S3 commits, then handoff with the full DOD §1 block + TD-30 acknowledgment.
+## Block 2 COMMISSIONED (post-audit, 2026-09-04) — order binding
+
+0. **S1 remediation FIRST (one commit):** make `CapturingAppender` format events through the ECS
+   encoder (or attach Boot's structured encoder to the capture path) so captured text IS the wire
+   format; rewrite JsonLogCorrelationIT legs (a) correlation fields, (b) end-to-end request_id,
+   (c) scrubbing over ALL captured FORMATTED lines; extend OnCallTxidDrillIT to resolve the trail
+   from those emitted lines (DB rows may complement, not replace). Paste 2 REAL ECS lines in the
+   handoff. S1 is the epic's namesake — the wire is the contract.
+1. S4 metrics (spec §5, names FROZEN; `MetricsScrapeIT`).
+2. S5 docs truth pass + TD-22 + E11 ✅ flip (M4 ◐ preserved) as last content commit + exactly one
+   citation commit citing a run whose tree IS the flip. DOD §1 evidence block in both handoffs.
