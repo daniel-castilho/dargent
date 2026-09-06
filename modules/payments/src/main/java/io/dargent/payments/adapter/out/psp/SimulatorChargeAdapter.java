@@ -22,6 +22,9 @@ import tools.jackson.databind.json.JsonMapper;
  * connect 2 s / read 5 s timeouts. Retry policy (D19): linear backoff via injected sleeper;
  * retryable = connect/read errors, 5xx; **409 {@code txid_already_exists} is NOT retryable** →
  * treated as already-created success path (read the charge back via {@code GET /cobs/{txid}}).
+ * <p>Wire contract (TD-32, E2 spec §5.2): {@code GET /cobs/{txid}} serves {@code status}/{@code amount}
+ * ({@link GetChargeResponse}), not {@code state}/{@code amountCents} — the reconciler's truth endpoint
+ * parses the REAL simulator fields (the pre-fix parser silently ladder-advanced on {@code null}).
  */
 public final class SimulatorChargeAdapter implements PspPort {
 
@@ -105,9 +108,11 @@ public final class SimulatorChargeAdapter implements PspPort {
                     .build();
             var response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() == 200) {
-                var responseBody = objectMapper.readValue(response.body(), ChargeResponse.class);
+                // GET /cobs/{txid} serves GetChargeResponse (E2 spec §5.2): no brcode field exists
+                // on this wire (the simulator does not store one) — ChargeResult carries a null brcode.
+                GetChargeResponse responseBody = objectMapper.readValue(response.body(), GetChargeResponse.class);
                 return new ChargeResult(new Txid(responseBody.txid()), Instant.parse(responseBody.expiresAt()),
-                        responseBody.endToEndId(), responseBody.brcode());
+                        responseBody.endToEndId(), null);
             }
             throw new PspException("PSP read-back failed with status " + response.statusCode() + " for txid " + txid.value());
         } catch (IOException | InterruptedException e) {
@@ -137,7 +142,7 @@ public final class SimulatorChargeAdapter implements PspPort {
         }
     }
 
-@Override
+    @Override
     public CobStatus getCob(Txid txid) {
         try {
             String url = baseUrl + "/cobs/" + txid.value();
@@ -148,11 +153,12 @@ public final class SimulatorChargeAdapter implements PspPort {
                     .build();
             var response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() == 200) {
-                var cob = objectMapper.readValue(response.body(), CobResponse.class);
+                // Real simulator wire (E2 spec §5.2 / GetChargeResponse): status + amount in cents.
+                GetChargeResponse cob = objectMapper.readValue(response.body(), GetChargeResponse.class);
                 return new CobStatus(
                         new Txid(cob.txid()),
-                        CobState.valueOf(cob.state()),
-                        cob.amountCents(),
+                        CobState.valueOf(cob.status()),
+                        cob.amount(),
                         Instant.parse(cob.expiresAt()),
                         cob.endToEndId(),
                         cob.paidAt() == null ? null : Instant.parse(cob.paidAt())
@@ -182,10 +188,11 @@ public final class SimulatorChargeAdapter implements PspPort {
             String brcode
     ) {}
 
-    private record CobResponse(
+    /** GET /cobs/{txid} wire shape (E2 spec §5.2) — the reconciler truth endpoint. TD-32. */
+    private record GetChargeResponse(
             String txid,
-            String state,
-            long amountCents,
+            String status,
+            long amount,
             String expiresAt,
             String endToEndId,
             String paidAt

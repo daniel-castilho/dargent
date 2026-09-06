@@ -1,6 +1,7 @@
 name: dargent
 
-# M0 topology (design.md §12). Blue-green flip scripts (canary/cutover/rollback) land at M4 in deploy/.
+# M0 topology (design.md §12). Blue-green flip scripts (canary/cutover/rollback) live in
+# scripts/deploy.sh + scripts/rollback.sh (E12 S0); weights are rendered into deploy/runtime/nginx.conf.
 
 services:
   postgres:
@@ -51,6 +52,11 @@ services:
       AWS_REGION: ${AWS_REGION:-us-east-1}
       AWS_ACCESS_KEY_ID: test
       AWS_SECRET_ACCESS_KEY: test
+      DARGENT_PSP_WEBHOOK_SECRET: ${PSP_WEBHOOK_SECRET:-dev-only-secret}
+      PSP_CALLBACK_URL: ${PSP_CALLBACK_URL:-http://nginx:80/webhooks/psp}
+      DARGENT_RECONCILER_ENABLED: ${DARGENT_RECONCILER_ENABLED:-false}
+      DARGENT_RECONCILER_SCAN_MS: ${DARGENT_RECONCILER_SCAN_MS:-60000}
+      DARGENT_RECONCILER_BACKOFF_MS: ${DARGENT_RECONCILER_BACKOFF_MS:-60000,300000,900000,3600000}
     ports:
       - "8081:8080"
     depends_on:
@@ -110,10 +116,15 @@ services:
 
   nginx:
     image: nginx:1.29-alpine
+    command: nginx -c /etc/nginx/runtime/nginx.conf -g "daemon off;"
     ports:
       - "8080:80"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      # Bind the DIRECTORY, not the file: a single-file bind mount pins the inode at mount time, so an
+      # atomic replace (mv/sed -i/editor) orphans the old inode and reloads silently read stale config.
+      # Directory binds resolve by name on every access — deploy relays work with plain `nginx -s reload`
+      # (research: docker bind-mile inode pinning, E12 S2).
+      - ./../deploy/runtime:/etc/nginx/runtime:ro
     depends_on:
       - api-blue
       - api-green

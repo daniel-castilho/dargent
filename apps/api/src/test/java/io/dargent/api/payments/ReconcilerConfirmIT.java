@@ -247,15 +247,17 @@ class ReconcilerConfirmIT {
                 status = 200;
                 String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
                 String txid = extractTxid(body);
-                respBody = ("{\"txid\":\"" + txid + "\",\"status\":\"OPEN\",\"amountCents\":10000,"
-                        + "\"expiresAt\":\"2026-09-03T10:00:00Z\",\"endToEndId\":null,\"paidAt\":null}")
+                respBody = ("{\"txid\":\"" + txid + "\",\"status\":\"OPEN\",\"amount\":10000,"
+                        + "\"expiresAt\":\"2026-09-03T10:00:00Z\",\"callbackUrl\":\"http://callback.local/hook\","
+                        + "\"description\":null,\"pixKey\":\"dargent-dev-receber@example.com\","
+                        + "\"receiverName\":\"Dargent Dev LTDA\",\"receiverCity\":\"SAO PAULO\"}")
                         .getBytes(StandardCharsets.UTF_8);
             } else if ("GET".equals(method) && path.startsWith("/cobs/")) {
                 String txid = path.substring("/cobs/".length());
                 status = 200;
                 String e2e = state == State.PAID ? "\"" + PSP_E2E + "\"" : "null";
                 String paidAt = state == State.PAID ? "\"2026-09-02T09:59:30Z\"" : "null";
-                respBody = ("{\"txid\":\"" + txid + "\",\"state\":\"" + state + "\",\"amountCents\":10000,"
+                respBody = ("{\"txid\":\"" + txid + "\",\"status\":\"" + state + "\",\"amount\":10000,"
                         + "\"expiresAt\":\"2026-09-03T10:00:00Z\",\"endToEndId\":" + e2e + ",\"paidAt\":" + paidAt + "}")
                         .getBytes(StandardCharsets.UTF_8);
             } else {

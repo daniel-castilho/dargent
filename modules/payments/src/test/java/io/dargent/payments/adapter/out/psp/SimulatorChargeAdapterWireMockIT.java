@@ -101,7 +101,7 @@ class SimulatorChargeAdapterWireMockIT {
                         .withHeader("Content-Type", "application/json")
                         .withBody("{\"error\": \"txid_already_exists\"}")));
 
-        // GET /cobs/{txid} returns the existing charge
+        // GET /cobs/{txid} returns the existing charge (real GetChargeResponse wire — TD-32)
         stubFor(get(urlPathEqualTo("/cobs/" + txid))
                 .willReturn(aResponse()
                         .withStatus(200)
@@ -109,9 +109,11 @@ class SimulatorChargeAdapterWireMockIT {
                         .withBody("""
                                 {
                                   "txid": "8KD4Z9X2Q7W1M5T3R6Y0A1B2C",
+                                  "status": "OPEN",
+                                  "amount": 10000,
                                   "expiresAt": "2026-08-29T15:30:00Z",
-                                  "endToEndId": "E2E-123",
-                                  "brcode": "00020101021226530014BR.GOV.BCB.PIX..."
+                                  "endToEndId": null,
+                                  "paidAt": null
                                 }""")));
 
         var input = new PspPort.CreateChargeInput(

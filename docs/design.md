@@ -589,7 +589,7 @@ First-party actions pinned by version; third-party **pinned by commit SHA**. Dep
 | Topology | `api-blue` :8081 / `api-green` :8082 + NGINX :8080 (`nginx:1.29-alpine`) |
 | Flow | new version into the idle slot → readiness gate → **canary 10% with 30 s observation** → cutover → drain old slot; automatic abort to blue on any red signal |
 | Rollback | instant (`rollback.sh` flips the upstream back) |
-| Weights | runtime copy of the conf + `nginx -s reload` — the versioned template is **never** mutated |
+| Weights | runtime copy of the conf + `nginx -s reload` — the versioned template is **never** mutated. The runtime conf is bind-mounted as a **directory** (`deploy/runtime:/etc/nginx/runtime`), nginx started with `-c /etc/nginx/runtime/nginx.conf`: a single-file bind would pin the inode at mount time and every `mv`/`sed -i`/editor replace would silently orphan it, turning `nginx -s reload` into a no-op (proven in E12 S2) |
 | Already-learned gotchas (for free) | `down` instead of `weight=0` (doesn't exist → crash-looped someone's LB); `resolver 127.0.0.11 valid=10s` + `zone` + `resolve` on upstreams so recreated fleets are picked up without reload; `proxy_next_upstream error timeout`; passive checks `max_fails=3 fail_timeout=10s`; `keepalive 32` |
 | Image | multi-stage, layered jar, base **digest-pinned**, non-root, read-only root FS + tmpfs, CPU/RAM limits, healthcheck with start period |
 | Shutdown | `server.shutdown=graceful` + per-phase timeout |
