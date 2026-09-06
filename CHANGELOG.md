@@ -36,6 +36,15 @@ versioning: semantic, cut from annotated git tags (see [release-runbook](docs/re
   `flyway-core`) — the app now runs the 18 schema migrations end to end instead of failing at boot.
 - **TD-32 paid**: simulator `GET /v1/cob` resumed on `CANCELED` payments returns honor in the
   reconciler path; `PspGetCobContractIT` + 4× `Reconciler*IT` prove the contract.
+- **TD-33 paid — migration gate refined (owner decision 2026-09-06)**: the gate's imprecise pattern
+  set (`DROP ` catching `DROP NOT NULL`) was a spec defect. Refined policy: range = LAST-DEPLOY
+  (`last-deploy.txt`) + live `flyway_schema_history` cross-check (`since ⊆ db ⊆ tag`); ABORT on
+  `DROP TABLE/COLUMN/SCHEMA`, `ALTER COLUMN … TYPE`, `SET NOT NULL`, `RENAME`; ALLOW with log on
+  `DROP NOT NULL`, `DROP DEFAULT`; CHECK substitution compares value sets (new ⊇ old passes with
+  log, narrowing/parse-fail/new-check-on-existing-table aborts); unknown statement verbs abort.
+  `scripts/migration_gate.py` (statement tokenizer + transitional constraint walk) +
+  `scripts/test-migration-gate.sh` (widening/destructive/CHECK-narrowing/parse-unknown, CI step).
+  Real range accepted: `v0.3.0..HEAD` (`--check` rc=0; V110/V205 + V207 `+RECEIVED` all ALLOW).
 
 ### Milestone — E11 Observability ✅ (2026-09-05)
 

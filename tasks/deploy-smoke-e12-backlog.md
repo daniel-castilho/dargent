@@ -25,9 +25,13 @@ E12 Deploy & Runtime Smoke (M4)
   color at 100% (fail-closed cutover).
 - `scripts/rollback.sh`: weights back to previous color instantly (no rebuild); prints the incident
   one-liner for `docs/release-runbook.md`.
-- **S0-gate (migration diff):** `git diff --name-only <last-release>..<tag> -- '**/db/migration/**'` →
-  fail on `DROP `, `RENAME `, `ALTER COLUMN .* TYPE`, `NOT NULL` additions on existing columns
-  (D16 expand-only is the machine-checked contract, not folklore).
+- **S0-gate (migration diff, TD-33 refined):** range = LAST-DEPLOY (recorded in
+  `deploy/runtime/last-deploy.txt` at each deploy) + live `flyway_schema_history` cross-check
+  (`since ⊆ db ⊆ tag`, fail-closed both ways; CI without DB → warn + git range). **ABORT**:
+  `DROP TABLE/COLUMN/SCHEMA`, `ALTER COLUMN … TYPE`, `SET NOT NULL`, `RENAME`. **ALLOW with log**:
+  `DROP NOT NULL`, `DROP DEFAULT`. **CHECK substitution**: set comparison, new ⊇ old passes with
+  log; narrowing, new CHECK on existing table, or parse-fail aborts (fail-closed always). Tests:
+  `scripts/test-migration-gate.sh` (widening/destructive/CHECK/parse-unknown), a CI step.
 - Canary weights: nginx conf becomes a small template rendered by deploy.sh (weights are the only
   variable; upstreams/keepalive unchanged).
 - **Accept:** script `--check` mode prints the plan without executing; shellcheck clean (or documented

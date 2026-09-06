@@ -99,45 +99,74 @@ wait_ready() {
     return 1
 }
 
-# --------------------------------------------------------------------------- migration gate (D16)
-migration_gate() {
+# --------------------------------------------------------------------------- migration gate (D16, TD-33)
+# The OWNED range is LAST-DEPLOY..target — the recorded deploy tag in last-deploy.txt, cross-checked
+# against the live flyway_schema_history when a database is reachable — never any arbitrary tag.
+last_deploy_ref() {
+    local t
+    if [[ -f "$LAST_DEPLOY_FILE" ]]; then
+        t=$(grep '^tag ' "$LAST_DEPLOY_FILE" | head -1 | awk '{print $2}' || true)
+        if [[ -n "$t" ]] && git -C "$REPO_DIR" rev-parse -q --verify "$t^{commit}" >/dev/null 2>&1; then
+            echo "$t"
+            return 0
+        fi
+    fi
+    return 1
+}
+
+# Live-DB flyway cross-check (TD-33): the installed schema must sit between the last deploy and the
+# deploy target — since ⊆ db ⊆ tag. DB behind the last deploy = broken baseline; DB ahead of the
+# target = refusing to cutover an older release over a newer schema. Unreachable DB (CI) -> warn and
+# let the git range hold; reachable mismatch -> hard fail (fail-closed).
+gate_db_cross_check() {
     local since="$1" tag="$2"
-    local last="$since"
-    local verdict="PASS"
-    if [[ -z "$last" ]]; then
-        last=$(git -C "$REPO_DIR" describe --tags --abbrev=0 --match 'v*' "$tag" 2>/dev/null || true)
-        [[ -n "$last" ]] || { echo "no previous release tag reachable from $tag — gate vacuous"; return 0; }
+    if ! compose ps --services 2>/dev/null | grep -q '^postgres$' \
+        || ! compose ps postgres --format '{{.State}}' 2>/dev/null | grep -q running; then
+        warn "postgres not running — live-DB flyway cross-check SKIPPED (git range holds)"
+        return 0
     fi
-    note "migration gate: $last..$tag"
-    local range_diff
-    range_diff=$(git -C "$REPO_DIR" diff --name-only "$last..$tag" 2>/dev/null || git -C "$REPO_DIR" diff --name-only "$last" "$tag" || true)
-    local migration
-    migration=$(grep -E 'db/migration/.*\.sql$' <<<"$range_diff" || true)
-    [[ -n "$migration" ]] || { echo "no migrations in $last..$tag — gate PASS"; return 0; }
-    local file bad=0
-    while IFS= read -r file; do
-        local content
-        content=$(git -C "$REPO_DIR" show "$tag:$file" 2>/dev/null || true)
-        [[ -n "$content" ]] || continue
-        local line
-        while IFS= read -r line; do
-            if grep -qE '\bDROP\s' <<<"$line" \
-                || grep -qE '\bRENAME\s' <<<"$line" \
-                || grep -qE 'ALTER\s+COLUMN.*\bTYPE\b' <<<"$line" \
-                || grep -qE '\bSET\s+NOT\s+NULL\b' <<<"$line"; then
-                echo "  D16 $file:$line" >&2
-                bad=1
-            fi
-        done <<<"$content"
-    done <<<"$migration"
-    if [[ "$bad" -eq 1 ]]; then
-        verdict="FAIL"
-    fi
-    if [[ "$verdict" == "FAIL" ]]; then
-        echo "migration-gate FAIL: expand-only violations found in $last..$tag (list above)" >&2
+    local db_versions
+    db_versions=$(compose exec -T postgres psql -U dargent -d dargent -tAc \
+        "select version from flyway_schema_history where success order by version" 2>/dev/null || true)
+    [[ -n "$db_versions" ]] || { warn "flyway_schema_history unreadable — cross-check SKIPPED"; return 0; }
+    local db_set
+    db_set=$(grep -oE '^[0-9]+$' <<<"$db_versions" | sort -n | tr '\n' ' ')
+    local not_in_db ahead_of_tag
+    not_in_db=$(comm -23 <(git -C "$REPO_DIR" ls-tree -r --name-only "$since" | grep -E 'db/migration/.*\.sql$' \
+        | sed -E 's#.*/V([0-9]+)__.*\.sql$#\1#' | sort -u) \
+        <(grep -oE '^[0-9]+$' <<<"$db_versions" | sort -u) | tr '\n' ' ')
+    ahead_of_tag=$(comm -23 <(grep -oE '^[0-9]+$' <<<"$db_versions" | sort -u) \
+        <(git -C "$REPO_DIR" ls-tree -r --name-only "$tag" | grep -E 'db/migration/.*\.sql$' \
+        | sed -E 's#.*/V([0-9]+)__.*\.sql$#\1#' | sort -u) | tr '\n' ' ')
+    if [[ -n "$not_in_db" ]]; then
+        echo "FAIL DB cross-check: live schema is BEHIND the last deploy (not installed: $not_in_db)"
         return 1
     fi
-    echo "migration-gate PASS — $last..$tag is expand-only"
+    if [[ -n "$ahead_of_tag" ]]; then
+        echo "FAIL DB cross-check: live schema is AHEAD of the deploy target (stray: $ahead_of_tag)"
+        echo "     refusing to cutover an older release over a newer schema (fail-closed)"
+        return 1
+    fi
+    note "DB cross-check OK — flyway_schema_history within $since..$tag (db: $db_set)"
+}
+
+migration_gate() {
+    local since="$1" tag="$2" last="$since"
+    if [[ -z "$last" ]]; then
+        last=$(last_deploy_ref || true)
+    fi
+    if [[ -z "$last" ]]; then
+        last=$(git -C "$REPO_DIR" describe --tags --abbrev=0 --match 'v*' "$tag" 2>/dev/null || true)
+        [[ -n "$last" ]] || { echo "no previous deploy or release tag reachable from $tag — gate vacuous"; return 0; }
+    fi
+    note "migration gate: $last..$tag (range = last deploy, TD-33)"
+    local verdict
+    if ! verdict=$(python3 "$SCRIPT_DIR/migration_gate.py" --repo "$REPO_DIR" check "$last" "$tag" 2>&1); then
+        echo "$verdict"
+        return 1
+    fi
+    echo "$verdict"
+    gate_db_cross_check "$last" "$tag" || return 1
 }
 
 # --------------------------------------------------------------------------- smoke probe against the LIVE stack

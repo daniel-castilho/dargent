@@ -13,10 +13,21 @@ N8/N12/N7/N9. Out of scope: k8s/Terraform/cloud LB (P2), dashboards/alerting (E1
 ## §2 Deploy contract
 
 - `scripts/deploy.sh <tag> [--canary 10,30,100]` — default canary `10,30,100` (design contract).
-- Preconditions, each fail-closed: (1) tag exists; (2) **migration gate**: no D16-violating migration in
-  `<last-release>..<tag>` (patterns: `DROP `, `RENAME `, `ALTER COLUMN` + `TYPE`, `SET NOT NULL` on
-  existing columns); (3) new color reaches READY on the management port (`:9090/actuator/health`,
-  readiness group) within the compose healthcheck budget.
+- Preconditions, each fail-closed: (1) tag exists; (2) **migration gate (TD-33, refined 2026-09-06 —
+  the imprecise pattern set was a spec defect, adjudicated in-channel)**: range = LAST-DEPLOY..target
+  (the deploy recorded in `deploy/runtime/last-deploy.txt`, cross-checked against the live
+  `flyway_schema_history` when a database is reachable — `since ⊆ db ⊆ tag`, both directions
+  fail-closed; unreachable DB in CI → warn and the git range holds). **ABORT**: `DROP TABLE/COLUMN/
+  SCHEMA`, `ALTER COLUMN … TYPE`, `SET NOT NULL`, `RENAME`. **ALLOW with log**: `DROP NOT NULL`,
+  `DROP DEFAULT`. **CHECK substitution**: set comparison — new ⊇ old passes with a log; narrowing,
+  a new CHECK on an existing table, or any parse-fail aborts (fail-closed always; unknown statement
+  verbs abort). Implementation: `scripts/migration_gate.py` (statement tokenizer + transitional
+  constraint walk); tests: `scripts/test-migration-gate.sh` (widening, destructive, CHECK narrowing,
+  parse-unknown) — wired as a CI step. Landed migrations are never touched (standing rule). For the
+  first real release, `v0.3.0..HEAD` with the refined gate is ACCEPTED (V110/V205 = `DROP NOT NULL`,
+  V207 = CHECK widening, all verified line-by-line in-channel; no extra memo); (3) new color reaches
+  READY on the management port (`:9090/actuator/health`, readiness group) within the compose
+  healthcheck budget.
 - Cutover: NGINX weights per canary steps, minimum 30s dwell between steps (design: 10%/30s), probe
   `scripts/smoke.sh` against the LIVE stack after each weight bump; any probe failure or readiness
   flap → abort → old color 100% (weights restored), new color stopped after drain, exit non-zero with
@@ -75,7 +86,7 @@ are rendered by deploy.sh from args. Any new env name = STOP (owner adjudication
 
 | Item | Deliverable | Evidence | Verdict |
 |---|---|---|---|
-| S0 | `deploy.sh`/`rollback.sh`/canary weights/migration gate | D2′ migration-gate abort on `e644484` (gate flagged V110/V205/V207); D3′ canary `v0.3.0` 10→30→100 each `SMOKE PASS`, cutover, blue drained/stopped (`DEPLOY OK`, rc=0); D4′ rollback after full cutover (`ROLLBACK OK`, rc=0) — pasted in `docs/release-runbook.md` "Corrections from the S2 replicate (E12 S2), 2026-09-06 (binding)" | ✅ |
+| S0 | `deploy.sh`/`rollback.sh`/canary weights/migration gate | D2′ migration-gate abort on `e644484` (gate flagged V110/V205/V207); D3′ canary `v0.3.0` 10→30→100 each `SMOKE PASS`, cutover, blue drained/stopped (`DEPLOY OK`, rc=0); D4′ rollback after full cutover (`ROLLBACK OK`, rc=0) — pasted in `docs/release-runbook.md` "Corrections from the S2 replicate (E12 S2), 2026-09-06 (binding)". **TD-33 follow-up**: refined gate run on the real range — `deploy.sh --check HEAD` rc=0: V110/V205 `DROP NOT NULL` → ALLOW, V207 `CHECK widened (+RECEIVED)` → ALLOW, live-DB flyway cross-check OK (`v0.3.0..HEAD`), `CHECK RESULT: PASS`; abort paths re-proven by `test-migration-gate.sh` 4/4 | ✅ (refined) |
 | S1 | blue-green drill evidence | runbook D1–D6 original + D2′/D3′/D4′ reruns on the fixed nginx mechanism; block/lift cycle 500↔503 verified with plain reloads | ✅ |
 | S2 | runtime-smoke job | three consecutive `RUNTIME-SMOKE PASS (P0–P6)` rc=0 (23:48, 23:03, 23:32 local — last on the webhook-500 fix); P4 chaos `9KBEDOB0DZHA8RHIWZOLL0PCQ` CONFIRMED by reconciler, zero `webhook_events` rows | ✅ |
 | S3 | shutdown-under-load | P5 probe codes `4 200 35 502 1 504` (single 504 is a drain-window artifact, disclosed); zero connection-refused; fleet restored P6 | ✅ |

@@ -23,6 +23,13 @@ jobs:
       - name: Architecture boundary check (imports + domain purity)
         run: bash scripts/check-boundaries.sh
 
+      # Migration gate (D16/TD-33): refined policy self-test — widening passes, destructive /
+      # CHECK-narrowing / parse-unknown abort (fail-closed). Runs on scratch git trees.
+      - name: Migration gate tests (TD-33)
+        run: |
+          python3 scripts/migration_gate.py selftest
+          bash scripts/test-migration-gate.sh
+
       # Unit + slice + integration (Testcontainers: Postgres + LocalStack).
       # SpotBugs / OWASP / JaCoCo gates and Trivy/SBOM image security land at M4 per design.md §11.
       - name: Build, unit and integration tests

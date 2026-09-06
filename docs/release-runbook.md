@@ -94,7 +94,7 @@ directly into `payments.api_keys` (SHA-256 hex hash, `key_prefix = 'psp_test_'`)
 | # | Drill | Result | Evidence (verbatim) |
 |---|---|---|---|
 | D1 | Baseline traffic (blue 100) | PASS | `SMOKE PASS` legs 1-4: create → idempotent replay → pay at simulator → CONFIRMED within 1s webhook poll |
-| D2 | Migration-gate deny (real) | PASS | Deploy `e644484` ABORTED at precondition 2/3: gate flagged `V110` (ALTER COLUMN actor_key_id DROP NOT NULL), `V205` (event_id DROP NOT NULL), `V207` (DROP CONSTRAINT events_status_check) — all post-`v0.3.0`. Traffic stayed 100%: `70 200`. **Owner decision required before first real release** (see §9). |
+| D2 | Migration-gate deny (real) | PASS | Deploy `e644484` ABORTED at precondition 2/3: gate flagged `V110` (ALTER COLUMN actor_key_id DROP NOT NULL), `V205` (event_id DROP NOT NULL), `V207` (DROP CONSTRAINT events_status_check) — all post-`v0.3.0`. Traffic stayed 100%: `70 200`. **Superseded by TD-33** (see the resolved finding below): the same range now runs ALLOW-with-log under the refined gate. |
 | D3 | Full canary deploy (green) | PASS | `canary step 1/2/3: api-green weight=10/30/100`, `SMOKE PASS` after each bump, dwell 30s, `cutover complete` → old color drained/stopped. Traffic: `80 200`. |
 | D4 | Rollback mid-canary | PASS | deploy killed at `canary step 1` (blue=10); `scripts/rollback.sh` → `rolling api-blue -> api-green … api-green back to 100%; api-blue now down`. Traffic: `90 200`; post-rollback `SMOKE PASS`. ⚠️ Evidence superseded for the weight-revert mechanics by the S2 correction below — rerun at 22:54. |
 | D5 | Abort on readiness timeout | PASS | idle color crashed at boot → `DEPLOY ABORT: readiness TIMEOUT for api-green (api-blue stayed active)`, automatic restore to 100% + drain. Traffic: `30 200`. |
@@ -104,11 +104,16 @@ Findings to disclose and keep in view:
 - **Drain-window 504** (D6): the killed old color can yield a transient gateway error in the instant the old
   container stops; the canary gate itself never lost traffic. Options for Block 2: `proxy_next_upstream`
   off/on, or accept as the documented zero-gap limit.
-- **Migration gate blocks the real nominal range**: `v0.3.0..e644484` contains three migrations the D16 gate
-  flags (all are *relaxing* operations — `DROP NOT NULL`, `DROP CONSTRAINT` — safe forward, but the spec's
-  `DROP ` pattern is intentionally fail-closed). Decide: (a) keep gate spec-exact and remediate with forward
-  migrations, or (b) refine the gate to allow `DROP NOT NULL`/`DROP CONSTRAINT` while still denying
-  `DROP COLUMN`/`RENAME`. Not resolved in-block (BD-14 discipline).
+- **Migration gate blocks the real nominal range — RESOLVED by owner decision (TD-33, 2026-09-06)**:
+  the imprecise pattern set (`DROP ` catching `DROP NOT NULL`) was a spec defect. The gate now
+  implements the refined policy: range = LAST-DEPLOY (`last-deploy.txt`) + live
+  `flyway_schema_history` cross-check (`since ⊆ db ⊆ tag`); ABORT `DROP TABLE/COLUMN/SCHEMA`,
+  `ALTER COLUMN … TYPE`, `SET NOT NULL`, `RENAME`; ALLOW with log `DROP NOT NULL`,
+  `DROP DEFAULT`; CHECK substitution compares value sets (new ⊇ old → ALLOW; narrowing,
+  new-check-on-existing-table or parse-fail → ABORT). Verified on the real range:
+  `scripts/deploy.sh --check HEAD` → `CHECK RESULT: PASS` (V110/V205 `DROP NOT NULL` → ALLOW,
+  V207 `CHECK widened (+RECEIVED)` → ALLOW, DB cross-check OK). Abort paths covered by
+  `scripts/test-migration-gate.sh` (4/4) in CI. First real release accepted: `v0.3.0..HEAD`.
 - Smoke deviations from spec wording (same class as the `fee` field): figure `expiresIn` is compared after
   masking, because the API recomputes it live (`Duration.between(now, expiresAt)`) — a stored byte-equal
   value would be stale by definition; everything else is verified byte-identical. Detailed idempotency: `expiresIn` masked, `expiresAt` byte-equal.
