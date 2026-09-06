@@ -71,6 +71,8 @@ public class JdbcPaymentQueryPort implements PaymentQueryPort {
     }
 
     static String encodeCursor(String txid, long createdAtMicros) {
-        return Base64.getUrlEncoder().withoutPadding().encodeToString((txid + "|" + createdAtMicros).getBytes());
+        return Base64.getUrlEncoder()
+                .withoutPadding()
+                .encodeToString((txid + "|" + createdAtMicros).getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 }

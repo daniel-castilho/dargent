@@ -99,6 +99,6 @@ public final class BrCode {
      */
     public static String encodeCursor(String txid, long createdAtMicros) {
         String raw = txid + "|" + createdAtMicros;
-        return java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(raw.getBytes());
+        return java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(raw.getBytes(StandardCharsets.UTF_8));
     }
 }

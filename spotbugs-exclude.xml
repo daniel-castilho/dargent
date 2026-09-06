@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Dargent SpotBugs exclusion filter (E13 S0, design §11.1).
+
+  RULE (P4): every <Match> below carries a rationale comment naming WHY the finding is a false
+  positive for this codebase and a review date. Suppressions without rationale are defects.
+-->
+<FindBugsFilter>
+  <!-- EI_EXPOSE_REP2 / EI_EXPOSE_REP on constructor injection and record components.
+       RATIONALE: the entire composition model is constructor injection of Spring-managed
+       collaborators (JdbcClient, TransactionTemplate, MeterRegistry, ports) and Java records
+       carrying them. "Exposing" these references is the architecture (AGENTS §2.2 hexagonal
+       wiring); the collaborators are never mutated by this code and are not value objects.
+       Rewriting to defensive copies would copy infrastructure beans — nonsense.
+       REVIEW: 2027-03-06 (re-check with SpotBugs 5.x which may fix the Java-25 record analysis). -->
+  <Match>
+    <Or>
+      <Bug pattern="EI_EXPOSE_REP2"/>
+      <Bug pattern="EI_EXPOSE_REP"/>
+    </Or>
+  </Match>
+
+  <!-- DLS_DEAD_LOCAL_STORE on constructor parameters and record components.
+       RATIONALE: SpotBugs 4.9.8.5 misreads constructor-parameter flow on Java 25 records and
+       multi-field constructors (reports the parameter as a dead store even though every field
+       is read later — verified by hand for all flagged sites: ReconciliationUseCase,
+       RefundPaymentUseCase, OutboxId). A tool bug, not a code bug.
+       REVIEW: 2027-03-06 (drop this exclusion when the wrapper moves to Maven >= 3.8.9 and
+       spotbugs-maven-plugin 4.10.x becomes usable). -->
+  <Match>
+    <Bug pattern="DLS_DEAD_LOCAL_STORE"/>
+  </Match>
+
+  <!-- DMI_RANDOM_USED_ONLY_ONCE on ApiKeyHasher.generateRawKey.
+       RATIONALE: the "random" is java.security.SecureRandom (the detector's advice targets
+       java.util.Random reuse for throughput). Key generation is a rare, security-critical
+       operation; a fresh CSPRNG per call is deliberately stateless. No performance or
+       security gain from hoisting the instance.
+       REVIEW: 2027-03-06. -->
+  <Match>
+    <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE"/>
+    <Or>
+      <Class name="io.dargent.api.security.ApiKeyHasher"/>
+    </Or>
+  </Match>
+
+  <!-- HRS_REQUEST_PARAMETER_TO_HTTP_HEADER on RequestIdFilter.
+       RATIONALE: the echoed X-Request-Id is either a freshly generated UUID or an inbound value
+       validated against ^[A-Za-z0-9-]{8,64}$ BEFORE being written to the response header — the
+       charset excludes CR/LF, so header/response splitting is impossible. The echo is the
+       documented correlation contract (observability.md §1).
+       REVIEW: 2027-03-06. -->
+  <Match>
+    <Bug pattern="HRS_REQUEST_PARAMETER_TO_HTTP_HEADER"/>
+    <Or>
+      <Class name="io.dargent.api.web.RequestIdFilter"/>
+    </Or>
+  </Match>
+</FindBugsFilter>

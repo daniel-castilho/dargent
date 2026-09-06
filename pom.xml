@@ -31,6 +31,11 @@
     <java.version>25</java.version>
     <archunit.version>1.4.1</archunit.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <!-- 4.9.8.5, not 4.10.x: the 4.10 line requires Maven >= 3.8.9; the wrapper is pinned to
+         3.8.7 (the version CI ran since M0 — wrapper bump is a separate owner decision). -->
+    <spotbugs.version>4.9.8.5</spotbugs.version>
+    <spotless.version>3.10.2</spotless.version>
+    <jacoco.version>0.8.15</jacoco.version>
   </properties>
 
   <dependencyManagement>
@@ -116,6 +121,53 @@
         <configuration>
           <failIfNoSpecifiedTests>false</failIfNoSpecifiedTests>
         </configuration>
+      </plugin>
+      <!-- E13 S0 — Spotless format gate (checkstyle-style determinism via palantir-java-format).
+           The ONE normalize commit landed before this gate went live (owner-approved). -->
+      <plugin>
+        <groupId>com.diffplug.spotless</groupId>
+        <artifactId>spotless-maven-plugin</artifactId>
+        <version>${spotless.version}</version>
+        <configuration>
+          <java>
+            <palantirJavaFormat/>
+            <removeUnusedImports/>
+            <importOrder/>
+            <trimTrailingWhitespace/>
+            <endWithNewline/>
+          </java>
+        </configuration>
+        <executions>
+          <execution>
+            <id>spotless-check</id>
+            <goals>
+              <goal>check</goal>
+            </goals>
+            <phase>validate</phase>
+          </execution>
+        </executions>
+      </plugin>
+      <!-- E13 S0 — SpotBugs static-analysis gate (design §11.1): effort max, fail on Medium+.
+           Exclusions carry a rationale per entry (P4). Runs on all production modules;
+           psp-simulator included (it is the outside world, but still our code). -->
+      <plugin>
+        <groupId>com.github.spotbugs</groupId>
+        <artifactId>spotbugs-maven-plugin</artifactId>
+        <version>${spotbugs.version}</version>
+        <configuration>
+          <effort>Max</effort>
+          <threshold>Medium</threshold>
+          <xmlOutput>true</xmlOutput>
+          <excludeFilterFile>${maven.multiModuleProjectDirectory}/spotbugs-exclude.xml</excludeFilterFile>
+        </configuration>
+        <executions>
+          <execution>
+            <id>spotbugs-gate</id>
+            <goals>
+              <goal>check</goal>
+            </goals>
+          </execution>
+        </executions>
       </plugin>
     </plugins>
   </build>
