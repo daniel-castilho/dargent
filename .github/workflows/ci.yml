@@ -37,7 +37,7 @@ jobs:
       # Unit + slice + integration (Testcontainers: Postgres + LocalStack).
       # SpotBugs / OWASP / JaCoCo gates and Trivy/SBOM image security land at M4 per design.md §11.
       - name: Build, unit and integration tests
-        run: mvn -B verify
+        run: ./mvnw -B verify
 
       - name: Upload test reports on failure
         if: failure()
