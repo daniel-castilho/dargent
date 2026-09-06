@@ -15,7 +15,10 @@ AGG="$(pwd)/apps/api/target/coverage-aggregate.exec"
 [[ -f "$AGG" ]] || { echo "COVERAGE FAIL: $AGG missing — run ./mvnw -B verify first"; exit 1; }
 
 fail=0
-while read -r module floor; do
+while read -r module; do
+    floor=$(rg -o '<jacoco\.line\.floor>[0-9.]+</jacoco\.line\.floor>' "$module/pom.xml" \
+        | head -1 | sed -E 's#.*>([0-9.]+)<.*#\1#')
+    [[ -n "$floor" ]] || { echo "COVERAGE FAIL  $module: no jacoco.line.floor in its pom (P1 — floors live in module poms)"; fail=1; continue; }
     out=$(./mvnw -B jacoco:check@jacoco-check -pl "$module" \
         -Djacoco.check.data="$AGG" -Djacoco.line.floor="$floor" -Djacoco.check.skip=false 2>&1 || true)
     ratio=$( { grep -o 'covered ratio is [0-9.]*' <<<"$out" || true; } | awk '{print $4}' | head -1)
@@ -25,13 +28,13 @@ while read -r module floor; do
         echo "COVERAGE FAIL  $module floor=$floor measured=${ratio:-unknown}"
         fail=1
     fi
-done <<'FLOORS'
-modules/payments 0.70
-modules/ledger 0.75
-modules/shared 0.80
-modules/notifications 0.50
-apps/api 0.40
-FLOORS
+done <<'MODULES'
+modules/payments
+modules/ledger
+modules/shared
+modules/notifications
+apps/api
+MODULES
 
 if [[ "$fail" -ne 0 ]]; then exit 1; fi
 echo "COVERAGE: all floors met (combined unit+IT, aggregate exec)"
