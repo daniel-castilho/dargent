@@ -10,8 +10,16 @@
     <relativePath>../../pom.xml</relativePath>
   </parent>
 
+  <properties>
+    <!-- E13 S1: owner-fixed LINE coverage floor (api, testing-playbook §5) — measured on combined unit+IT data. -->
+    <jacoco.line.floor>0.40</jacoco.line.floor>
+    <jacoco.skip>false</jacoco.skip>
+  </properties>
+
+
   <artifactId>dargent-api</artifactId>
   <name>Dargent API</name>
+
   <description>Composition root: wires modules, REST, security, schedulers, messaging adapters (AGENTS.md §2 — no domain logic here).</description>
 
   <dependencies>
@@ -134,6 +142,34 @@
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <executions>
+          <!-- E13 S1: the boot app hosts the hexagonal ITs; this merge writes ONE aggregated exec
+               for the whole reactor. The CI coverage step then enforces each module's floor against
+               it — adapter lines exercised by ITs count toward the owning module (playbook §5:
+               combined unit+IT data, measured after the IT step; design §11.1 `./mvnw jacoco:check`). -->
+          <execution>
+            <id>jacoco-merge</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>merge</goal>
+            </goals>
+            <configuration>
+              <fileSets>
+                <fileSet>
+                  <directory>${maven.multiModuleProjectDirectory}</directory>
+                  <includes>
+                    <include>**/target/jacoco.exec</include>
+                  </includes>
+                </fileSet>
+              </fileSets>
+              <destFile>${project.build.directory}/coverage-aggregate.exec</destFile>
+            </configuration>
+          </execution>
+        </executions>
       </plugin>
     </plugins>
   </build>

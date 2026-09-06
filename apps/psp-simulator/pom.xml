@@ -6,9 +6,16 @@
   <parent>
     <groupId>io.dargent</groupId>
     <artifactId>dargent-parent</artifactId>
+
     <version>1.0-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
+
+  <properties>
+    <!-- E13 S1: no coverage floor — not in the initial owner-fixed set (testing-playbook §5). -->
+    <jacoco.skip>true</jacoco.skip>
+  </properties>
+
 
   <artifactId>dargent-psp-simulator</artifactId>
   <name>Dargent PSP Simulator</name>

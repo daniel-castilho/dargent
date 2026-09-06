@@ -10,8 +10,16 @@
     <relativePath>../../pom.xml</relativePath>
   </parent>
 
+  <properties>
+    <!-- E13 S1: owner-fixed LINE coverage floor (ledger, testing-playbook §5) — measured on combined unit+IT data. -->
+    <jacoco.line.floor>0.75</jacoco.line.floor>
+    <jacoco.skip>false</jacoco.skip>
+  </properties>
+
+
   <artifactId>dargent-ledger</artifactId>
   <name>Dargent Ledger</name>
+
   <description>Append-only double-entry journal, balance projection, balance proof (design.md §5.2). Pure event consumer — JdbcClient only, zero JPA (D14).</description>
 
 <dependencies>
