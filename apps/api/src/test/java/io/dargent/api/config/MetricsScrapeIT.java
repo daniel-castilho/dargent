@@ -738,7 +738,7 @@ class MetricsScrapeIT {
                     String e2e = state == State.PAID ? "\"E00416968202009221504E2345678910\"" : "null";
                     String paidAt = state == State.PAID ? "\"2027-01-01T11:59:30Z\"" : "null";
                     status = 200;
-                    respBody = ("{\"txid\":\"" + txid + "\",\"state\":\"" + state + "\",\"amountCents\":10000,"
+                    respBody = ("{\"txid\":\"" + txid + "\",\"status\":\"" + state + "\",\"amount\":10000,"
                             + "\"expiresAt\":\"2027-01-01T13:00:00Z\",\"endToEndId\":" + e2e
                             + ",\"paidAt\":" + paidAt + "}")
                             .getBytes(StandardCharsets.UTF_8);

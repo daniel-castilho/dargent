@@ -5,6 +5,47 @@ versioning: semantic, cut from annotated git tags (see [release-runbook](docs/re
 
 ## [Unreleased]
 
+### Added — E12 Deploy & Runtime Smoke, Block 1 (S0–S3) (2026-09-06)
+
+- **Deploy artifacts (S0)**: `scripts/deploy.sh` (tag verified → migration-diff gate → new color up →
+  management-port healthcheck → stepwise canary 10/30/100 → cutover → old color drained/stopped;
+  `--check` prints the plan), `scripts/rollback.sh` (instant weight flip back to the previous color,
+  no rebuild), canary weights rendered from `docker/nginx/nginx.conf` into a runtime copy
+  (`deploy/runtime/nginx.conf`), forward-only migration gate (fails on `DROP`/`RENAME`/
+  `ALTER COLUMN TYPE`/`NOT NULL` additions).
+- **Blue-green nginx fix (S1/S2, the money guard)**: compose now binds the nginx runtime conf as a
+  DIRECTORY (`./deploy/runtime:/etc/nginx/runtime:ro`) instead of a single file. A file bind-mount
+  pins the inode at mount time, so any atomic replace (mv/sed -i/editor) orphans the old inode and
+  `nginx -s reload` silently keeps serving stale config — verified live (lift→500, block→503,
+  lift→500). Deploy/rollback/chaos now use plain `nginx -s reload`.
+- **Runtime-smoke CI job (S2+S3)**: `runtime-smoke` in `.github/workflows/ci.yml` boots the full
+  compose stack (api-blue + api-green + postgres + localstack + psp-simulator + nginx), checks
+  readiness on the management port, runs `scripts/smoke.sh` (create → idempotent replay → webhook
+  CONFIRMED), chaos-legs webhook suppression at nginx and proves the reconciler self-heals the
+  payment (zero webhook rows), then SIGTERMs the active color under probe load asserting zero
+  connection-refused and a graceful ≤30s exit. Logs archived as a workflow artifact on failure.
+- **Webhook intake fail-closed defect (E12 S3 follow-up)**: `POST /webhooks/psp` with a
+  non-`application/json` content type (curl `-d` form-urlencoded default) previously tripped Spring's
+  `HttpMediaTypeNotSupportedException` → 500 with **no audit row**. The controller no longer restricts
+  `consumes` (HMAC *is* the authentication); every rejected payload is now a 4xx — 401
+  `invalid_signature`/`signature_expired`, or 400 `invalid_request` for a validly-signed but
+  unparseable/non-object/empty body — and the raw bytes are persisted to `webhook_events`
+  (opaque non-JSON bodies vaulted as a JSON string so the jsonb column never rejects the audit).
+  `WebhookIntakeIT` 13/13 covers both fail-closed cases.
+- **Flyway runtime fix**: `spring-boot-starter-flyway` (the Spring Boot 4 starter, not the bare
+  `flyway-core`) — the app now runs the 18 schema migrations end to end instead of failing at boot.
+- **TD-32 paid**: simulator `GET /v1/cob` resumed on `CANCELED` payments returns honor in the
+  reconciler path; `PspGetCobContractIT` + 4× `Reconciler*IT` prove the contract.
+- **TD-33 paid — migration gate refined (owner decision 2026-09-06)**: the gate's imprecise pattern
+  set (`DROP ` catching `DROP NOT NULL`) was a spec defect. Refined policy: range = LAST-DEPLOY
+  (`last-deploy.txt`) + live `flyway_schema_history` cross-check (`since ⊆ db ⊆ tag`); ABORT on
+  `DROP TABLE/COLUMN/SCHEMA`, `ALTER COLUMN … TYPE`, `SET NOT NULL`, `RENAME`; ALLOW with log on
+  `DROP NOT NULL`, `DROP DEFAULT`; CHECK substitution compares value sets (new ⊇ old passes with
+  log, narrowing/parse-fail/new-check-on-existing-table aborts); unknown statement verbs abort.
+  `scripts/migration_gate.py` (statement tokenizer + transitional constraint walk) +
+  `scripts/test-migration-gate.sh` (widening/destructive/CHECK-narrowing/parse-unknown, CI step).
+  Real range accepted: `v0.3.0..HEAD` (`--check` rc=0; V110/V205 + V207 `+RECEIVED` all ALLOW).
+
 ### Milestone — E11 Observability ✅ (2026-09-05)
 
 - **E11 ✅ — observability live**: structured ECS JSON logs with end-to-end request correlation

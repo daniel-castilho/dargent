@@ -23,6 +23,9 @@ Thumbs.db
 docker/runtime/
 perf/results/
 .localstack/
+# deploy.sh local state (nginx.conf in deploy/runtime stays TRACKED — it is a commit artifact)
+deploy/runtime/last-deploy.txt
+deploy/runtime/deploy-overlay.yaml
 
 # Logs
 *.log

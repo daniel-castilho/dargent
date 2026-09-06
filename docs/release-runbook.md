@@ -84,6 +84,80 @@ expand/contract contract — this is why it exists.
 - **LocalStack is disposable by design:** after a host loss, queues re-provision at boot; missed events replay
   via the outbox republish tool (`scripts/republish-outbox.sh --from <ts>`); nothing else is lost.
 
+### Deploy drill record — S1 (E12 Block 1), 2026-09-06
+
+Repo state: commit `e644484` + uncommitted S0 working tree (psp `psp_test_` 9-char prefix, deploy/rollback/smoke
+scripts, Flyway-starter fix). Drilled ref: `v0.3.0` (last tag; gate `v0.3.0..v0.3.0` vacuous). Both colors on
+the same compose image (`dargent-api:compose`). Smoke key: random `psp_test_` + 43 base62 chars, inserted
+directly into `payments.api_keys` (SHA-256 hex hash, `key_prefix = 'psp_test_'`), same row for the whole drill.
+
+| # | Drill | Result | Evidence (verbatim) |
+|---|---|---|---|
+| D1 | Baseline traffic (blue 100) | PASS | `SMOKE PASS` legs 1-4: create → idempotent replay → pay at simulator → CONFIRMED within 1s webhook poll |
+| D2 | Migration-gate deny (real) | PASS | Deploy `e644484` ABORTED at precondition 2/3: gate flagged `V110` (ALTER COLUMN actor_key_id DROP NOT NULL), `V205` (event_id DROP NOT NULL), `V207` (DROP CONSTRAINT events_status_check) — all post-`v0.3.0`. Traffic stayed 100%: `70 200`. **Superseded by TD-33** (see the resolved finding below): the same range now runs ALLOW-with-log under the refined gate. |
+| D3 | Full canary deploy (green) | PASS | `canary step 1/2/3: api-green weight=10/30/100`, `SMOKE PASS` after each bump, dwell 30s, `cutover complete` → old color drained/stopped. Traffic: `80 200`. |
+| D4 | Rollback mid-canary | PASS | deploy killed at `canary step 1` (blue=10); `scripts/rollback.sh` → `rolling api-blue -> api-green … api-green back to 100%; api-blue now down`. Traffic: `90 200`; post-rollback `SMOKE PASS`. ⚠️ Evidence superseded for the weight-revert mechanics by the S2 correction below — rerun at 22:54. |
+| D5 | Abort on readiness timeout | PASS | idle color crashed at boot → `DEPLOY ABORT: readiness TIMEOUT for api-green (api-blue stayed active)`, automatic restore to 100% + drain. Traffic: `30 200`. |
+| D6 | Canary in reverse direction (blue) | PASS | Same 10/30/100 + smoke sequence. Traffic: `59 200 1 504` — the single `504` landed in the drain window (upstream closing during `compose stop -t 30`) → treat as known drain artifact, not a regression. |
+
+Findings to disclose and keep in view:
+- **Drain-window 504** (D6): the killed old color can yield a transient gateway error in the instant the old
+  container stops; the canary gate itself never lost traffic. Options for Block 2: `proxy_next_upstream`
+  off/on, or accept as the documented zero-gap limit.
+- **Migration gate blocks the real nominal range — RESOLVED by owner decision (TD-33, 2026-09-06)**:
+  the imprecise pattern set (`DROP ` catching `DROP NOT NULL`) was a spec defect. The gate now
+  implements the refined policy: range = LAST-DEPLOY (`last-deploy.txt`) + live
+  `flyway_schema_history` cross-check (`since ⊆ db ⊆ tag`); ABORT `DROP TABLE/COLUMN/SCHEMA`,
+  `ALTER COLUMN … TYPE`, `SET NOT NULL`, `RENAME`; ALLOW with log `DROP NOT NULL`,
+  `DROP DEFAULT`; CHECK substitution compares value sets (new ⊇ old → ALLOW; narrowing,
+  new-check-on-existing-table or parse-fail → ABORT). Verified on the real range:
+  `scripts/deploy.sh --check HEAD` → `CHECK RESULT: PASS` (V110/V205 `DROP NOT NULL` → ALLOW,
+  V207 `CHECK widened (+RECEIVED)` → ALLOW, DB cross-check OK). Abort paths covered by
+  `scripts/test-migration-gate.sh` (4/4) in CI. First real release accepted: `v0.3.0..HEAD`.
+- Smoke deviations from spec wording (same class as the `fee` field): figure `expiresIn` is compared after
+  masking, because the API recomputes it live (`Duration.between(now, expiresAt)`) — a stored byte-equal
+  value would be stale by definition; everything else is verified byte-identical. Detailed idempotency: `expiresIn` masked, `expiresAt` byte-equal.
+
+### Corrections from the S2 replicate (E12 S2), 2026-09-06 (binding)
+
+**Single-file bind mount pins the inode — fixed by mounting the directory.** The original compose mount
+was `./deploy/runtime/nginx.conf:/etc/nginx/nginx.conf:rw`. A single-file bind resolves the inode at mount
+time; any atomic replace (`mv`, `sed -i`, editors) orphans the old inode and the container keeps reading
+stale config, so `nginx -s reload` silently did nothing. The D4 rollback above used `mv` and therefore did
+*not* revert the weights — the correct behavior only held because `deploy.sh` renders with truncate-in-place
+and the pinned inode happened to match. Fix (adopted): mount the **directory** `./deploy/runtime:/etc/nginx/runtime:ro`
+and start nginx with `command: nginx -c /etc/nginx/runtime/nginx.conf -g "daemon off;"`. Directory binds
+resolve by name on every access — host writes now propagate to plain `nginx -s reload`. Research:
+docker bind-mount inode pinning (E12 S2). Equal-named only.
+
+**Rerun evidence on the fixed mechanism (all timestamps 2026-09-06, working tree `e644484` + S0/S2):**
+
+| # | Drill | Result | Evidence (verbatim) |
+|---|---|---|---|
+| D2' | Migration-gate deny (real, rerun) | PASS | `DEPLOY 22:52:00 ABORT: migration gate FAIL` — gate flagged `V205`/`V207`/`V110` for `v0.3.0..e644484`; traffic untouched. Deploy drill then used `v0.3.0` (gate vacuous: `no migrations in v0.3.0..v0.3.0 — gate PASS`). |
+| D3' | Full canary deploy (green, rerun) | PASS | `canary step 1/2/3: api-green weight=10/30/100` with `SMOKE PASS` after every bump (txids `ANWWN88LMHGY0ARWQE0DYXB51`, `I3QMW4GOX0L12QCNJQ7VOLKLV`, `Q56660ZTEXP033BRDCZDT4M5L`), dwell 30s each, `cutover complete (100% on api-green)`, `api-blue drained and stopped`; `DEPLOY OK` rc=0. Weights VERIFIED via functional probes on the live reload (directory mount). |
+| D4' | Rollback after full cutover (rerun) | PASS | `rollback.sh` → `api-blue` STARTED (new: rollback restarts the drained old color), reload applied, `--active` → `api-blue`, `ROLLBACK OK` rc=0; post-rollback `SMOKE PASS` (create → CONFIRMED `4714a17b-…`, 1s webhook poll) proving traffic serves blue again. |
+
+**S2/S3 runtime-smoke job (P0–P6) — first fully green run, 22:48–22:51:**
+`RUNTIME-SMOKE PASS (P0-P6)` rc=0: P0/P1 stack+readiness, P2 key insert, P3 smoke (webhook confirm <1s),
+P4 chaos webhook-suppression (`POST /webhooks/psp → 503` confirmed) → simulator pay → **reconciler confirmed
+`0ARQX9SFVEZY9XUXJ03K6NACR` with zero `payments.webhook_events` rows** (self-healing without the webhook),
+block lifted back to 500 — P5 shutdown-under-load (`stop in 1s, probe codes: 4 200 35 502 1 504` — the 502s/504
+are nginx gateway artifacts during the drain window, the API answered consistently 4×200), P6 fleet restored.
+
+Findings from the S2 replicate (+ lessons for design.md §11.2 / lessons):
+- **nginx reload was a silent no-op under the file bind** — the whole S1/S2 chaos confusion traced back to it.
+  Symptom pair: host/container inodes drift after `mv`; `container grep=0` while host grep=3; `nginx -t` OK but
+  live config unchanged. Diagnostics: compare `stat -c %i` host vs `docker compose exec nginx stat -c %i`.
+- **`awk file > file` truncates the source before awk reads it** — an in-place render on the SAME path zeroes the
+  file silently ("no `events` section" on reload). Renders must land in a temp file, then `cat temp > file`.
+  Guard: render + assert `grep -q '^events {'`.
+- **Reconciler first-rung timing**: payment create schedules the first reconcile at `now + backoff[0]` (default
+  60s); the scan interval only gates how often `runOnce` runs. A chaos webhook-drop confirms at ~60s, NOT the
+  scan tick — smoke budgets must cover first rung + slack (90s), which the job now does.
+- **A failed chaos leg must never leak its block**: the job installs an EXIT trap that idempotently strips
+  chaos markers + reloads, so even a P4 failure restores normal webhook intake.
+
 ## 7. Incidents — quick reference
 
 | Incident | First move | Then |

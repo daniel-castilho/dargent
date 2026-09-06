@@ -24,6 +24,7 @@ import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -67,8 +68,11 @@ public class WebhookController {
         this.secret = secret;
     }
 
-    @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
+    @PostMapping
     void receive(HttpServletRequest request, HttpServletResponse response) throws IOException {
+        // No `consumes` restriction on purpose (AGENTS §4.4 fail-closed): HMAC is the auth, so ANY
+        // content type must reach the verdict and get persisted for the attack audit — a 415 on
+        // form-urlencoded/empty payloads used to surface as a 500 with no audit row (E12 S3 defect).
         byte[] rawBody = request.getInputStream().readAllBytes();
 
         String timestamp = request.getHeader("X-PSP-Timestamp");
@@ -93,7 +97,27 @@ public class WebhookController {
             return;
         }
 
-        JsonNode parsed = objectMapper.readTree(rawBody);
+        JsonNode parsed;
+        if (rawBody.length == 0) {
+            metrics.counter("dargent.webhook.payload.failures", "reason", "empty").increment();
+            persistRawAndRespond(request, response, rawBody, true,
+                    "INVALID_REQUEST", "Empty webhook body");
+            return;
+        }
+        try {
+            parsed = objectMapper.readTree(rawBody);
+        } catch (JacksonException e) {
+            metrics.counter("dargent.webhook.payload.failures", "reason", "not_json").increment();
+            persistRawAndRespond(request, response, rawBody, true,
+                    "INVALID_REQUEST", "Body is not valid JSON");
+            return;
+        }
+        if (!parsed.isObject()) {
+            metrics.counter("dargent.webhook.payload.failures", "reason", "not_object").increment();
+            persistRawAndRespond(request, response, rawBody, true,
+                    "INVALID_REQUEST", "Body is not a JSON object");
+            return;
+        }
         String type = text(parsed, "type");
         String endToEndId = text(parsed, "endToEndId");
         String txid = text(parsed, "txid");
@@ -128,6 +152,19 @@ public class WebhookController {
 
     private void persistRawAndRespond(HttpServletRequest request, HttpServletResponse response,
             byte[] rawBody, boolean signatureValid, String errorCode, String detail) throws IOException {
+        // payload_raw is jsonb — an opaque (non-JSON) attack body must still be persisted verbatim for the
+        // audit, so unparseable bytes are wrapped in a JSON string (escaping handled by Jackson).
+        String rawText = new String(rawBody, StandardCharsets.UTF_8);
+        String storedPayload;
+        try {
+            objectMapper.readTree(rawBody);
+            storedPayload = rawText;
+        } catch (JacksonException e) {
+            ObjectNode wrap = objectMapper.createObjectNode();
+            wrap.put("malformed", rawText);
+            storedPayload = objectMapper.writeValueAsString(wrap);
+        }
+
         String providerEventId = RAW_PREFIX + sha256Hex(rawBody);
         webhookEventStore.insertIfAbsent(new WebhookEventRecord(
                 UUID.randomUUID(),
@@ -135,7 +172,7 @@ public class WebhookController {
                 "unknown",
                 "unknown",
                 null,
-                new String(rawBody, StandardCharsets.UTF_8),
+                storedPayload,
                 signatureValid,
                 "IGNORED",
                 clock.instant(),

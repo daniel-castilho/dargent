@@ -23,6 +23,13 @@ jobs:
       - name: Architecture boundary check (imports + domain purity)
         run: bash scripts/check-boundaries.sh
 
+      # Migration gate (D16/TD-33): refined policy self-test — widening passes, destructive /
+      # CHECK-narrowing / parse-unknown abort (fail-closed). Runs on scratch git trees.
+      - name: Migration gate tests (TD-33)
+        run: |
+          python3 scripts/migration_gate.py selftest
+          bash scripts/test-migration-gate.sh
+
       # Unit + slice + integration (Testcontainers: Postgres + LocalStack).
       # SpotBugs / OWASP / JaCoCo gates and Trivy/SBOM image security land at M4 per design.md §11.
       - name: Build, unit and integration tests
@@ -59,5 +66,32 @@ jobs:
           echo "OK: image runs non-root"
 
       # M4 adds: Trivy 2-pass (SARIF advisory + HIGH/CRITICAL gate), SBOM CycloneDX,
-      # CodeQL, Dependency Review, runtime-smoke (E2E + reconciliation chaos + shutdown under load),
-      # k6 performance (consultative) — design.md §11.1.
+      # CodeQL, Dependency Review, k6 performance (consultative) — design.md §11.1.
+      # runtime-smoke (E12 S2+S3) is live below: compose → readiness → smoke → chaos → shutdown.
+
+  runtime-smoke:
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build compose images
+        run: |
+          docker build -t dargent-api:compose -f apps/api/Dockerfile .
+          docker build -t dargent-psp-simulator:compose -f apps/psp-simulator/Dockerfile .
+
+      - name: Runtime smoke — compose up, probe, chaos reconciler self-heal, shutdown-under-load
+        env:
+          DARGENT_RECONCILER_ENABLED: "true"
+          DARGENT_RECONCILER_SCAN_MS: "2000"
+        run: bash scripts/ci-runtime-smoke.sh
+
+      - name: Upload runtime-smoke logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: runtime-smoke
+          path: |
+            /tmp/smoke.*
+            /tmp/shutdown.probe.body*
+          if-no-files-found: ignore

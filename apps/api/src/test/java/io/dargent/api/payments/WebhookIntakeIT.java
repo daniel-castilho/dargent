@@ -284,10 +284,10 @@ class WebhookIntakeIT {
         assertThat(payment(txid)[0]).isEqualTo("PENDING");
     }
 
-    @Test
+@Test
     void stale_timestamp_returns_401_signature_expired_via_injected_clock() throws Exception {
         String txid = createPayment("webhook-stale");
-        String body = confirmedBody(txid, "E9STALE00000000000000000000001X", 10000);
+        String body = confirmedBody(txid, "E9STALE00000000000000000001X", 10000);
         // -301s relative to the FIXED clock -> outside the 300s replay window (AGENTS §5.3: no sleep)
         String staleTs = String.valueOf(FIXED_NOW_SECS - 301);
 
@@ -296,6 +296,58 @@ class WebhookIntakeIT {
         assertThat(resp.statusCode()).isEqualTo(401);
         assertThat(parse(resp).at("/code").asText()).isEqualTo("signature_expired");
         assertThat(payment(txid)[0]).isEqualTo("PENDING");
+    }
+
+    // ------------------------------------------------------------------ E12 S3 fail-closed defect (was HTTP 500)
+
+    @Test
+    void wrong_content_type_or_empty_body_without_authentication_is_401_not_500_and_is_audited() throws Exception {
+        // E12 S3 regression: a form-urlencoded (curl default) or empty POST used to trip Spring's
+        // HttpMediaTypeNotSupportedException -> global handler 500, with NO audit row. Fail-closed
+        // contract (AGENTS §4.4): any unauthenticated intake MUST be a 4xx and raw bytes persisted.
+        HttpResponse<String> resp = http.send(HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + "/webhooks/psp"))
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString("{}"))
+                .build(), HttpResponse.BodyHandlers.ofString());
+
+        assertThat(resp.statusCode()).isEqualTo(401);
+        assertThat(parse(resp).at("/code").asText()).isEqualTo("invalid_signature");
+        var row = jdbc.sql(
+                "select signature_valid, payload_raw::text from payments.webhook_events where provider_event_id = :p")
+                .param("p", "raw|" + sha256Hex("{}".getBytes(StandardCharsets.UTF_8)))
+                .query((rs, i) -> new Object[]{rs.getBoolean(1), rs.getString(2)})
+                .single();
+        assertThat(row[0]).isEqualTo(false);
+        assertThat(row[1]).isEqualTo("{}");
+    }
+
+    @Test
+    void valid_signature_with_unparseable_body_returns_400_and_persists_authentic_audit() throws Exception {
+        // A genuinely signed-but-broken payload is authentic: 400 invalid_request (never 500), and the
+        // attack-audit row keeps signature_valid=true with the raw bytes wrapped (jsonb-safe).
+        String ts = String.valueOf(FIXED_NOW_SECS);
+        String body = "this is definitely not json";
+        String sig = sign(ts, body);
+
+        HttpResponse<String> resp = http.send(HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + "/webhooks/psp"))
+                .header("Content-Type", "text/plain")
+                .header("X-PSP-Timestamp", ts)
+                .header("X-PSP-Signature", sig)
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build(), HttpResponse.BodyHandlers.ofString());
+
+        assertThat(resp.statusCode()).isEqualTo(400);
+        assertThat(parse(resp).at("/code").asText()).isEqualTo("invalid_request");
+        var stored = jdbc.sql(
+                "select signature_valid, payload_raw::text from payments.webhook_events where provider_event_id = :p")
+                .param("p", "raw|" + sha256Hex(body.getBytes(StandardCharsets.UTF_8)))
+                .query((rs, i) -> new Object[]{rs.getBoolean(1), rs.getString(2)})
+                .single();
+        assertThat(stored[0]).isEqualTo(true);
+        assertThat(new tools.jackson.databind.json.JsonMapper().readTree((String) stored[1]).at("/malformed").asText())
+                .isEqualTo(body);
     }
 
     // ------------------------------------------------------------------ ignored (sanity)

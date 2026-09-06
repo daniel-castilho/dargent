@@ -61,8 +61,11 @@
       <artifactId>spring-boot-starter-jdbc</artifactId>
     </dependency>
     <dependency>
-      <groupId>org.flywaydb</groupId>
-      <artifactId>flyway-core</artifactId>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-flyway</artifactId>
+      <!-- Boot 4.x moved Flyway auto-configuration out of spring-boot-autoconfigure into this
+           starter (migration guide: "Add technology-specific starters"). Raw flyway-core alone
+           silently disables boot-time migration despite spring.flyway.* configuration. -->
     </dependency>
     <dependency>
       <groupId>org.flywaydb</groupId>
