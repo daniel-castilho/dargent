@@ -13,13 +13,23 @@ import java.util.UUID;
 public final class LedgerReconciliationUseCase {
 
     private final LedgerStore store;
+    private final LedgerMetrics metrics;
 
     public LedgerReconciliationUseCase(LedgerStore store) {
+        this(store, null);
+    }
+
+    public LedgerReconciliationUseCase(LedgerStore store, LedgerMetrics metrics) {
         this.store = store;
+        this.metrics = metrics;
     }
 
     public LedgerStore.ProofResult proof() {
-        return store.verifyProof();
+        LedgerStore.ProofResult result = store.verifyProof();
+        if (!result.ok() && metrics != null) {
+            metrics.proofFail(result.scope());
+        }
+        return result;
     }
 
     public LedgerStore.ProofResult rebuild(UUID actorKeyId) {

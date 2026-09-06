@@ -79,10 +79,12 @@ are rendered by deploy.sh from args. Any new env name = STOP (owner adjudication
 | S1 | blue-green drill evidence | runbook section (outputs pasted) | pair/— | ✅ |
 | S2 | runtime-smoke job | job log + chaos leg | pair | ✅ |
 | S3 | shutdown-under-load | job assertion output | pair | ✅ |
-| S4 | proof cron + counter + buckets | workflow run + scrape assertions | pair | ◻ |
-| S5 | docs truth + E12 ✅ (M4 ◐) + citation | epics diff | pair | ◻ |
+| S4 | proof cron + counter + buckets | workflow run + scrape assertions | pair | ✅ |
+| S5 | docs truth + E12 ✅ (M4 ◐) + citation | epics diff | pair | ✅ |
 
 ## §7 Block 1 evidence (S0–S3, single push — quoted at the commit it ran at, TD-10)
+
+> Block 2 (S4–S6) evidence lives in §8 below — separate push, same discipline.
 
 | Item | Deliverable | Evidence | Verdict |
 |---|---|---|---|
@@ -91,3 +93,23 @@ are rendered by deploy.sh from args. Any new env name = STOP (owner adjudication
 | S2 | runtime-smoke job | three consecutive `RUNTIME-SMOKE PASS (P0–P6)` rc=0 (23:48, 23:03, 23:32 local — last on the webhook-500 fix); P4 chaos `9KBEDOB0DZHA8RHIWZOLL0PCQ` CONFIRMED by reconciler, zero `webhook_events` rows | ✅ |
 | S3 | shutdown-under-load | P5 probe codes `4 200 35 502 1 504` (single 504 is a drain-window artifact, disclosed); zero connection-refused; fleet restored P6 | ✅ |
 | S3.1 | webhook intake fail-closed defect (E12 S3 follow-up) | `POST /webhooks/psp` urlencoded/opaque now 401 `invalid_signature` (was 500) + audit row persisted; valid-sig + unparseable body → 400 `invalid_request` + row `signature_valid=true`; `WebhookIntakeIT` 13/13 | ✅ |
+
+## §8 Block 2 evidence (S4–S6, 2026-09-06 — local runs at the working tree of this push; CI run id cited after push per amendment (c))
+
+| Item | Deliverable | Evidence | Verdict |
+|---|---|---|---|
+| S4/N8a counter | `dargent_ledger_proof_fail_total{scope=balance\|projection}` on the proof endpoint failure path | `LedgerMetrics` (both scopes pre-registered at 0); `LedgerReconciliationUseCaseTest` 8/8 (failure→increments by scope; ok→never increments; pre-registration); `MetricsScrapeIT` leg I asserts both series PRESENT AT 0 on a healthy boot (no seeded failure — AGENTS §5) | ✅ |
+| S4/N8a workflow | `proof-daily` (cron 03:00 UTC + `workflow_dispatch`) | `scripts/ci-proof-daily.sh` local run PASS: P0 spine ON (relay+ledger consumer), P1 key, P2 smoke money path (txid `83UZT889Q24TCML6DW1EIAMKB` CONFIRMED), P3 journal entry POSTED, P4 `/v1/ledger/proof` `ok:true` (`accountsChecked:3, entriesChecked:1, postingsChecked:3`), P5 DB corroboration Σ DR = Σ CR = 100 cents + projection == lines; exit status = source of truth. **Fixes en route:** apps/api SNS dependency was test-scope (runtime image missed `SnsClient` when the relay is ON → compile scope); LocalStack init subscriptions lacked `RawMessageDelivery` (SQS got SNS-wrapped bodies → all poison → DLQ; enforced + self-healing set-subscription-attributes on rerun) | ✅ |
+| S4/N12 buckets | SLO buckets 100ms/250ms/1s + percentile histogram | `application.yaml` `management.metrics.distribution.slo.http.server.requests` + `publish-percentile-histogram: true`; `MetricsScrapeIT` asserts `http_server_requests_seconds_bucket{le="0.25"}` present | ✅ |
+| S5/N7 | log level contract (WARN = self-healing, ERROR = needs-a-human) | `observability.md` §2 contract added; spot-check paid: outbox publish-failed-with-next-attempt ERROR→WARN (backoff engaged), purge-failed ERROR→WARN (next-cycle retry), webhook-ignored WARN→INFO (business outcome); EXHAUSTED/poison/consumer-exception stay ERROR (verified — no change needed) | ✅ |
+| S5/N9 | non-goals + adoption triggers | `observability.md` §7 rewritten: tracing/exemplars/tail-sampling deferred by design; triggers (a) second process, (b) inexplicable p95/p99, (c) multi-host; prerequisite (request_id+txid crossing outbox) already IT-enforced | ✅ |
+| S5 runbook truth | release-runbook §3/§4 now describe the REAL script | §3 rewritten to the actual deploy.sh contract (management-port readiness :9090, smoke probe per weight bump, last-deploy.txt record); §4 points to `--check` + smoke.sh + proof-daily as the standing full-spine check | ✅ |
+| S5 flip | E12 ✅ in epics.md (M4 ◐ preserved) | LAST content commit of Block 2; exactly one citation commit after (run id + head sha) | ✅ (this push) |
+| S6 (optional) | compose `metrics` profile: single Prometheus | `docker/prometheus/prometheus.yml` scraping `api-blue:9090`/`api-green:9090` per-color jobs; opt-in `docker compose --profile metrics up -d`; convenience, not a contract | ✅ (delivered minimal) |
+
+Disclosures for the Block 2 handoff: (1) SNS compile-scope fix in apps/api — production bean,
+test-only scope was a latent defect only visible with the spine ON; (2) RawMessageDelivery fix in
+`deploy/localstack-init.sh` — the notify queue had the same latent poisoning (no consumer was ever
+on in compose until proof-daily); (3) `MetricsScrapeIT` leg I deletes the setUp balance seed before
+the proof call (the refund-guard seed is journal-less by design — proof would honestly fail);
+(4) runbook §3/§4 rewrite supersedes the earlier aspirational text (P5 discipline).

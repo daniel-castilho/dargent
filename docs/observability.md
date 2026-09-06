@@ -24,13 +24,19 @@ healthy"), distributed tracing deliberately out (a modular monolith with correla
     — log the id, not the blob.
   - Never log API keys, HMAC signatures, bearer tokens, or QR payloads.
   - No log-and-rethrow duplication; pick the layer that reports.
-  - `WARN` is reserved for degraded-but-self-healing paths (fail-open, retry scheduled, reconciler compensating).
+- **Level contract (N7, binding):** `WARN` = degraded-but-self-healing — a retry is scheduled, backoff is
+  engaged, the reconciler will compensate, the redrive ladder owns the message. Nobody needs to wake up;
+  if the condition persists past its designed window it escalates (metrics will show it). `ERROR` = needs
+  a human — poison message heading to the DLQ after the final attempt, outbox `EXHAUSTED`, ledger proof
+  failure (`ok:false` from `/v1/ledger/proof`), anything that already lost data or will lose data if no
+  one acts. A stack trace without an owner-action is a defect; a WARN that never escalates is a defect.
 
 ## 3. Metrics (Micrometer → Prometheus at `/actuator/prometheus`)
 
-**Status: live (E11).** All 8 series below are wired end-to-end and asserted — with their frozen tag
-vocabularies and non-zero values — on a real `/actuator/prometheus` scrape of a prod-profile boot by
-`MetricsScrapeIT` (CI). Names are FROZEN: renaming any series is a contract break.
+**Status: live (E11; proof counter + SLO buckets added in E12).** All 9 series below are wired end-to-end and
+asserted — with their frozen tag vocabularies and non-zero values (proof-fail asserted PRESENT AT 0) — on a
+real `/actuator/prometheus` scrape of a prod-profile boot by `MetricsScrapeIT` (CI). Names are FROZEN:
+renaming any series is a contract break.
 
 | Metric | Type | Labels | Question it answers |
 |---|---|---|---|
@@ -42,6 +48,7 @@ vocabularies and non-zero values — on a real `/actuator/prometheus` scrape of 
 | `dargent_webhook_signature_failures_total` | counter | `reason` (invalid, expired) | Attack noise / clock drift |
 | `dargent_idempotency_events_total` | counter | `kind` (replayed, conflict, in_flight) | Client retry behavior pressure |
 | `dargent_refunds_rejected_total` | counter | `code` | Money-guard trips (exceeds remaining, not refundable) |
+| `dargent_ledger_proof_fail_total` | counter | `scope` (balance, projection) | Ledger proof failures (N8) — 0 is the only good value; a non-zero page is a freeze-deploys moment |
 
 Naming follows Micrometer conventions (dots, lower-case); Prometheus exposition renders `dargent.*` as `dargent_*`.
 
@@ -69,10 +76,14 @@ Naming follows Micrometer conventions (dots, lower-case); Prometheus exposition 
 | Payments stuck `PENDING` | `dargent_outbox_lag_seconds` high or relay logs | Runbook §Incidents (relay down / SNS down) |
 | Merchant reports "paid but pending" | `dargent_reconciler_confirmations_total` not moving; webhook logs | Check webhook intake errors; run reconciler manually |
 | Sudden 401 storm on API | `dargent_webhook_signature_failures_total` / API auth logs | Key rotation or clock drift on caller |
-| Confirmed but ledger unbalanced | balance proof job failure | Freeze deploys; run triage procedure (release-runbook §7) |
+| Confirmed but ledger unbalanced | balance proof job failure | Freeze deploys; run triage procedure (release-runbook §7). The `proof-daily` CI job (03:00 UTC) is the standing check; `dargent_ledger_proof_fail_total{scope}` tells you which side broke (balance = ΣDR≠ΣCR, projection = balances≠lines) |
 | DLQ depth > 0 | `dargent_dlq_messages{queue}` | Inspect message, fix cause, requeue per runbook |
 
 ## 7. Explicit non-goals
 
-- Distributed tracing (added only if/when the ledger is extracted; correlation ids keep that door open).
+- **Deferred by design — distributed tracing, exemplars, tail sampling.** Adoption triggers (any one
+  makes the deferral wrong): (a) the ledger or the relay is extracted as a second process; (b) p95/p99
+  becomes inexplicable from logs+metrics alone; (c) the fleet spans multiple hosts. The prerequisite —
+  correlation of `request_id` + `txid` crossing the outbox boundary — is already enforced by IT, so
+  adopting tracing later is additive, not a rewrite.
 - Log aggregation stack on-prem (docker json-file + host retention is enough for v1; shipping to a collector is a stretch).

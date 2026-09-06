@@ -1,0 +1,12 @@
+# Prometheus scrape config (E12 S6, compose `metrics` profile). One job per fleet color so a
+# half-dead color is visible by name. SLO buckets come from the API's N12 histogram config.
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: dargent-api-blue
+    static_configs:
+      - targets: ["api-blue:9090"]
+  - job_name: dargent-api-green
+    static_configs:
+      - targets: ["api-green:9090"]

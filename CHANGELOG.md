@@ -5,6 +5,33 @@ versioning: semantic, cut from annotated git tags (see [release-runbook](docs/re
 
 ## [Unreleased]
 
+### Added — E12 Deploy & Runtime Smoke, Block 2 (S4–S6) (2026-09-06)
+
+- **N8 — daily ledger proof**: `proof-daily` CI job (cron 03:00 UTC + `workflow_dispatch`) boots the
+  full event spine (outbox relay + ledger consumer), pushes one real payment through money path,
+  waits for the ledger journal, then proves: `GET /v1/ledger/proof` `ok:true` + DB corroboration
+  (Σ DR = Σ CR + balances projection == journal lines). Exit status = the S7 source of truth.
+  Local run green end-to-end (txid journaled + proven; Σ DR = Σ CR = 100 cents).
+- **N8 — proof-failure counter**: `dargent_ledger_proof_fail_total{scope=balance|projection}`
+  incremented on the proof endpoint's failure path (`LedgerMetrics`, both scopes pre-registered at
+  0); `ProofResult` carries the failure scope; asserted PRESENT AT 0 in `MetricsScrapeIT` (presence
+  assertion, never a seeded failure).
+- **N12 — SLO buckets**: `management.metrics.distribution.slo.http.server.requests: 100ms,250ms,1s`
+  + `publish-percentile-histogram: true`; `MetricsScrapeIT` asserts the `le="0.25"` bucket line.
+- **N7 — log level contract (binding)**: WARN = degraded-but-self-healing, ERROR = needs-a-human;
+  spot-check paid (outbox retry-scheduled/purge → WARN, webhook-ignored → INFO).
+- **N9 — non-goals with adoption triggers**: tracing/exemplars/tail-sampling deferred by design;
+  triggers = second process / inexplicable p95-p99 / multi-host.
+- **Runbook truth pass**: release-runbook §3/§4 now describe the real `deploy.sh` behavior
+  (management-port readiness, smoke probe per weight bump, last-deploy record, TD-33 gate range).
+- **S6 — compose `metrics` profile**: single Prometheus scraping both colors' management ports
+  (opt-in convenience, not a contract).
+- **Latent defects found and fixed by turning the spine on**: apps/api declared the AWS SNS SDK
+  test-scope while wiring the production relay publisher (runtime image missed `SnsClient`
+  whenever the relay was enabled → compile scope); LocalStack init subscriptions lacked
+  `RawMessageDelivery` (SQS received SNS-wrapped bodies → every event poisoned to the DLQ →
+  enforced on subscribe + self-healing set-subscription-attributes on re-run).
+
 ### Added — E12 Deploy & Runtime Smoke, Block 1 (S0–S3) (2026-09-06)
 
 - **Deploy artifacts (S0)**: `scripts/deploy.sh` (tag verified → migration-diff gate → new color up →

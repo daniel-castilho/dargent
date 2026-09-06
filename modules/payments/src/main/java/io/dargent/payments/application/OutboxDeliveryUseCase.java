@@ -86,7 +86,8 @@ public final class OutboxDeliveryUseCase {
             int deleted = store.purgeSent(cutoff, PURGE_BATCH);
             log.info("OUTBOX purge deleted={} cutoff={}", deleted, cutoff);
         } catch (Exception e) {
-            log.error("OUTBOX purge failed cutoff={} error={}", cutoff, e.getMessage());
+            // N7: retention purge is opportunistic — the next cycle retries. Self-healing → WARN.
+            log.warn("OUTBOX purge failed cutoff={} error={}", cutoff, e.getMessage());
         }
     }
 
@@ -127,7 +128,9 @@ public final class OutboxDeliveryUseCase {
                     if (failed) {
                         metrics.outboxAttempt("failed");
                     }
-                    log.error("OUTBOX publish failed id={} type={} attempts={} next={} error={}",
+                    // N7 level contract: backoff engaged, next attempt scheduled — self-healing → WARN.
+                    // EXHAUSTED (no next attempt) stays ERROR: needs a human.
+                    log.warn("OUTBOX publish failed id={} type={} attempts={} next={} error={}",
                             row.id(), row.type(), attempts, nextAttempt, e.getMessage());
                 }
                 continue;

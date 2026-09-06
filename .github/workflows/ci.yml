@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    # E12 S4 rider N8: daily ledger proof (03:00 UTC — off-peak for BRL business hours).
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -94,4 +98,32 @@ jobs:
           path: |
             /tmp/smoke.*
             /tmp/shutdown.probe.body*
+          if-no-files-found: ignore
+
+  # E12 S4 rider N8: daily ledger proof. Full event spine ON (relay + ledger consumer), one real
+  # payment through money path, then /v1/ledger/proof + DB-level Σ DR = Σ CR + projection == lines.
+  # The job's exit status IS the S7 source of truth. First execution via workflow_dispatch.
+  proof-daily:
+    needs: build
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build compose images
+        run: |
+          docker build -t dargent-api:compose -f apps/api/Dockerfile .
+          docker build -t dargent-psp-simulator:compose -f apps/psp-simulator/Dockerfile .
+
+      - name: Daily ledger proof — full spine, money path, ΣDR=ΣCR + projection==lines
+        run: bash scripts/ci-proof-daily.sh
+
+      - name: Upload proof-daily logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: proof-daily
+          path: |
+            /tmp/proof-daily.*
+            /tmp/smoke.*
           if-no-files-found: ignore

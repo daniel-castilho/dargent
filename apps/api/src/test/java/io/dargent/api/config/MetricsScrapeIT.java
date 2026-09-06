@@ -87,6 +87,9 @@ import tools.jackson.databind.json.JsonMapper;
  *   <li>{@code dargent_webhook_signature_failures_total{reason=invalid|expired}</li>
  *   <li>{@code dargent_idempotency_events_total{kind=replayed|conflict|in_flight}}</li>
  *   <li>{@code dargent_refunds_rejected_total{code=not_refundable|exceeds_remaining}}</li>
+ *   <li>{@code dargent_ledger_proof_fail_total{scope=balance|projection}} (N8 — PRESENT at 0 on a
+ *       healthy system; presence assertion, never a seeded failure)</li>
+ *   <li>{@code http_server_requests_seconds_bucket{le="0.25"}} (N12 — SLO bucket line exists)</li>
  * </ol>
  */
 @SpringBootTest(
@@ -253,13 +256,16 @@ class MetricsScrapeIT {
         psp.paidFor(txidConfirm);
         assertThat(reconciliationScheduler.runOnce()).isEqualTo(1);
 
+
         String txidResurrect = seedExpiredPayment("RECRESUR");
         psp.paidFor(txidResurrect);
         assertThat(reconciliationScheduler.runOnce()).isEqualTo(1);
 
+
         String txidReconExpire = seedPendingPayment("RECEXP", START.minusSeconds(60), START.minusSeconds(30));
         psp.expiredFor(txidReconExpire);
         assertThat(reconciliationScheduler.runOnce()).isEqualTo(1);
+
 
         // ------------------------------------------------------------------- leg D: expiration
         String txidExpiry = seedPendingPayment("EXPLEG", null, START.minusSeconds(30));
@@ -293,6 +299,19 @@ class MetricsScrapeIT {
                 .messageGroupId(txidMain)
                 .messageDeduplicationId(UUID.randomUUID().toString()));
         dlqDepthPoller.poll();
+
+        // ------------------------------------------------------ leg I: ledger proof (N8, healthy)
+        // The proof endpoint runs on a HEALTHY ledger (never a seeded failure — a faked proof
+        // failure would fake the guarantee the series guards): the series must merely be PRESENT
+        // at 0 with both frozen scopes. The setUp seeded a journal-less available balance for the
+        // refund guard (leg E already consumed it) — drop it so the proof sees the real ledger.
+        jdbc.sql("delete from ledger.balances where account = :a")
+                .param("a", "merchant:" + MERCHANT + ":available").update();
+        String proofBody = http.send(HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + "/v1/ledger/proof"))
+                .header("Authorization", "Bearer " + rawKey)
+                .GET().build(), HttpResponse.BodyHandlers.ofString()).body();
+        assertThat(proofBody).contains("\"ok\":true");
 
         // ======================================================================= scrape + asserts
         String scrape = scrapePrometheus();
@@ -345,6 +364,16 @@ class MetricsScrapeIT {
         // 8. refunds rejected: not_refundable + exceeds_remaining
         assertSeries(scrape, "dargent_refunds_rejected_total", "code=\"not_refundable\"");
         assertSeries(scrape, "dargent_refunds_rejected_total", "code=\"exceeds_remaining\"");
+
+        // 9. ledger proof failures (N8): PRESENT at 0 on a healthy system — presence assertion only,
+        //    never a seeded failure in tests.
+        assertSeriesPresent(scrape, "dargent_ledger_proof_fail_total", "scope=\"balance\"", 0.0);
+        assertSeriesPresent(scrape, "dargent_ledger_proof_fail_total", "scope=\"projection\"", 0.0);
+
+        // 10. N12 SLO buckets: the 0.25s bucket line exists (http_server_requests_seconds_bucket).
+        assertThat(scrape).contains("http_server_requests_seconds_bucket{");
+        assertThat(scrape).containsPattern(
+                "http_server_requests_seconds_bucket\\{[^}]*le=\"0.25\"[^}]*\\}");
     }
 
     // ================================================================================ helpers
@@ -600,6 +629,22 @@ class MetricsScrapeIT {
             }
         }
         throw new AssertionError("Missing metric series " + name + " with tags " + tagString
+                + "\nscrape excerpt:\n" + excerpt(scrape, name));
+    }
+
+    /** Asserts a counter series line exists and equals the expected value (N8 presence-at-zero). */
+    private void assertSeriesPresent(String scrape, String name, String tag, double expected) {
+        Pattern p = Pattern.compile(Pattern.quote(name) + "\\{([^}]*)\\}\\s+" + NUMBER);
+        Matcher m = p.matcher(scrape);
+        while (m.find()) {
+            if (m.group(1).contains(tag)) {
+                assertThat(Double.parseDouble(m.group(2)))
+                        .as("series %s{%s} must equal %s", name, tag, expected)
+                        .isEqualTo(expected);
+                return;
+            }
+        }
+        throw new AssertionError("Missing metric series " + name + " with tag " + tag
                 + "\nscrape excerpt:\n" + excerpt(scrape, name));
     }
 
