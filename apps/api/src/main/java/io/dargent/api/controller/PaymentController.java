@@ -10,7 +10,6 @@ import io.dargent.payments.domain.model.Payment;
 import io.dargent.payments.domain.model.Txid;
 import io.dargent.payments.domain.port.out.PaymentQueryPort;
 import io.dargent.shared.money.Money;
-import io.dargent.shared.money.Money;
 import jakarta.servlet.http.HttpServletRequest;
 import java.security.MessageDigest;
 import java.time.Clock;
@@ -59,8 +58,11 @@ class PaymentController {
     private final String receiverName;
     private final String receiverCity;
 
-    PaymentController(PaymentQueryPort queryPort, CreatePaymentUseCase createUseCase,
-            RefundPaymentUseCase refundUseCase, Clock clock,
+    PaymentController(
+            PaymentQueryPort queryPort,
+            CreatePaymentUseCase createUseCase,
+            RefundPaymentUseCase refundUseCase,
+            Clock clock,
             tools.jackson.databind.ObjectMapper objectMapper,
             @Value("${dargent.pix.profile.pix-key}") String pixKey,
             @Value("${dargent.pix.profile.receiver-name}") String receiverName,
@@ -77,8 +79,7 @@ class PaymentController {
 
     @PostMapping
     ResponseEntity<CreatePaymentResponse> create(
-            HttpServletRequest request,
-            @AuthenticationPrincipal io.dargent.api.security.ApiKeyPrincipal principal) {
+            HttpServletRequest request, @AuthenticationPrincipal io.dargent.api.security.ApiKeyPrincipal principal) {
         byte[] rawBody = readRawBody(request);
         String fingerprint = fingerprint(rawBody);
         CreatePaymentRequest body = parseBody(rawBody);
@@ -88,20 +89,39 @@ class PaymentController {
         String idempotencyKey = idempotencyKey(request);
         String requestId = (String) request.getAttribute(RequestIdFilter.ATTRIBUTE);
 
-        log.info("Payment create request endpoint={} merchant_id={} amount_cents={} expires_in={}",
-                ENDPOINT, principal.merchantId(), amount, expiresIn);
+        log.info(
+                "Payment create request endpoint={} merchant_id={} amount_cents={} expires_in={}",
+                ENDPOINT,
+                principal.merchantId(),
+                amount,
+                expiresIn);
 
-        CreatePaymentUseCase.Output out = createUseCase.execute(new CreatePaymentUseCase.Input(principal.merchantId(), principal.keyId(),
-                idempotencyKey, ENDPOINT, fingerprint, requestId, Money.of(amount, BRL),
-                description, expiresIn));
+        CreatePaymentUseCase.Output out = createUseCase.execute(new CreatePaymentUseCase.Input(
+                principal.merchantId(),
+                principal.keyId(),
+                idempotencyKey,
+                ENDPOINT,
+                fingerprint,
+                requestId,
+                Money.of(amount, BRL),
+                description,
+                expiresIn));
 
         MDC.put("txid", out.txid().value());
-        log.info("Payment create result status={} idempotent_replay={}",
-                out.status().name(), out.replay());
+        log.info(
+                "Payment create result status={} idempotent_replay={}",
+                out.status().name(),
+                out.replay());
         MDC.remove("txid");
 
-        var response = new CreatePaymentResponse(out.txid().value(), out.status().name(), amount,
-                BRL, out.expiresAt(), out.brcode(), Duration.between(clock.instant(), out.expiresAt()));
+        var response = new CreatePaymentResponse(
+                out.txid().value(),
+                out.status().name(),
+                amount,
+                BRL,
+                out.expiresAt(),
+                out.brcode(),
+                Duration.between(clock.instant(), out.expiresAt()));
         ResponseEntity.BodyBuilder builder = org.springframework.http.ResponseEntity.status(HttpStatus.CREATED)
                 .location(java.net.URI.create("/v1/payments/" + out.txid().value()));
         if (out.replay()) {
@@ -112,8 +132,7 @@ class PaymentController {
 
     @GetMapping("/{txid}")
     ResponseEntity<PaymentDetailResponse> detail(
-            @AuthenticationPrincipal io.dargent.api.security.ApiKeyPrincipal principal,
-            @PathVariable String txid) {
+            @AuthenticationPrincipal io.dargent.api.security.ApiKeyPrincipal principal, @PathVariable String txid) {
         Txid txidObj = new Txid(txid);
         Optional<Payment> payment = queryPort.findByTxid(principal.merchantId(), txidObj);
         if (payment.isEmpty()) {
@@ -149,11 +168,7 @@ class PaymentController {
         }
         List<PaymentSummaryResponse> items = payments.stream()
                 .map(p -> new PaymentSummaryResponse(
-                        p.txid().value(),
-                        p.status().name(),
-                        p.amount().cents(),
-                        BRL,
-                        p.createdAt()))
+                        p.txid().value(), p.status().name(), p.amount().cents(), BRL, p.createdAt()))
                 .toList();
         return ResponseEntity.ok(new PaymentListResponse(items, nextCursor));
     }
@@ -171,12 +186,17 @@ class PaymentController {
         String requestId = (String) request.getAttribute(RequestIdFilter.ATTRIBUTE);
 
         RefundPaymentUseCase.Output out = refundUseCase.execute(new RefundPaymentUseCase.Input(
-                txid, principal.merchantId(), principal.keyId(), idempotencyKey,
-                "POST /v1/payments/" + txid + "/refunds", fingerprint, requestId,
+                txid,
+                principal.merchantId(),
+                principal.keyId(),
+                idempotencyKey,
+                "POST /v1/payments/" + txid + "/refunds",
+                fingerprint,
+                requestId,
                 Money.of(amountCents, BRL)));
 
-        var response = new RefundPaymentResponse(out.id(), out.payment(), out.amount(),
-                out.feeReversal(), out.net(), out.status(), out.createdAt());
+        var response = new RefundPaymentResponse(
+                out.id(), out.payment(), out.amount(), out.feeReversal(), out.net(), out.status(), out.createdAt());
         ResponseEntity.BodyBuilder builder = org.springframework.http.ResponseEntity.status(HttpStatus.CREATED)
                 .location(java.net.URI.create("/v1/payments/" + out.payment() + "/refunds/" + out.id()));
         if (out.replay()) {
@@ -291,16 +311,9 @@ class PaymentController {
             String brcode,
             Duration expiresIn) {}
 
-    record PaymentSummaryResponse(
-            String txid,
-            String status,
-            long amount,
-            String currency,
-            Instant createdAt) {}
+    record PaymentSummaryResponse(String txid, String status, long amount, String currency, Instant createdAt) {}
 
-    record PaymentListResponse(
-            List<PaymentSummaryResponse> items,
-            String nextCursor) {}
+    record PaymentListResponse(List<PaymentSummaryResponse> items, String nextCursor) {}
 
     // ------------------------------------------------------------ refund body
 
@@ -317,11 +330,5 @@ class PaymentController {
     }
 
     record RefundPaymentResponse(
-            String id,
-            String payment,
-            long amount,
-            long feeReversal,
-            long net,
-            String status,
-            Instant createdAt) {}
+            String id, String payment, long amount, long feeReversal, long net, String status, Instant createdAt) {}
 }

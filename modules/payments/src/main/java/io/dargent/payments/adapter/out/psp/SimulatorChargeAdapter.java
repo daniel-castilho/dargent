@@ -3,10 +3,10 @@ package io.dargent.payments.adapter.out.psp;
 import io.dargent.payments.domain.model.Txid;
 import io.dargent.payments.domain.port.out.PspPort;
 import java.io.IOException;
-import java.net.URI;
-import java.net.ProxySelector;
 import java.net.Proxy;
+import java.net.ProxySelector;
 import java.net.SocketAddress;
+import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -35,8 +35,7 @@ public final class SimulatorChargeAdapter implements PspPort {
     private final Supplier<Long> sleeperMillis;
     private final ObjectMapper objectMapper;
 
-    public SimulatorChargeAdapter(String baseUrl, int maxAttempts, Duration baseBackoff,
-            Supplier<Long> sleeperMillis) {
+    public SimulatorChargeAdapter(String baseUrl, int maxAttempts, Duration baseBackoff, Supplier<Long> sleeperMillis) {
         this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
         this.maxAttempts = maxAttempts;
         this.baseBackoff = baseBackoff;
@@ -67,8 +66,12 @@ public final class SimulatorChargeAdapter implements PspPort {
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
                 String url = baseUrl + "/cobs";
-                String json = objectMapper.writeValueAsString(new ChargeRequest(input.txid().value(), input.amountCents(),
-                        input.expiresAt().toString(), input.callbackUrl(), input.description()));
+                String json = objectMapper.writeValueAsString(new ChargeRequest(
+                        input.txid().value(),
+                        input.amountCents(),
+                        input.expiresAt().toString(),
+                        input.callbackUrl(),
+                        input.description()));
                 var request = HttpRequest.newBuilder()
                         .uri(URI.create(url))
                         .timeout(Duration.ofSeconds(5))
@@ -79,12 +82,16 @@ public final class SimulatorChargeAdapter implements PspPort {
                 int statusCode = response.statusCode();
                 if (statusCode == 200 || statusCode == 201) {
                     var responseBody = objectMapper.readValue(response.body(), ChargeResponse.class);
-                    return new ChargeResult(new Txid(responseBody.txid()), Instant.parse(responseBody.expiresAt()),
-                            responseBody.endToEndId(), responseBody.brcode());
+                    return new ChargeResult(
+                            new Txid(responseBody.txid()),
+                            Instant.parse(responseBody.expiresAt()),
+                            responseBody.endToEndId(),
+                            responseBody.brcode());
                 } else if (statusCode == 409) {
                     return readBackCharge(input.txid());
                 } else if (!isRetryable(statusCode) || attempt == maxAttempts) {
-                    throw new PspException("PSP call failed with status " + statusCode + " after " + attempt + " attempts");
+                    throw new PspException(
+                            "PSP call failed with status " + statusCode + " after " + attempt + " attempts");
                 }
             } catch (IOException | InterruptedException e) {
                 if (!isRetryable(0) || attempt == maxAttempts) {
@@ -111,10 +118,14 @@ public final class SimulatorChargeAdapter implements PspPort {
                 // GET /cobs/{txid} serves GetChargeResponse (E2 spec §5.2): no brcode field exists
                 // on this wire (the simulator does not store one) — ChargeResult carries a null brcode.
                 GetChargeResponse responseBody = objectMapper.readValue(response.body(), GetChargeResponse.class);
-                return new ChargeResult(new Txid(responseBody.txid()), Instant.parse(responseBody.expiresAt()),
-                        responseBody.endToEndId(), null);
+                return new ChargeResult(
+                        new Txid(responseBody.txid()),
+                        Instant.parse(responseBody.expiresAt()),
+                        responseBody.endToEndId(),
+                        null);
             }
-            throw new PspException("PSP read-back failed with status " + response.statusCode() + " for txid " + txid.value());
+            throw new PspException(
+                    "PSP read-back failed with status " + response.statusCode() + " for txid " + txid.value());
         } catch (IOException | InterruptedException e) {
             throw new PspException("PSP read-back failed for txid " + txid.value(), e);
         }
@@ -137,6 +148,7 @@ public final class SimulatorChargeAdapter implements PspPort {
         PspException(String msg, Throwable cause) {
             super(msg, cause);
         }
+
         PspException(String msg) {
             super(msg);
         }
@@ -161,40 +173,23 @@ public final class SimulatorChargeAdapter implements PspPort {
                         cob.amount(),
                         Instant.parse(cob.expiresAt()),
                         cob.endToEndId(),
-                        cob.paidAt() == null ? null : Instant.parse(cob.paidAt())
-                );
+                        cob.paidAt() == null ? null : Instant.parse(cob.paidAt()));
             } else if (response.statusCode() == 404) {
                 throw new PspException("COB not found for txid " + txid.value());
             }
-            throw new PspException("PSP getCob failed with status " + response.statusCode() + " for txid " + txid.value());
+            throw new PspException(
+                    "PSP getCob failed with status " + response.statusCode() + " for txid " + txid.value());
         } catch (IOException | InterruptedException e) {
             throw new PspException("PSP getCob failed for txid " + txid.value(), e);
         }
     }
 
     // Request/response records
-    private record ChargeRequest(
-            String txid,
-            long amount,
-            String expiresAt,
-            String callbackUrl,
-            String description
-    ) {}
+    private record ChargeRequest(String txid, long amount, String expiresAt, String callbackUrl, String description) {}
 
-    private record ChargeResponse(
-            String txid,
-            String expiresAt,
-            String endToEndId,
-            String brcode
-    ) {}
+    private record ChargeResponse(String txid, String expiresAt, String endToEndId, String brcode) {}
 
     /** GET /cobs/{txid} wire shape (E2 spec §5.2) — the reconciler truth endpoint. TD-32. */
     private record GetChargeResponse(
-            String txid,
-            String status,
-            long amount,
-            String expiresAt,
-            String endToEndId,
-            String paidAt
-    ) {}
+            String txid, String status, long amount, String expiresAt, String endToEndId, String paidAt) {}
 }

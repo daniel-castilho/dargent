@@ -1,7 +1,6 @@
 package io.dargent.payments.domain.port.out;
 
 import java.util.Optional;
-import java.util.UUID;
 
 /** Port for webhook event storage (E4 spec §5.4) — raw evidence first, processing second. */
 public interface WebhookEventStore {

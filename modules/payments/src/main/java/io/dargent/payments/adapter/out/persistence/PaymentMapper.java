@@ -1,7 +1,6 @@
 package io.dargent.payments.adapter.out.persistence;
 
 import io.dargent.payments.domain.model.EndToEndId;
-import io.dargent.payments.domain.model.FeeBreakdown;
 import io.dargent.payments.domain.model.Payment;
 import io.dargent.payments.domain.model.PaymentStatus;
 import io.dargent.payments.domain.model.Txid;
@@ -16,8 +15,7 @@ public final class PaymentMapper {
 
     private static final String BRL = "BRL";
 
-    private PaymentMapper() {
-    }
+    private PaymentMapper() {}
 
     public static PaymentEntity toEntity(Payment payment) {
         PaymentEntity entity = new PaymentEntity();

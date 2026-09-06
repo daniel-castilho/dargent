@@ -1,11 +1,11 @@
 package io.dargent.notifications.application;
 
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
 import io.dargent.shared.events.EventEnvelope;
 import java.time.DateTimeException;
 import java.time.Instant;
 import java.util.UUID;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Strict Jackson 3 reader for the wire-format envelope (E10 spec §3).
@@ -46,8 +46,7 @@ public final class EventEnvelopeReader {
                     UUID.fromString(required(node, "merchantId").asText()),
                     node.path("requestId").asText(null),
                     parseInstant(required(node, "occurredAt").asText()),
-                    required(node, "payload").toString()
-            );
+                    required(node, "payload").toString());
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException("Invalid envelope: " + e.getMessage(), e);
         }

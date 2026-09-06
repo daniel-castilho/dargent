@@ -9,9 +9,9 @@ import io.dargent.api.web.RequestIdFilter;
 import io.dargent.payments.domain.model.OutboxId;
 import io.dargent.payments.domain.port.out.AuditWriter;
 import io.dargent.payments.domain.port.out.OutboxEventStore;
+import io.dargent.payments.domain.port.out.OutboxEventStore.RepublishResult;
 import io.dargent.payments.domain.port.out.OutboxEventStore.RequeueOutcome;
 import io.dargent.payments.domain.port.out.OutboxEventStore.RequeueResult;
-import io.dargent.payments.domain.port.out.OutboxEventStore.RepublishResult;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
@@ -32,7 +32,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Admin outbox surface (E9 §3/§4): human recovery actions on the transactional outbox, gated by a
@@ -55,8 +54,12 @@ class OutboxAdminController {
     private final Clock clock;
     private final String adminKey;
 
-    OutboxAdminController(OutboxEventStore store, AuditWriter auditWriter,
-            ErrorResponseWriter errorWriter, TransactionTemplate txTemplate, Clock clock,
+    OutboxAdminController(
+            OutboxEventStore store,
+            AuditWriter auditWriter,
+            ErrorResponseWriter errorWriter,
+            TransactionTemplate txTemplate,
+            Clock clock,
             @Value("${DARGENT_OUTBOX_ADMIN_KEY:}") String adminKey) {
         this.store = store;
         this.auditWriter = auditWriter;
@@ -73,8 +76,11 @@ class OutboxAdminController {
      * {@code not_exhaustible}; unknown id → 404.
      */
     @PostMapping("/{id}/requeue")
-    void requeue(HttpServletRequest request, HttpServletResponse response,
-            @AuthenticationPrincipal ApiKeyPrincipal principal, @PathVariable String id)
+    void requeue(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            @AuthenticationPrincipal ApiKeyPrincipal principal,
+            @PathVariable String id)
             throws IOException {
         if (!isAdmin(request, response, principal)) {
             return;
@@ -90,8 +96,7 @@ class OutboxAdminController {
         RequeueResult result = txTemplate.execute(status -> {
             RequeueResult r = store.requeueExhausted(outboxId, clock.instant());
             if (r.outcome() == RequeueOutcome.REQUEUED) {
-                auditWriter.record("outbox_requeued", adminKeyId, adminMerchantId,
-                        r.aggregateId(), requestId);
+                auditWriter.record("outbox_requeued", adminKeyId, adminMerchantId, r.aggregateId(), requestId);
             }
             return r;
         });
@@ -100,17 +105,19 @@ class OutboxAdminController {
             response.setStatus(HttpStatus.OK.value());
             response.setContentType("application/json");
             response.setCharacterEncoding("UTF-8");
-            response.getWriter().write("{\"id\":\"" + outboxId.value()
-                    + "\",\"status\":\"PENDING\",\"attemptCount\":0}");
+            response.getWriter()
+                    .write("{\"id\":\"" + outboxId.value() + "\",\"status\":\"PENDING\",\"attemptCount\":0}");
             return;
         }
         if (result.outcome() == RequeueOutcome.NOT_EXHAUSTIBLE) {
-            errorWriter.write(request, response, ErrorCode.NOT_EXHAUSTIBLE,
-                    "Outbox row is not exhausted", (java.util.Map<String, String>) null);
+            errorWriter.write(
+                    request, response, ErrorCode.NOT_EXHAUSTIBLE, "Outbox row is not exhausted", (java.util.Map<
+                                    String, String>)
+                            null);
             return;
         }
-        errorWriter.write(request, response, ErrorCode.NOT_FOUND,
-                "Outbox row not found", (java.util.Map<String, String>) null);
+        errorWriter.write(
+                request, response, ErrorCode.NOT_FOUND, "Outbox row not found", (java.util.Map<String, String>) null);
     }
 
     /**
@@ -118,19 +125,19 @@ class OutboxAdminController {
      * 404-hidden; otherwise the caller must present that exact key (constant-time compare). A valid
      * API key that is not the admin key is 403.
      */
-    private boolean isAdmin(HttpServletRequest request, HttpServletResponse response,
-            ApiKeyPrincipal principal) throws IOException {
+    private boolean isAdmin(HttpServletRequest request, HttpServletResponse response, ApiKeyPrincipal principal)
+            throws IOException {
         if (adminKey == null || adminKey.isBlank()) {
-            errorWriter.write(request, response, ErrorCode.NOT_FOUND, "Unknown route",
-                    (java.util.Map<String, String>) null);
+            errorWriter.write(
+                    request, response, ErrorCode.NOT_FOUND, "Unknown route", (java.util.Map<String, String>) null);
             return false;
         }
         String rawKey = (String) request.getAttribute(ApiKeyAuthenticationFilter.RAW_KEY_ATTRIBUTE);
         if (rawKey == null
                 || !ApiKeyHasher.constantTimeEquals(ApiKeyHasher.hash(adminKey), ApiKeyHasher.hash(rawKey))) {
             log.warn("forbidden admin outbox action by key {} merchant {}", principal.keyId(), principal.merchantId());
-            errorWriter.write(request, response, ErrorCode.FORBIDDEN, "Forbidden",
-                    (java.util.Map<String, String>) null);
+            errorWriter.write(
+                    request, response, ErrorCode.FORBIDDEN, "Forbidden", (java.util.Map<String, String>) null);
             return false;
         }
         return true;
@@ -142,8 +149,9 @@ class OutboxAdminController {
         try {
             return new OutboxId(UUID.fromString(id));
         } catch (IllegalArgumentException e) {
-            errorWriter.write(request, response, ErrorCode.NOT_FOUND, "Outbox row not found",
-                    (java.util.Map<String, String>) null);
+            errorWriter.write(
+                    request, response, ErrorCode.NOT_FOUND, "Outbox row not found", (java.util.Map<String, String>)
+                            null);
             return null;
         }
     }
@@ -156,8 +164,11 @@ class OutboxAdminController {
      * 400 {@code invalid_window} on bad ISO-8601, inverted bounds, or window >30d.
      */
     @PostMapping("/republish")
-    void republish(HttpServletRequest request, HttpServletResponse response,
-            @AuthenticationPrincipal ApiKeyPrincipal principal) throws IOException {
+    void republish(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            @AuthenticationPrincipal ApiKeyPrincipal principal)
+            throws IOException {
         if (!isAdmin(request, response, principal)) {
             return;
         }
@@ -170,8 +181,12 @@ class OutboxAdminController {
         try {
             req = parseRepublishRequest(request);
         } catch (Exception e) {
-            errorWriter.write(request, response, ErrorCode.INVALID_WINDOW,
-                    "Invalid request body: " + e.getMessage(), (java.util.Map<String, String>) null);
+            errorWriter.write(
+                    request,
+                    response,
+                    ErrorCode.INVALID_WINDOW,
+                    "Invalid request body: " + e.getMessage(),
+                    (java.util.Map<String, String>) null);
             return;
         }
         if (req == null) {
@@ -182,8 +197,7 @@ class OutboxAdminController {
             RepublishResult r = store.republishSent(req.from(), req.to(), req.types(), 500, clock.instant());
             if (r.matched() > 0) {
                 String windowMarker = "repub-" + req.from().toString().substring(0, 10);
-                auditWriter.record("outbox_republished", adminKeyId, adminMerchantId,
-                        windowMarker, requestId);
+                auditWriter.record("outbox_republished", adminKeyId, adminMerchantId, windowMarker, requestId);
             }
             return r;
         });
@@ -191,8 +205,8 @@ class OutboxAdminController {
         response.setStatus(HttpStatus.OK.value());
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
-        response.getWriter().write("{\"matched\":" + result.matched() + ",\"republished\":"
-                + result.republished() + "}");
+        response.getWriter()
+                .write("{\"matched\":" + result.matched() + ",\"republished\":" + result.republished() + "}");
     }
 
     private record RepublishRequest(Instant from, Instant to, List<String> types) {}

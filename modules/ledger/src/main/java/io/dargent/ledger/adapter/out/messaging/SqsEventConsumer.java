@@ -1,7 +1,7 @@
 package io.dargent.ledger.adapter.out.messaging;
 
 import io.dargent.ledger.application.EventIngestionUseCase;
-import io.dargent.shared.events.EventEnvelope;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.sqs.SqsClient;
@@ -9,9 +9,6 @@ import software.amazon.awssdk.services.sqs.model.DeleteMessageBatchRequest;
 import software.amazon.awssdk.services.sqs.model.DeleteMessageBatchRequestEntry;
 import software.amazon.awssdk.services.sqs.model.Message;
 import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
-
-import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * SQS consumer for the ledger fan-out queue (spec §5.1, §5.3).
@@ -31,11 +28,7 @@ public class SqsEventConsumer {
     private final EventIngestionUseCase ingestion;
 
     public SqsEventConsumer(
-            SqsClient sqs,
-            String queueUrl,
-            int batchSize,
-            long pollMs,
-            EventIngestionUseCase ingestion) {
+            SqsClient sqs, String queueUrl, int batchSize, long pollMs, EventIngestionUseCase ingestion) {
         this.sqs = sqs;
         this.queueUrl = queueUrl;
         this.batchSize = Math.min(batchSize, 10); // SQS max batch = 10
@@ -84,7 +77,9 @@ public class SqsEventConsumer {
                         .build());
                 processed++;
             } else {
-                log.warn("Message {} not acked (poison or processing error); will redrive after 5 receives", msg.messageId());
+                log.warn(
+                        "Message {} not acked (poison or processing error); will redrive after 5 receives",
+                        msg.messageId());
             }
         }
 

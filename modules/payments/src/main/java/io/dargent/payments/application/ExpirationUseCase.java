@@ -33,9 +33,14 @@ public final class ExpirationUseCase {
     private final Clock clock;
     private final PaymentsMetrics metrics;
 
-    public ExpirationUseCase(PaymentRepository paymentRepository, OutboxWriter outboxWriter,
-            AuditWriter auditWriter, EventEnvelopeFactory envelopeFactory,
-            TransactionTemplate txTemplate, Clock clock, PaymentsMetrics metrics) {
+    public ExpirationUseCase(
+            PaymentRepository paymentRepository,
+            OutboxWriter outboxWriter,
+            AuditWriter auditWriter,
+            EventEnvelopeFactory envelopeFactory,
+            TransactionTemplate txTemplate,
+            Clock clock,
+            PaymentsMetrics metrics) {
         this.paymentRepository = paymentRepository;
         this.outboxWriter = outboxWriter;
         this.auditWriter = auditWriter;
@@ -75,7 +80,8 @@ public final class ExpirationUseCase {
             }
             metrics.transition("PENDING", "EXPIRED", "expiry");
             appendExpiredOutbox(current, now);
-            auditWriter.record("expire_payment", null, current.merchantId(), current.txid().value(), null);
+            auditWriter.record(
+                    "expire_payment", null, current.merchantId(), current.txid().value(), null);
             return true;
         });
     }
@@ -85,8 +91,8 @@ public final class ExpirationUseCase {
         payload.put("txid", payment.txid().value());
         payload.put("expiresAt", payment.expiresAt().toString());
         payload.put("amountCents", payment.amount().cents());
-        String envelope = envelopeFactory.envelope("payment.expired", 1, payment.txid().value(),
-                payment.merchantId(), null, payload, now);
+        String envelope = envelopeFactory.envelope(
+                "payment.expired", 1, payment.txid().value(), payment.merchantId(), null, payload, now);
         outboxWriter.append(payment.txid().value(), "payment.expired", 1, envelope, null);
     }
 }

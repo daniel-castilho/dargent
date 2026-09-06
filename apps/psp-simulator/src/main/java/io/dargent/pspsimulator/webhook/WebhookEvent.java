@@ -9,20 +9,19 @@ import tools.jackson.databind.ObjectMapper;
  * Serialized once to bytes by the dispatcher; those bytes are what gets signed and sent (no
  * re-serialization, no pretty-printing).
  */
-public record WebhookEvent(
-        String eventId,
-        String type,
-        String txid,
-        String endToEndId,
-        long amount,
-        String paidAt) {
+public record WebhookEvent(String eventId, String type, String txid, String endToEndId, long amount, String paidAt) {
 
     public static WebhookEvent of(Charge charge) {
         if (charge.endToEndId() == null || charge.paidAt() == null || charge.eventId() == null) {
             throw new IllegalStateException("Cannot dispatch webhook for an unpaid charge " + charge.txid());
         }
-        return new WebhookEvent(charge.eventId(), "payment.confirmed", charge.txid(),
-                charge.endToEndId(), charge.amount(), charge.paidAt().toString());
+        return new WebhookEvent(
+                charge.eventId(),
+                "payment.confirmed",
+                charge.txid(),
+                charge.endToEndId(),
+                charge.amount(),
+                charge.paidAt().toString());
     }
 
     public byte[] toJsonBytes(ObjectMapper mapper) {

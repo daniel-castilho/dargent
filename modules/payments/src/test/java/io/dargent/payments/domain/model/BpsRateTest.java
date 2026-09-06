@@ -16,13 +16,11 @@ class BpsRateTest {
 
     @Test
     void rejects_values_above_ten_thousand_bps() {
-        assertThatThrownBy(() -> new BpsRate(10_001))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new BpsRate(10_001)).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void rejects_negative_values() {
-        assertThatThrownBy(() -> new BpsRate(-1))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new BpsRate(-1)).isInstanceOf(IllegalArgumentException.class);
     }
 }

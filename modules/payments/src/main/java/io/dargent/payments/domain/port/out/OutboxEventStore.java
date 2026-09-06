@@ -3,8 +3,6 @@ package io.dargent.payments.domain.port.out;
 import io.dargent.payments.domain.model.OutboxId;
 import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
 
 /**
  * Port for relay-specific outbox operations (E6 §5.1).
@@ -83,7 +81,9 @@ public interface OutboxEventStore {
 
     /** Outcome of {@link #requeueExhausted}. */
     enum RequeueOutcome {
-        REQUEUED, NOT_EXHAUSTIBLE, NOT_FOUND
+        REQUEUED,
+        NOT_EXHAUSTIBLE,
+        NOT_FOUND
     }
 
     /**
@@ -124,6 +124,5 @@ public interface OutboxEventStore {
             int version,
             String payload,
             String requestId,
-            int attemptCount
-    ) {}
+            int attemptCount) {}
 }

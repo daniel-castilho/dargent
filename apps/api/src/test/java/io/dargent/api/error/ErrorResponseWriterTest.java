@@ -23,7 +23,11 @@ class ErrorResponseWriterTest {
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/v1/payments");
         MockHttpServletResponse response = new MockHttpServletResponse();
 
-        writer.write(request, response, ErrorCode.INVALID_REQUEST, "Validation failed",
+        writer.write(
+                request,
+                response,
+                ErrorCode.INVALID_REQUEST,
+                "Validation failed",
                 Map.of("amount", "must be greater than 0"));
 
         assertThat(response.getStatus()).isEqualTo(400);

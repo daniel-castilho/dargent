@@ -7,7 +7,6 @@ import io.dargent.payments.domain.model.PaymentStatus;
 import io.dargent.payments.domain.model.Txid;
 import io.dargent.payments.domain.port.out.AuditWriter;
 import io.dargent.payments.domain.port.out.OutboxWriter;
-import io.dargent.payments.domain.port.out.PaymentRepository;
 import io.dargent.payments.domain.port.out.PspPort;
 import io.dargent.payments.domain.port.out.PspPort.CobState;
 import io.dargent.payments.domain.port.out.PspPort.CobStatus;
@@ -37,8 +36,8 @@ class ReconciliationUseCaseTest {
     private static final ZoneOffset OFFSET = ZoneOffset.UTC;
     private static final UUID MERCHANT = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final Money AMOUNT = Money.of(10_000, "BRL");
-    private static final List<Duration> LADDER = List.of(
-            Duration.ofMinutes(1), Duration.ofMinutes(5), Duration.ofMinutes(15), Duration.ofHours(1));
+    private static final List<Duration> LADDER =
+            List.of(Duration.ofMinutes(1), Duration.ofMinutes(5), Duration.ofMinutes(15), Duration.ofHours(1));
 
     private final FakeOutboxWriter outbox = new FakeOutboxWriter();
     private final FakeAuditWriter audit = new FakeAuditWriter();
@@ -46,10 +45,16 @@ class ReconciliationUseCaseTest {
     private final InMemoryPaymentRepository repo = new InMemoryPaymentRepository();
 
     private ReconciliationUseCase useCase() {
-        return new ReconciliationUseCase(repo, psp, outbox, audit,
+        return new ReconciliationUseCase(
+                repo,
+                psp,
+                outbox,
+                audit,
                 new EventEnvelopeFactory(new EventSerializer()),
-                new DirectTransactionTemplate(), Clock.fixed(NOW, OFFSET),
-                LADDER, Duration.ofHours(72),
+                new DirectTransactionTemplate(),
+                Clock.fixed(NOW, OFFSET),
+                LADDER,
+                Duration.ofHours(72),
                 new PaymentsMetrics(new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
     }
 
@@ -66,8 +71,7 @@ class ReconciliationUseCaseTest {
 
         assertThat(outbox.entries).hasSize(1);
         assertThat(outbox.entries.get(0).type()).isEqualTo("payment.confirmed");
-        assertThat(outbox.entries.get(0).payload()).contains("\"late\":false")
-                .contains("\"amount\":10000");
+        assertThat(outbox.entries.get(0).payload()).contains("\"late\":false").contains("\"amount\":10000");
 
         assertThat(audit.entries).hasSize(1);
         assertThat(audit.entries.get(0).commandName()).isEqualTo("confirm_from_reconciliation");
@@ -124,8 +128,8 @@ class ReconciliationUseCaseTest {
 
     @Test
     void past_give_up_window_clears_schedule_and_audits_window_expired_without_confirm() {
-        Payment payment = seedPending(
-                Instant.parse("2026-08-30T09:00:00Z")); // expires long before now (give-up window 72h)
+        Payment payment =
+                seedPending(Instant.parse("2026-08-30T09:00:00Z")); // expires long before now (give-up window 72h)
         psp.state = CobState.PAID;
 
         int reconciled = useCase().runOnce(100);
@@ -159,8 +163,10 @@ class ReconciliationUseCaseTest {
         int second = useCase().runOnce(100);
         assertThat(second).isZero();
         assertThat(outbox.entries).hasSize(1);
-        assertThat(audit.entries.stream().filter(e -> e.commandName().equals("confirm_from_reconciliation"))
-                .count()).isEqualTo(1);
+        assertThat(audit.entries.stream()
+                        .filter(e -> e.commandName().equals("confirm_from_reconciliation"))
+                        .count())
+                .isEqualTo(1);
     }
 
     private Payment seedScheduled() {
@@ -168,27 +174,40 @@ class ReconciliationUseCaseTest {
     }
 
     private Payment seedPending(Instant expiresAt) {
-        Txid txid = new Txid(java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 25));
-        Payment payment = Payment.create(txid, MERCHANT, AMOUNT, "order", expiresAt,
-                expiresAt.minusSeconds(3600));
+        Txid txid =
+                new Txid(java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 25));
+        Payment payment = Payment.create(txid, MERCHANT, AMOUNT, "order", expiresAt, expiresAt.minusSeconds(3600));
         // owner decision: initial schedule set at create — present here so findDueReconciliation finds it now
-        payment.scheduleInitialReconciliation(Duration.ofMinutes(1),
-                NOW.minusSeconds(61)); // first rung already elapsed → due now
+        payment.scheduleInitialReconciliation(
+                Duration.ofMinutes(1), NOW.minusSeconds(61)); // first rung already elapsed → due now
         repo.save(payment);
         return payment;
     }
 
     private Payment seedExpiredLocally() {
-        Txid txid = new Txid(java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 25));
+        Txid txid =
+                new Txid(java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 25));
         Instant expiresAt = Instant.parse("2026-09-01T10:00:00Z"); // past deadline → expire-able
-        Payment base = Payment.create(txid, MERCHANT, AMOUNT, "order", expiresAt,
-                expiresAt.minusSeconds(3600));
+        Payment base = Payment.create(txid, MERCHANT, AMOUNT, "order", expiresAt, expiresAt.minusSeconds(3600));
         base.expire(Instant.parse("2026-09-02T09:00:00Z")); // after deadline
         Payment expired = Payment.restore(
-                base.id(), base.txid(), base.merchantId(), base.amount(), base.description(),
-                base.expiresAt(), base.createdAt(), PaymentStatus.EXPIRED, base.version() + 1,
-                null, null, null, false, null, 0,
-                NOW.minusSeconds(61), 0);
+                base.id(),
+                base.txid(),
+                base.merchantId(),
+                base.amount(),
+                base.description(),
+                base.expiresAt(),
+                base.createdAt(),
+                PaymentStatus.EXPIRED,
+                base.version() + 1,
+                null,
+                null,
+                null,
+                false,
+                null,
+                0,
+                NOW.minusSeconds(61),
+                0);
         repo.save(expired);
         return expired;
     }
@@ -208,8 +227,7 @@ class ReconciliationUseCaseTest {
 
         @Override
         public CobStatus getCob(Txid txid) {
-            return new CobStatus(txid, state, amountCents,
-                    Instant.parse("2026-09-03T10:00:00Z"), endToEndId, paidAt);
+            return new CobStatus(txid, state, amountCents, Instant.parse("2026-09-03T10:00:00Z"), endToEndId, paidAt);
         }
     }
 

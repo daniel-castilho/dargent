@@ -1,16 +1,15 @@
 package io.dargent.pspsimulator.webhook;
 
-import java.util.Random;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import io.dargent.pspsimulator.config.ChaosProperties;
 import io.dargent.pspsimulator.error.ErrorResponse;
+import java.util.Random;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import tools.jackson.databind.ObjectMapper;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Request-side chaos knobs (spec §6), exercised directly on the filter — forced extreme modes, zero

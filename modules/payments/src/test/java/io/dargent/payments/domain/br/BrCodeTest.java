@@ -21,8 +21,9 @@ class BrCodeTest {
 
         String brcode = BrCode.of(pixKey, receiverName, receiverCity, amountCents, txid);
 
-        assertThat(brcode).isEqualTo(
-                "00020101021226530014BR.GOV.BCB.PIX0131dargent-dev-receber@example.com5204000053039865406100.005802BR5916Dargent Dev LTDA6009SAO PAULO622905258KD4Z9X2Q7W1M5T3R6Y0A1B2C6304EDD2");
+        assertThat(brcode)
+                .isEqualTo(
+                        "00020101021226530014BR.GOV.BCB.PIX0131dargent-dev-receber@example.com5204000053039865406100.005802BR5916Dargent Dev LTDA6009SAO PAULO622905258KD4Z9X2Q7W1M5T3R6Y0A1B2C6304EDD2");
         assertThat(brcode).hasSize(174);
     }
 }

@@ -1,14 +1,13 @@
 package io.dargent.notifications.application;
 
-import io.dargent.notifications.domain.port.out.NotificationStore;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
 
+import io.dargent.notifications.domain.port.out.NotificationStore;
 import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 class NotificationIngestionUseCaseTest {
 
@@ -24,7 +23,8 @@ class NotificationIngestionUseCaseTest {
 
     @Test
     void processes_valid_notification_and_acks() {
-        String raw = rawEnvelope("payment.confirmed",
+        String raw = rawEnvelope(
+                "payment.confirmed",
                 "{\"txid\":\"txid-123\",\"merchantId\":\"11111111-1111-1111-1111-111111111111\",\"amount\":10000,\"fee\":100,\"net\":9900,\"late\":false}");
 
         boolean ack = useCase.processMessage(raw);
@@ -35,7 +35,8 @@ class NotificationIngestionUseCaseTest {
 
     @Test
     void duplicate_notification_is_acked_and_skipped_zero_writes() {
-        String raw = rawEnvelope("payment.confirmed",
+        String raw = rawEnvelope(
+                "payment.confirmed",
                 "{\"txid\":\"txid-123\",\"merchantId\":\"11111111-1111-1111-1111-111111111111\",\"amount\":10000,\"fee\":100,\"net\":9900,\"late\":false}");
 
         boolean ack1 = useCase.processMessage(raw);
@@ -70,7 +71,8 @@ class NotificationIngestionUseCaseTest {
 
     @Test
     void every_event_type_records() {
-        for (String type : java.util.List.of("payment.created", "payment.failed", "payment.confirmed", "payment.expired")) {
+        for (String type :
+                java.util.List.of("payment.created", "payment.failed", "payment.confirmed", "payment.expired")) {
             String raw = rawEnvelope(type, "{}");
             boolean ack = useCase.processMessage(raw);
             assertThat(ack).isTrue();
@@ -91,12 +93,12 @@ class NotificationIngestionUseCaseTest {
     static class FakeNotificationStore implements NotificationStore {
         final ConcurrentHashMap<UUID, NotificationRecord> insertedNotifications = new ConcurrentHashMap<>();
 
-        record NotificationRecord(UUID eventId, String type, String txid, UUID merchantId,
-                                  String payload, Instant occurredAt) {}
+        record NotificationRecord(
+                UUID eventId, String type, String txid, UUID merchantId, String payload, Instant occurredAt) {}
 
         @Override
-        public boolean insertNotificationIfAbsent(UUID eventId, String type, String txid, UUID merchantId,
-                String payload, Instant occurredAt) {
+        public boolean insertNotificationIfAbsent(
+                UUID eventId, String type, String txid, UUID merchantId, String payload, Instant occurredAt) {
             if (insertedNotifications.containsKey(eventId)) {
                 return false;
             }

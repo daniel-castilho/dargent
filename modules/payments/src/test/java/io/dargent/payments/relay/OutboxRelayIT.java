@@ -19,7 +19,6 @@ import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -33,7 +32,6 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
-import org.testcontainers.junit.jupiter.Testcontainers;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
@@ -68,8 +66,7 @@ class OutboxRelayIT {
     private static final String TOPIC = "dargent-payments-events.fifo";
     private static final String DLQ = "dargent-payments-notify-dlq.fifo";
     private static final UUID MERCHANT = UUID.fromString("11111111-1111-1111-1111-111111111111");
-    private static final Clock FIXED_CLOCK =
-            Clock.fixed(Instant.parse("2026-08-30T12:00:00Z"), ZoneOffset.UTC);
+    private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2026-08-30T12:00:00Z"), ZoneOffset.UTC);
     private static final String OCCURRED_AT = "2026-08-29T10:00:00Z";
     private static final ObjectMapper MAPPER = new JsonMapper();
 
@@ -77,9 +74,10 @@ class OutboxRelayIT {
     static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:16-alpine");
 
     @Container
-    static final LocalStackContainer localstack =
-            new LocalStackContainer(DockerImageName.parse("localstack/localstack:3.8.1"))
-                    .withServices(LocalStackContainer.Service.SNS, LocalStackContainer.Service.SQS);
+    static final LocalStackContainer localstack = new LocalStackContainer(
+                    DockerImageName.parse("localstack/localstack:3.8.1"))
+            .withServices(LocalStackContainer.Service.SNS, LocalStackContainer.Service.SQS);
+
     private static HikariDataSource dataSource;
     private static JdbcClient jdbc;
     private static SqsClient sqs;
@@ -109,12 +107,15 @@ class OutboxRelayIT {
 
         jdbc = JdbcClient.create(dataSource);
         OutboxDeliveryUseCase.Policy policy = new OutboxDeliveryUseCase.Policy(
-                32, 2, 1000, Integer.MAX_VALUE,
-                java.time.Duration.ofSeconds(30), java.time.Duration.ofMinutes(5), 7);
-        TransactionTemplate txTemplate =
-                new TransactionTemplate(new DataSourceTransactionManager(dataSource));
-        useCase = new OutboxDeliveryUseCase(new JdbcOutboxEventStore(jdbc),
-                publisher(topicArn), MAPPER, FIXED_CLOCK, policy, txTemplate,
+                32, 2, 1000, Integer.MAX_VALUE, java.time.Duration.ofSeconds(30), java.time.Duration.ofMinutes(5), 7);
+        TransactionTemplate txTemplate = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
+        useCase = new OutboxDeliveryUseCase(
+                new JdbcOutboxEventStore(jdbc),
+                publisher(topicArn),
+                MAPPER,
+                FIXED_CLOCK,
+                policy,
+                txTemplate,
                 new io.dargent.payments.application.PaymentsMetrics(
                         new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
     }
@@ -160,11 +161,14 @@ class OutboxRelayIT {
         assertThat(received.groupId()).isEqualTo(txid);
         assertThat(received.dedupeId()).isEqualTo(eventId);
         String storedText = jdbc.sql("select payload::text from payments.outbox where id = :id")
-                .param("id", rowId).query(String.class).single();
+                .param("id", rowId)
+                .query(String.class)
+                .single();
         assertThat(received.body().path("Message").asText()).isEqualTo(storedText);
 
         Object[] row = jdbc.sql("select status, attempt_count, published_at from payments.outbox where id = :id")
-                .param("id", rowId).query((rs, i) -> new Object[]{rs.getString(1), rs.getInt(2), rs.getTimestamp(3)})
+                .param("id", rowId)
+                .query((rs, i) -> new Object[] {rs.getString(1), rs.getInt(2), rs.getTimestamp(3)})
                 .single();
         assertThat(row[0]).isEqualTo("SENT");
         assertThat(row[1]).isEqualTo(1);
@@ -187,9 +191,18 @@ class OutboxRelayIT {
         // A publisher aimed at a topic that does not exist: publish fails fast (fixed inputs)
         String brokenArn = topicArn.replace(TOPIC, TOPIC + "-missing");
         OutboxDeliveryUseCase broken = new OutboxDeliveryUseCase(
-                new JdbcOutboxEventStore(jdbc), publisher(brokenArn), MAPPER, FIXED_CLOCK,
-                new OutboxDeliveryUseCase.Policy(32, 2, 1000, Integer.MAX_VALUE,
-                        java.time.Duration.ofSeconds(30), java.time.Duration.ofMinutes(5), 7),
+                new JdbcOutboxEventStore(jdbc),
+                publisher(brokenArn),
+                MAPPER,
+                FIXED_CLOCK,
+                new OutboxDeliveryUseCase.Policy(
+                        32,
+                        2,
+                        1000,
+                        Integer.MAX_VALUE,
+                        java.time.Duration.ofSeconds(30),
+                        java.time.Duration.ofMinutes(5),
+                        7),
                 new TransactionTemplate(new DataSourceTransactionManager(dataSource)),
                 new io.dargent.payments.application.PaymentsMetrics(
                         new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
@@ -197,9 +210,9 @@ class OutboxRelayIT {
         int published = broken.runOnce(32);
 
         assertThat(published).isZero();
-        Object[] row = jdbc.sql(
-                "select status, attempt_count, next_attempt_at from payments.outbox where id = :id")
-                .param("id", rowId).query((rs, i) -> new Object[]{rs.getString(1), rs.getInt(2), rs.getTimestamp(3)})
+        Object[] row = jdbc.sql("select status, attempt_count, next_attempt_at from payments.outbox where id = :id")
+                .param("id", rowId)
+                .query((rs, i) -> new Object[] {rs.getString(1), rs.getInt(2), rs.getTimestamp(3)})
                 .single();
         assertThat(row[0]).isEqualTo("PENDING");
         assertThat(row[1]).isEqualTo(1);
@@ -222,8 +235,12 @@ class OutboxRelayIT {
         for (int i = 0; i < n; i++) {
             UUID id = UUID.randomUUID();
             String tx = txid(100 + i);
-            seed(id, tx, "payment.created",
-                    envelope(UUID.randomUUID().toString(), tx, "payment.created"), "req-3-" + i);
+            seed(
+                    id,
+                    tx,
+                    "payment.created",
+                    envelope(UUID.randomUUID().toString(), tx, "payment.created"),
+                    "req-3-" + i);
             ids.add(id);
         }
 
@@ -252,14 +269,19 @@ class OutboxRelayIT {
 
         for (UUID id : ids) {
             Object[] row = jdbc.sql("select status, attempt_count from payments.outbox where id = :id")
-                    .param("id", id).query((rs, i) -> new Object[]{rs.getString(1), rs.getInt(2)})
+                    .param("id", id)
+                    .query((rs, i) -> new Object[] {rs.getString(1), rs.getInt(2)})
                     .single();
             assertThat(row[0]).isEqualTo("SENT");
             assertThat(row[1]).isEqualTo(1); // no double-SENT
         }
-        Long sent = jdbc.sql("select count(*) from payments.outbox where status='SENT'").query(Long.class).single();
+        Long sent = jdbc.sql("select count(*) from payments.outbox where status='SENT'")
+                .query(Long.class)
+                .single();
         assertThat(sent).isEqualTo((long) n);
-        Long pending = jdbc.sql("select count(*) from payments.outbox where status='PENDING'").query(Long.class).single();
+        Long pending = jdbc.sql("select count(*) from payments.outbox where status='PENDING'")
+                .query(Long.class)
+                .single();
         assertThat(pending).isZero();
     }
 
@@ -274,20 +296,41 @@ class OutboxRelayIT {
     void purge_deletes_old_sent_keeps_fresh_sent_and_pending() {
         String oldTx = txid(400);
         UUID oldSent = UUID.randomUUID();
-        seedWithStatus(oldSent, oldTx, "payment.created",
-                envelope(UUID.randomUUID().toString(), oldTx, "payment.created"), "req-4-old",
-                "SENT", 1, "2026-08-29T09:59:00Z", "2026-08-20T00:00:00Z");
+        seedWithStatus(
+                oldSent,
+                oldTx,
+                "payment.created",
+                envelope(UUID.randomUUID().toString(), oldTx, "payment.created"),
+                "req-4-old",
+                "SENT",
+                1,
+                "2026-08-29T09:59:00Z",
+                "2026-08-20T00:00:00Z");
         String freshTx = txid(401);
         UUID freshSent = UUID.randomUUID();
-        seedWithStatus(freshSent, freshTx, "payment.created",
-                envelope(UUID.randomUUID().toString(), freshTx, "payment.created"), "req-4-fresh",
-                "SENT", 1, "2026-08-29T09:59:00Z", "2026-08-29T00:00:00Z");
+        seedWithStatus(
+                freshSent,
+                freshTx,
+                "payment.created",
+                envelope(UUID.randomUUID().toString(), freshTx, "payment.created"),
+                "req-4-fresh",
+                "SENT",
+                1,
+                "2026-08-29T09:59:00Z",
+                "2026-08-29T00:00:00Z");
         String pendingTx = txid(402);
         UUID pending = UUID.randomUUID();
         // PENDING, not due — never claimed, never purged
-        seedWithStatus(pending, pendingTx, "payment.created",
-                envelope(UUID.randomUUID().toString(), pendingTx, "payment.created"), "req-4-pending",
-                "PENDING", 0, "2099-01-01T00:00:00Z", null);
+        seedWithStatus(
+                pending,
+                pendingTx,
+                "payment.created",
+                envelope(UUID.randomUUID().toString(), pendingTx, "payment.created"),
+                "req-4-pending",
+                "PENDING",
+                0,
+                "2099-01-01T00:00:00Z",
+                null);
 
         for (int i = 0; i < 60; i++) {
             useCase.runOnce(32);
@@ -311,9 +354,9 @@ class OutboxRelayIT {
         // Same contract as deploy/localstack-init.sh: FIFO topic + DLQ (created once),
         // a fresh notify queue per test with redrive maxReceiveCount=5 and the SQS subscription.
         topicArn = sns.createTopic(CreateTopicRequest.builder()
-                .name(TOPIC)
-                .attributes(Map.of("FifoTopic", "true"))
-                .build())
+                        .name(TOPIC)
+                        .attributes(Map.of("FifoTopic", "true"))
+                        .build())
                 .topicArn();
 
         String dlqUrl = sqs.createQueue(CreateQueueRequest.builder()
@@ -325,7 +368,8 @@ class OutboxRelayIT {
                         .queueUrl(dlqUrl)
                         .attributeNames(QueueAttributeName.QUEUE_ARN)
                         .build())
-                .attributes().get(QueueAttributeName.QUEUE_ARN);
+                .attributes()
+                .get(QueueAttributeName.QUEUE_ARN);
     }
 
     /** Creates a fresh FIFO notify queue (unique name), wires redrive + subscription onto it. */
@@ -342,17 +386,20 @@ class OutboxRelayIT {
                         .queueUrl(dlqUrl)
                         .attributeNames(QueueAttributeName.QUEUE_ARN)
                         .build())
-                .attributes().get(QueueAttributeName.QUEUE_ARN);
+                .attributes()
+                .get(QueueAttributeName.QUEUE_ARN);
 
         sqs.setQueueAttributes(ctx -> ctx.queueUrl(url)
-                .attributes(Map.of(QueueAttributeName.REDRIVE_POLICY,
+                .attributes(Map.of(
+                        QueueAttributeName.REDRIVE_POLICY,
                         "{\"deadLetterTargetArn\":\"" + dlqArn + "\",\"maxReceiveCount\":\"5\"}")));
 
         String notifyArn = sqs.getQueueAttributes(GetQueueAttributesRequest.builder()
                         .queueUrl(url)
                         .attributeNames(QueueAttributeName.QUEUE_ARN)
                         .build())
-                .attributes().get(QueueAttributeName.QUEUE_ARN);
+                .attributes()
+                .get(QueueAttributeName.QUEUE_ARN);
 
         sns.subscribe(SubscribeRequest.builder()
                 .topicArn(topicArn)
@@ -365,11 +412,11 @@ class OutboxRelayIT {
     private static SqsClient sqsClient() {
         return SqsClient.builder()
                 .region(Region.of(REGION))
-                .endpointOverride(URI.create(
-                        localstack.getEndpointOverride(LocalStackContainer.Service.SQS).toString()))
+                .endpointOverride(URI.create(localstack
+                        .getEndpointOverride(LocalStackContainer.Service.SQS)
+                        .toString()))
                 .httpClient(UrlConnectionHttpClient.builder().build())
-                .credentialsProvider(StaticCredentialsProvider.create(
-                        AwsBasicCredentials.create("test", "test")))
+                .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create("test", "test")))
                 .overrideConfiguration(c -> c.apiCallAttemptTimeout(java.time.Duration.ofSeconds(5)))
                 .build();
     }
@@ -377,18 +424,23 @@ class OutboxRelayIT {
     private static SnsClient snsClient() {
         return SnsClient.builder()
                 .region(Region.of(REGION))
-                .endpointOverride(URI.create(
-                        localstack.getEndpointOverride(LocalStackContainer.Service.SNS).toString()))
+                .endpointOverride(URI.create(localstack
+                        .getEndpointOverride(LocalStackContainer.Service.SNS)
+                        .toString()))
                 .httpClient(UrlConnectionHttpClient.builder().build())
-                .credentialsProvider(StaticCredentialsProvider.create(
-                        AwsBasicCredentials.create("test", "test")))
+                .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create("test", "test")))
                 .overrideConfiguration(c -> c.apiCallAttemptTimeout(java.time.Duration.ofSeconds(5)))
                 .build();
     }
 
     private static SnsEventPublisher publisher(String arn) {
-        return new SnsEventPublisher(arn, 2000, REGION,
-                localstack.getEndpointOverride(LocalStackContainer.Service.SNS).toString(), "test", "test");
+        return new SnsEventPublisher(
+                arn,
+                2000,
+                REGION,
+                localstack.getEndpointOverride(LocalStackContainer.Service.SNS).toString(),
+                "test",
+                "test");
     }
 
     /** Seeds a PENDING, due row (next_attempt_at in the past, no clock skew with the fixed clock). */
@@ -406,8 +458,16 @@ class OutboxRelayIT {
     }
 
     /** Seeds a row with explicit status, attempt count, next_attempt_at and published_at (IT4). */
-    private static void seedWithStatus(UUID id, String txid, String type, String payloadJson, String requestId,
-            String status, int attemptCount, String nextAttemptAt, String publishedAt) {
+    private static void seedWithStatus(
+            UUID id,
+            String txid,
+            String type,
+            String payloadJson,
+            String requestId,
+            String status,
+            int attemptCount,
+            String nextAttemptAt,
+            String publishedAt) {
         jdbc.sql("""
                 insert into payments.outbox (id, aggregate_id, type, version, payload, request_id, status, attempt_count, next_attempt_at, published_at)
                 values (:id, :agg, :type, 1, :payload::jsonb, :req, :status, :attempts, :next::timestamptz, :published::timestamptz)
@@ -426,12 +486,16 @@ class OutboxRelayIT {
 
     private static long count(UUID id) {
         return jdbc.sql("select count(*) from payments.outbox where id = :id")
-                .param("id", id).query(Long.class).single();
+                .param("id", id)
+                .query(Long.class)
+                .single();
     }
 
     private static String status(UUID id) {
         return jdbc.sql("select status from payments.outbox where id = :id")
-                .param("id", id).query(String.class).single();
+                .param("id", id)
+                .query(String.class)
+                .single();
     }
 
     /** Full E3 §5.6 envelope payload with eventId, deterministic key order via Jackson. */
@@ -479,7 +543,8 @@ class OutboxRelayIT {
             throw new RuntimeException(e);
         }
         Map<MessageSystemAttributeName, String> attrs = m.attributes();
-        return new Received(body,
+        return new Received(
+                body,
                 attrs.get(MessageSystemAttributeName.MESSAGE_GROUP_ID),
                 attrs.get(MessageSystemAttributeName.MESSAGE_DEDUPLICATION_ID));
     }

@@ -8,18 +8,16 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -34,7 +32,6 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
-import javax.sql.DataSource;
 
 /**
  * E9 §6.3 OutboxRepublishIT — republish tool end-to-end: SENT rows in a bounded window are
@@ -50,20 +47,16 @@ import javax.sql.DataSource;
  * Clock injected, zero sleeps.
  */
 @SpringBootTest(
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    classes = {DargentApiApplication.class, OutboxRepublishIT.RepublishTestConfig.class},
-    properties = {
-        "dargent.relay.enabled=true",
-        "dargent.psp.webhook-secret=dev-only-secret"
-    })
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        classes = {DargentApiApplication.class, OutboxRepublishIT.RepublishTestConfig.class},
+        properties = {"dargent.relay.enabled=true", "dargent.psp.webhook-secret=dev-only-secret"})
 @Testcontainers
 class OutboxRepublishIT {
 
     private static final UUID MERCHANT = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID ADMIN_KEY_ID = UUID.fromString("33333333-3333-3333-3333-333333333333");
     private static final UUID OTHER_KEY_ID = UUID.fromString("44444444-4444-4444-4444-444444444444");
-    private static final Clock FIXED_CLOCK =
-            Clock.fixed(Instant.parse("2027-01-02T12:00:00Z"), ZoneOffset.UTC);
+    private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2027-01-02T12:00:00Z"), ZoneOffset.UTC);
 
     private static final String ADMIN_RAW_KEY = ApiKeyHasher.generateRawKey();
     private static final String OTHER_RAW_KEY = ApiKeyHasher.generateRawKey();
@@ -73,9 +66,9 @@ class OutboxRepublishIT {
     static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:16-alpine");
 
     @Container
-    static final LocalStackContainer localstack =
-            new LocalStackContainer(DockerImageName.parse("localstack/localstack:3.8.1"))
-                    .withServices(LocalStackContainer.Service.SNS, LocalStackContainer.Service.SQS);
+    static final LocalStackContainer localstack = new LocalStackContainer(
+                    DockerImageName.parse("localstack/localstack:3.8.1"))
+            .withServices(LocalStackContainer.Service.SNS, LocalStackContainer.Service.SQS);
 
     @Autowired
     JdbcClient jdbc;
@@ -90,7 +83,8 @@ class OutboxRepublishIT {
     static void awsEnvironment(org.springframework.test.context.DynamicPropertyRegistry registry) {
         ensureTopology();
         registry.add("AWS_ENDPOINT_URL", () -> localstack
-                .getEndpointOverride(LocalStackContainer.Service.SNS).toString());
+                .getEndpointOverride(LocalStackContainer.Service.SNS)
+                .toString());
         registry.add("AWS_REGION", () -> "us-east-1");
         registry.add("AWS_ACCESS_KEY_ID", () -> "test");
         registry.add("AWS_SECRET_ACCESS_KEY", () -> "test");
@@ -107,8 +101,8 @@ class OutboxRepublishIT {
     @BeforeEach
     void setUp() {
         baseUrl = "http://localhost:" + port;
-        jdbc.sql("truncate payments.outbox, payments.audit_log, payments.api_keys "
-                + "restart identity cascade").update();
+        jdbc.sql("truncate payments.outbox, payments.audit_log, payments.api_keys " + "restart identity cascade")
+                .update();
         insertKey(ADMIN_KEY_ID.toString(), ADMIN_RAW_KEY, null);
     }
 
@@ -214,8 +208,7 @@ class OutboxRepublishIT {
         seedSent(t2, "payment.confirmed", "2027-01-02T11:00:00Z");
 
         // Only payment.created
-        var resp = republish(ADMIN_RAW_KEY, "2027-01-02T09:00:00Z", "2027-01-02T12:00:00Z",
-                List.of("payment.created"));
+        var resp = republish(ADMIN_RAW_KEY, "2027-01-02T09:00:00Z", "2027-01-02T12:00:00Z", List.of("payment.created"));
         assertThat(resp.statusCode()).isEqualTo(200);
         assertThat(resp.body()).contains("\"matched\":1");
         assertThat(resp.body()).contains("\"republished\":1");
@@ -303,37 +296,47 @@ class OutboxRepublishIT {
 
     private String status(UUID id) {
         return jdbc.sql("select status from payments.outbox where id = :id")
-                .param("id", id).query(String.class).single();
+                .param("id", id)
+                .query(String.class)
+                .single();
     }
 
     private String getEventId(UUID id) {
         return jdbc.sql("select payload->>'eventId' from payments.outbox where id = :id")
-                .param("id", id).query(String.class).single();
+                .param("id", id)
+                .query(String.class)
+                .single();
     }
 
     private String getEventIdOfPending(String aggregateId) {
-        return jdbc.sql("select payload->>'eventId' from payments.outbox where aggregate_id = :agg and status = 'PENDING' limit 1")
-                .param("agg", aggregateId).query(String.class).single();
+        return jdbc.sql(
+                        "select payload->>'eventId' from payments.outbox where aggregate_id = :agg and status = 'PENDING' limit 1")
+                .param("agg", aggregateId)
+                .query(String.class)
+                .single();
     }
 
     private String typeOfFirstPending() {
         return jdbc.sql("select type from payments.outbox where status = 'PENDING' order by id limit 1")
-                .query(String.class).single();
+                .query(String.class)
+                .single();
     }
 
     private long countPending() {
         return jdbc.sql("select count(*) from payments.outbox where status = 'PENDING'")
-                .query(Long.class).single();
+                .query(Long.class)
+                .single();
     }
 
     private long auditCount(String command) {
         return jdbc.sql("select count(*) from payments.audit_log where command_name = :cmd")
-                .param("cmd", command).query(Long.class).single();
+                .param("cmd", command)
+                .query(Long.class)
+                .single();
     }
 
     private void insertKey(String id, String rawKey, String revokedAt) {
-        jdbc.sql(
-                "insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
+        jdbc.sql("insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
                         + "values (:id, :merchant, 'it-key', :prefix, :hash, now(), :revoked)")
                 .param("id", UUID.fromString(id))
                 .param("merchant", MERCHANT)
@@ -417,12 +420,13 @@ class OutboxRepublishIT {
         String redrive = "{\"deadLetterTargetArn\":\"" + dlqArn + "\",\"maxReceiveCount\":\"5\"}";
         String notifyUrl = createQueue(sqs, "dargent-republish-notify.fifo", redrive);
         String notifyArn = queueArn(sqs, notifyUrl);
-        topicArn = sns.createTopic(r -> r.name("dargent-republish-events.fifo")
-                .attributes(Map.of("FifoTopic", "true"))).topicArn();
+        topicArn = sns.createTopic(r -> r.name("dargent-republish-events.fifo").attributes(Map.of("FifoTopic", "true")))
+                .topicArn();
         sns.subscribe(r -> r.topicArn(topicArn).protocol("sqs").endpoint(notifyArn));
     }
 
-    private static String createQueue(software.amazon.awssdk.services.sqs.SqsClient client, String name, String redrive) {
+    private static String createQueue(
+            software.amazon.awssdk.services.sqs.SqsClient client, String name, String redrive) {
         Map<software.amazon.awssdk.services.sqs.model.QueueAttributeName, String> attrs =
                 new java.util.LinkedHashMap<>();
         attrs.put(software.amazon.awssdk.services.sqs.model.QueueAttributeName.FIFO_QUEUE, "true");
@@ -434,7 +438,8 @@ class OutboxRepublishIT {
 
     private static String queueArn(software.amazon.awssdk.services.sqs.SqsClient client, String url) {
         return client.getQueueAttributes(r -> r.queueUrl(url)
-                .attributeNames(software.amazon.awssdk.services.sqs.model.QueueAttributeName.QUEUE_ARN))
-                .attributes().get(software.amazon.awssdk.services.sqs.model.QueueAttributeName.QUEUE_ARN);
+                        .attributeNames(software.amazon.awssdk.services.sqs.model.QueueAttributeName.QUEUE_ARN))
+                .attributes()
+                .get(software.amazon.awssdk.services.sqs.model.QueueAttributeName.QUEUE_ARN);
     }
 }

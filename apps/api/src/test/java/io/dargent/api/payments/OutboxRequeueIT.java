@@ -10,14 +10,13 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.UUID;
+import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -32,7 +31,6 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
-import javax.sql.DataSource;
 
 /**
  * E9 §6.2 OutboxRequeueIT (Q11 adjudication) — scenario 19 end-to-end: an EXHAUSTED outbox row is
@@ -46,20 +44,16 @@ import javax.sql.DataSource;
  * predecessor → 403 fail-closed. Clock is injected and shared by requeue and relay; zero sleeps.
  */
 @SpringBootTest(
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    classes = {DargentApiApplication.class, OutboxRequeueIT.RequeueTestConfig.class},
-    properties = {
-        "dargent.relay.enabled=true",
-        "dargent.psp.webhook-secret=dev-only-secret"
-    })
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        classes = {DargentApiApplication.class, OutboxRequeueIT.RequeueTestConfig.class},
+        properties = {"dargent.relay.enabled=true", "dargent.psp.webhook-secret=dev-only-secret"})
 @Testcontainers
 class OutboxRequeueIT {
 
     private static final UUID MERCHANT = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID ADMIN_KEY_ID = UUID.fromString("33333333-3333-3333-3333-333333333333");
     private static final UUID OTHER_KEY_ID = UUID.fromString("44444444-4444-4444-4444-444444444444");
-    private static final Clock FIXED_CLOCK =
-            Clock.fixed(Instant.parse("2027-01-01T12:00:00Z"), ZoneOffset.UTC);
+    private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2027-01-01T12:00:00Z"), ZoneOffset.UTC);
 
     // The admin key value is a real ACTIVE API key (raw present in api_keys) whose hash the controller
     // compares against DARGENT_OUTBOX_ADMIN_KEY — giving a REAL audit actor, never the sentinel.
@@ -73,9 +67,9 @@ class OutboxRequeueIT {
     static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:16-alpine");
 
     @Container
-    static final LocalStackContainer localstack =
-            new LocalStackContainer(DockerImageName.parse("localstack/localstack:3.8.1"))
-                    .withServices(LocalStackContainer.Service.SNS, LocalStackContainer.Service.SQS);
+    static final LocalStackContainer localstack = new LocalStackContainer(
+                    DockerImageName.parse("localstack/localstack:3.8.1"))
+            .withServices(LocalStackContainer.Service.SNS, LocalStackContainer.Service.SQS);
 
     @Autowired
     JdbcClient jdbc;
@@ -96,7 +90,8 @@ class OutboxRequeueIT {
     static void awsEnvironment(org.springframework.test.context.DynamicPropertyRegistry registry) {
         ensureTopology();
         registry.add("AWS_ENDPOINT_URL", () -> localstack
-                .getEndpointOverride(LocalStackContainer.Service.SNS).toString());
+                .getEndpointOverride(LocalStackContainer.Service.SNS)
+                .toString());
         registry.add("AWS_REGION", () -> "us-east-1");
         registry.add("AWS_ACCESS_KEY_ID", () -> "test");
         registry.add("AWS_SECRET_ACCESS_KEY", () -> "test");
@@ -113,8 +108,8 @@ class OutboxRequeueIT {
     @BeforeEach
     void setUp() {
         baseUrl = "http://localhost:" + port;
-        jdbc.sql("truncate payments.outbox, payments.audit_log, payments.api_keys "
-                + "restart identity cascade").update();
+        jdbc.sql("truncate payments.outbox, payments.audit_log, payments.api_keys " + "restart identity cascade")
+                .update();
         // Single active key (the one-active-per-prefix schema): ADMIN_RAW_KEY is the admin key.
         insertKey(ADMIN_KEY_ID, ADMIN_RAW_KEY, null);
     }
@@ -142,8 +137,9 @@ class OutboxRequeueIT {
         // audit: outbox_requeued with the REAL admin principal (not the sentinel)
         assertThat(auditCount()).isEqualTo(auditsBefore + 1);
         String actor = jdbc.sql(
-                "select actor_key_id::text from payments.audit_log where command_name='outbox_requeued'")
-                .query(String.class).single();
+                        "select actor_key_id::text from payments.audit_log where command_name='outbox_requeued'")
+                .query(String.class)
+                .single();
         assertThat(actor).isEqualTo(ADMIN_KEY_ID.toString());
 
         // relay picks it up on the next poll -> SENT (attempt_count resets to 1 on publish)
@@ -259,30 +255,34 @@ class OutboxRequeueIT {
     }
 
     private void insertKey(UUID id, String rawKey, String revokedAt) {
-        jdbc.sql(
-                "insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
+        jdbc.sql("insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
                         + "values (:id, :merchant, 'it-key', :prefix, :hash, now(), :revoked)")
                 .param("id", id)
                 .param("merchant", MERCHANT)
                 .param("prefix", ApiKeyHasher.prefix(rawKey))
                 .param("hash", ApiKeyHasher.hash(rawKey))
-                .param("revoked", revokedAt == null ? null : java.sql.Timestamp.from(
-                        Instant.parse(revokedAt)))
+                .param("revoked", revokedAt == null ? null : java.sql.Timestamp.from(Instant.parse(revokedAt)))
                 .update();
     }
 
     private String status(UUID id) {
         return jdbc.sql("select status from payments.outbox where id = :id")
-                .param("id", id).query(String.class).single();
+                .param("id", id)
+                .query(String.class)
+                .single();
     }
 
     private int attemptCount(UUID id) {
         return jdbc.sql("select attempt_count from payments.outbox where id = :id")
-                .param("id", id).query(Integer.class).single();
+                .param("id", id)
+                .query(Integer.class)
+                .single();
     }
 
     private long auditCount() {
-        return jdbc.sql("select count(*) from payments.audit_log").query(Long.class).single();
+        return jdbc.sql("select count(*) from payments.audit_log")
+                .query(Long.class)
+                .single();
     }
 
     private static String txid(UUID id) {
@@ -359,12 +359,13 @@ class OutboxRequeueIT {
         String redrive = "{\"deadLetterTargetArn\":\"" + dlqArn + "\",\"maxReceiveCount\":\"5\"}";
         String notifyUrl = createQueue(sqs, "dargent-requeue-notify.fifo", redrive);
         String notifyArn = queueArn(sqs, notifyUrl);
-        topicArn = sns.createTopic(r -> r.name("dargent-requeue-events.fifo")
-                .attributes(Map.of("FifoTopic", "true"))).topicArn();
+        topicArn = sns.createTopic(r -> r.name("dargent-requeue-events.fifo").attributes(Map.of("FifoTopic", "true")))
+                .topicArn();
         sns.subscribe(r -> r.topicArn(topicArn).protocol("sqs").endpoint(notifyArn));
     }
 
-    private static String createQueue(software.amazon.awssdk.services.sqs.SqsClient client, String name, String redrive) {
+    private static String createQueue(
+            software.amazon.awssdk.services.sqs.SqsClient client, String name, String redrive) {
         Map<software.amazon.awssdk.services.sqs.model.QueueAttributeName, String> attrs =
                 new java.util.LinkedHashMap<>();
         attrs.put(software.amazon.awssdk.services.sqs.model.QueueAttributeName.FIFO_QUEUE, "true");
@@ -376,7 +377,8 @@ class OutboxRequeueIT {
 
     private static String queueArn(software.amazon.awssdk.services.sqs.SqsClient client, String url) {
         return client.getQueueAttributes(r -> r.queueUrl(url)
-                .attributeNames(software.amazon.awssdk.services.sqs.model.QueueAttributeName.QUEUE_ARN))
-                .attributes().get(software.amazon.awssdk.services.sqs.model.QueueAttributeName.QUEUE_ARN);
+                        .attributeNames(software.amazon.awssdk.services.sqs.model.QueueAttributeName.QUEUE_ARN))
+                .attributes()
+                .get(software.amazon.awssdk.services.sqs.model.QueueAttributeName.QUEUE_ARN);
     }
 }

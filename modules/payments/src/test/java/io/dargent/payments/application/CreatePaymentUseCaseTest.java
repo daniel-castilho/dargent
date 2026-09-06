@@ -4,9 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
@@ -43,8 +41,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
-import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -96,16 +94,27 @@ class CreatePaymentUseCaseTest {
         when(txidGenerator.generate()).thenReturn(TXID);
         when(paymentRepo.findByTxid(any())).thenReturn(Optional.of(savedPayment(NOW.plus(EXPIRES_IN))));
         when(paymentRepo.updateIfVersionMatches(any(), anyInt())).thenReturn(true);
-        useCase = new CreatePaymentUseCase(paymentRepo, idempotencyStore, outboxWriter, auditWriter,
-                pspPort, txidGenerator, txTemplate, new EventEnvelopeFactory(new EventSerializer(mapper)),
-                PIX_KEY, RECEIVER_NAME, RECEIVER_CITY, CALLBACK_URL,
-                Clock.fixed(NOW, ZoneOffset.UTC), Duration.ofSeconds(60),
+        useCase = new CreatePaymentUseCase(
+                paymentRepo,
+                idempotencyStore,
+                outboxWriter,
+                auditWriter,
+                pspPort,
+                txidGenerator,
+                txTemplate,
+                new EventEnvelopeFactory(new EventSerializer(mapper)),
+                PIX_KEY,
+                RECEIVER_NAME,
+                RECEIVER_CITY,
+                CALLBACK_URL,
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                Duration.ofSeconds(60),
                 new PaymentsMetrics(new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
     }
 
     private Input input() {
-        return new Input(MERCHANT, KEY_ID, "idem-key", ENDPOINT, FINGERPRINT_SAME, REQUEST_ID,
-                AMOUNT, "Order #1", EXPIRES_IN);
+        return new Input(
+                MERCHANT, KEY_ID, "idem-key", ENDPOINT, FINGERPRINT_SAME, REQUEST_ID, AMOUNT, "Order #1", EXPIRES_IN);
     }
 
     private Payment savedPayment(Instant expiresAt) {
@@ -123,7 +132,7 @@ class CreatePaymentUseCaseTest {
 
         assertThat(out.txid()).isEqualTo(TXID);
         assertThat(out.status()).isEqualTo(PaymentStatus.PENDING); // BD-2: never CONFIRMED on create
-        assertThat(out.expiresAt()).isEqualTo(PSP_EXPIRES);        // PSP truth
+        assertThat(out.expiresAt()).isEqualTo(PSP_EXPIRES); // PSP truth
         assertThat(out.brcode()).contains(PIX_KEY);
         assertThat(out.replay()).isFalse();
 
@@ -138,8 +147,7 @@ class CreatePaymentUseCaseTest {
         useCase.execute(input());
 
         ArgumentCaptor<String> payload = ArgumentCaptor.forClass(String.class);
-        verify(outboxWriter).append(eq(TXID.value()), eq("payment.created"), eq(1),
-                payload.capture(), eq(REQUEST_ID));
+        verify(outboxWriter).append(eq(TXID.value()), eq("payment.created"), eq(1), payload.capture(), eq(REQUEST_ID));
         Map<String, Object> parsed = mapper.readValue(payload.getValue(), new TypeReference<>() {});
         assertThat(parsed).containsEntry("type", "payment.created");
         assertThat(parsed).containsEntry("version", 1);
@@ -181,8 +189,13 @@ class CreatePaymentUseCaseTest {
 
         useCase.execute(input());
 
-        verify(auditWriter).record(eq("create_payment"), eq(KEY_ID), eq(MERCHANT),
-                eq(TXID.value()), eq(REQUEST_ID)); // BD-7: real key id, never generated; BD-5: requestId
+        verify(auditWriter)
+                .record(
+                        eq("create_payment"),
+                        eq(KEY_ID),
+                        eq(MERCHANT),
+                        eq(TXID.value()),
+                        eq(REQUEST_ID)); // BD-7: real key id, never generated; BD-5: requestId
     }
 
     @Test
@@ -203,8 +216,7 @@ class CreatePaymentUseCaseTest {
 
     @Test
     void same_key_same_fingerprint_completed_replays_snapshot_with_zero_side_effects() {
-        when(idempotencyStore.insertIfAbsent(any(), any(), any(), any()))
-                .thenReturn(Optional.of(completedRecord()));
+        when(idempotencyStore.insertIfAbsent(any(), any(), any(), any())).thenReturn(Optional.of(completedRecord()));
 
         Output out = useCase.execute(input());
 
@@ -223,13 +235,11 @@ class CreatePaymentUseCaseTest {
 
     @Test
     void same_key_different_fingerprint_conflicts() {
-        when(idempotencyStore.insertIfAbsent(any(), any(), any(), any()))
-                .thenReturn(Optional.of(completedRecord()));
-        Input conflicting = new Input(MERCHANT, KEY_ID, "idem-key", ENDPOINT, "sha256-other",
-                REQUEST_ID, AMOUNT, "Order #1", EXPIRES_IN);
+        when(idempotencyStore.insertIfAbsent(any(), any(), any(), any())).thenReturn(Optional.of(completedRecord()));
+        Input conflicting = new Input(
+                MERCHANT, KEY_ID, "idem-key", ENDPOINT, "sha256-other", REQUEST_ID, AMOUNT, "Order #1", EXPIRES_IN);
 
-        assertThatThrownBy(() -> useCase.execute(conflicting))
-                .isInstanceOf(IdempotencyKeyConflictException.class);
+        assertThatThrownBy(() -> useCase.execute(conflicting)).isInstanceOf(IdempotencyKeyConflictException.class);
 
         verify(paymentRepo, never()).save(any());
         verify(pspPort, never()).createCharge(any());
@@ -239,12 +249,11 @@ class CreatePaymentUseCaseTest {
 
     @Test
     void key_in_flight_same_fingerprint_returns_in_flight_exception() {
-        IdempotencyRecord inFlight = new IdempotencyRecord(MERCHANT, "idem-key", ENDPOINT,
-                FINGERPRINT_SAME, "IN_FLIGHT", null, null, null);
+        IdempotencyRecord inFlight =
+                new IdempotencyRecord(MERCHANT, "idem-key", ENDPOINT, FINGERPRINT_SAME, "IN_FLIGHT", null, null, null);
         when(idempotencyStore.insertIfAbsent(any(), any(), any(), any())).thenReturn(Optional.of(inFlight));
 
-        assertThatThrownBy(() -> useCase.execute(input()))
-                .isInstanceOf(IdempotencyKeyInFlightException.class);
+        assertThatThrownBy(() -> useCase.execute(input())).isInstanceOf(IdempotencyKeyInFlightException.class);
 
         verify(paymentRepo, never()).save(any());
         verify(pspPort, never()).createCharge(any());
@@ -277,8 +286,7 @@ class CreatePaymentUseCaseTest {
                 .thenReturn(Optional.of(savedPayment(NOW.plus(EXPIRES_IN)))); // fresh PENDING per re-read
         when(paymentRepo.updateIfVersionMatches(any(), anyInt())).thenReturn(false, true); // first loses, second wins
 
-        assertThatThrownBy(() -> useCase.execute(input()))
-                .isInstanceOf(PspUnavailableException.class);
+        assertThatThrownBy(() -> useCase.execute(input())).isInstanceOf(PspUnavailableException.class);
 
         verify(paymentRepo, times(2)).updateIfVersionMatches(any(), anyInt()); // re-read + decide (BD-3)
     }
@@ -306,7 +314,9 @@ class CreatePaymentUseCaseTest {
         when(txidGenerator.generate()).thenReturn(TXID, TXID2);
         doThrow(new DuplicatePaymentTxidException(TXID))
                 .doNothing()
-                .when(paymentRepo).save(any());        when(pspPort.createCharge(any())).thenReturn(new ChargeResult(TXID2, PSP_EXPIRES, "E2E-1", "br"));
+                .when(paymentRepo)
+                .save(any());
+        when(pspPort.createCharge(any())).thenReturn(new ChargeResult(TXID2, PSP_EXPIRES, "E2E-1", "br"));
         when(paymentRepo.findByTxid(TXID2))
                 .thenReturn(Optional.of(Payment.create(TXID2, MERCHANT, AMOUNT, "x", PSP_EXPIRES, NOW)));
         when(paymentRepo.updateIfVersionMatches(any(), anyInt())).thenReturn(true);
@@ -328,8 +338,8 @@ class CreatePaymentUseCaseTest {
         body.put("expiresAt", PSP_EXPIRES.toString());
         body.put("brcode", "brcode-for-replay");
         body.put("expiresIn", "PT30M");
-        return new IdempotencyRecord(MERCHANT, "idem-key", ENDPOINT, FINGERPRINT_SAME,
-                "COMPLETED", TXID.value(), 201, body);
+        return new IdempotencyRecord(
+                MERCHANT, "idem-key", ENDPOINT, FINGERPRINT_SAME, "COMPLETED", TXID.value(), 201, body);
     }
 
     /** TransactionTemplate over a manager that runs the callback without a real transaction. */
@@ -338,10 +348,12 @@ class CreatePaymentUseCaseTest {
         public TransactionStatus getTransaction(TransactionDefinition definition) {
             return new SimpleTransactionStatus();
         }
+
         @Override
         public void commit(TransactionStatus status) {
             ((SimpleTransactionStatus) status).setCompleted();
         }
+
         @Override
         public void rollback(TransactionStatus status) {
             ((SimpleTransactionStatus) status).setCompleted();

@@ -7,7 +7,6 @@ import io.dargent.api.security.ApiKeyHasher;
 import io.dargent.ledger.application.EventIngestionUseCase;
 import io.dargent.ledger.application.LedgerReconciliationUseCase;
 import io.dargent.ledger.application.SettlementUseCase;
-import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -45,20 +44,19 @@ import tools.jackson.databind.json.JsonMapper;
  * balance row: both land, proof stays green, no lost update and never a negative available balance.
  */
 @SpringBootTest(
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    classes = {DargentApiApplication.class, LedgerSettlementIT.SettlementTestConfig.class},
-    properties = {
-        "dargent.relay.enabled=false",
-        "dargent.ledger.consumer.enabled=false",
-        "dargent.psp.webhook-secret=dev-only-secret"
-    })
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        classes = {DargentApiApplication.class, LedgerSettlementIT.SettlementTestConfig.class},
+        properties = {
+            "dargent.relay.enabled=false",
+            "dargent.ledger.consumer.enabled=false",
+            "dargent.psp.webhook-secret=dev-only-secret"
+        })
 @Testcontainers
 class LedgerSettlementIT {
 
     private static final UUID MERCHANT = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID KEY_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
-    private static final Clock FIXED_CLOCK =
-            Clock.fixed(Instant.parse("2027-01-01T12:00:00Z"), ZoneOffset.UTC);
+    private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2027-01-01T12:00:00Z"), ZoneOffset.UTC);
     private static final JsonMapper MAPPER = new JsonMapper();
 
     @Container
@@ -88,9 +86,9 @@ class LedgerSettlementIT {
     void setUp() {
         baseUrl = "http://localhost:" + port;
         jdbc.sql("truncate ledger.events, ledger.postings, ledger.journal_entries, ledger.balances, "
-                + "ledger.settlements, ledger.audit_log, payments.api_keys restart identity cascade").update();
-        jdbc.sql(
-                "insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
+                        + "ledger.settlements, ledger.audit_log, payments.api_keys restart identity cascade")
+                .update();
+        jdbc.sql("insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
                         + "values (:id, :merchant, 'ledger-settle-key', :prefix, :hash, now(), null)")
                 .param("id", KEY_ID)
                 .param("merchant", MERCHANT)
@@ -173,7 +171,9 @@ class LedgerSettlementIT {
         assertThat(pool.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
 
         long settled = jdbc.sql("select amount_cents from ledger.settlements where idempotency_key='race-settle-key'")
-                .query(Long.class).optional().orElse(0L);
+                .query(Long.class)
+                .optional()
+                .orElse(0L);
         long finalAvailable = available();
 
         // Both landed: a settlement exists and a confirm journal entry was posted.
@@ -188,7 +188,9 @@ class LedgerSettlementIT {
         assertThat(finalAvailable).isGreaterThanOrEqualTo(0);
         // No duplicate settlement for the key.
         assertThat(jdbc.sql("select count(*) from ledger.settlements where idempotency_key='race-settle-key'")
-                .query(Long.class).single()).isEqualTo(1);
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(1);
     }
 
     // ------------------------------------------------------------------ helpers
@@ -216,13 +218,15 @@ class LedgerSettlementIT {
     }
 
     private HttpResponse<String> postSettlement(String idemKey) throws Exception {
-        return http.send(HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl + "/v1/ledger/settlements"))
-                .header("Authorization", "Bearer " + rawKey)
-                .header("Content-Type", "application/json")
-                .header("Idempotency-Key", idemKey)
-                .POST(HttpRequest.BodyPublishers.noBody())
-                .build(), HttpResponse.BodyHandlers.ofString());
+        return http.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create(baseUrl + "/v1/ledger/settlements"))
+                        .header("Authorization", "Bearer " + rawKey)
+                        .header("Content-Type", "application/json")
+                        .header("Idempotency-Key", idemKey)
+                        .POST(HttpRequest.BodyPublishers.noBody())
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
     }
 
     private long available() {
@@ -231,20 +235,29 @@ class LedgerSettlementIT {
 
     private long balance(String account) {
         return jdbc.sql("select balance_cents from ledger.balances where account = :a")
-                .param("a", account).query(Long.class).optional().orElse(0L);
+                .param("a", account)
+                .query(Long.class)
+                .optional()
+                .orElse(0L);
     }
 
     private long journalEntries() {
-        return jdbc.sql("select count(*) from ledger.journal_entries").query(Long.class).single();
+        return jdbc.sql("select count(*) from ledger.journal_entries")
+                .query(Long.class)
+                .single();
     }
 
     private long settlementCount() {
-        return jdbc.sql("select count(*) from ledger.settlements").query(Long.class).single();
+        return jdbc.sql("select count(*) from ledger.settlements")
+                .query(Long.class)
+                .single();
     }
 
     private long auditCount(String command) {
         return jdbc.sql("select count(*) from ledger.audit_log where command = :c")
-                .param("c", command).query(Long.class).single();
+                .param("c", command)
+                .query(Long.class)
+                .single();
     }
 
     private void assertProofOk() {
@@ -264,8 +277,7 @@ class LedgerSettlementIT {
                     .locations(
                             "classpath:db/migration/payments",
                             "classpath:db/migration/ledger",
-                            "classpath:db/migration/notifications"
-                    )
+                            "classpath:db/migration/notifications")
                     .baselineOnMigrate(true)
                     .load();
             flyway.migrate();

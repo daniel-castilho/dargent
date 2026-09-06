@@ -6,13 +6,12 @@ import io.dargent.ledger.domain.model.JournalEntry;
 import io.dargent.ledger.domain.model.Posting;
 import io.dargent.ledger.domain.model.Settlement;
 import io.dargent.ledger.domain.port.out.LedgerStore;
-import org.springframework.transaction.support.TransactionTemplate;
-
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Settlement use case (spec §5.5): moves a merchant's full available balance to payouts in one
@@ -54,22 +53,22 @@ public final class SettlementUseCase {
             Instant now = clock.instant();
             UUID entryId = UUID.randomUUID();
             var postings = List.of(
-                    new Posting(UUID.randomUUID(), entryId,
+                    new Posting(
+                            UUID.randomUUID(),
+                            entryId,
                             "merchant:" + merchantId + ":available",
-                            EntryDirection.DEBIT, balance, now),
-                    new Posting(UUID.randomUUID(), entryId,
-                            "payouts:external",
-                            EntryDirection.CREDIT, balance, now)
-            );
-            var entry = new JournalEntry(entryId, null, idempotencyKey, merchantId,
-                    "Settlement for merchant " + merchantId, now, postings);
+                            EntryDirection.DEBIT,
+                            balance,
+                            now),
+                    new Posting(UUID.randomUUID(), entryId, "payouts:external", EntryDirection.CREDIT, balance, now));
+            var entry = new JournalEntry(
+                    entryId, null, idempotencyKey, merchantId, "Settlement for merchant " + merchantId, now, postings);
             store.postJournal(entry);
 
-            var settlement = new Settlement(UUID.randomUUID(), merchantId, idempotencyKey,
-                    balance, entryId, now);
+            var settlement = new Settlement(UUID.randomUUID(), merchantId, idempotencyKey, balance, entryId, now);
             Settlement persisted = store.insertSettlement(settlement).orElse(settlement);
-            store.recordAudit(new LedgerStore.AuditEntry(UUID.randomUUID(),
-                    "SETTLE", actorKeyId, merchantId, idempotencyKey));
+            store.recordAudit(
+                    new LedgerStore.AuditEntry(UUID.randomUUID(), "SETTLE", actorKeyId, merchantId, idempotencyKey));
             return SettlementResult.created(persisted);
         });
     }

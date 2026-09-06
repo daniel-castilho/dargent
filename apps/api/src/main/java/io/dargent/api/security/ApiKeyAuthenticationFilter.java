@@ -8,7 +8,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.Map;
-import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -39,8 +38,8 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
     }
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
-            FilterChain filterChain) throws ServletException, IOException {
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+            throws ServletException, IOException {
         // Webhook intake is HMAC-authenticated (E4) — skip API-key auth.
         if (request.getRequestURI().startsWith("/webhooks/psp")) {
             filterChain.doFilter(request, response);
@@ -48,7 +47,10 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
         }
         String auth = request.getHeader(AUTH_HEADER);
         if (auth == null || !auth.startsWith(BEARER_PREFIX)) {
-            errorWriter.write(request, response, ErrorCode.UNAUTHORIZED, "Missing or invalid Authorization header", (Map<String, String>) null);
+            errorWriter.write(
+                    request, response, ErrorCode.UNAUTHORIZED, "Missing or invalid Authorization header", (Map<
+                                    String, String>)
+                            null);
             return;
         }
         String rawKey = auth.substring(BEARER_PREFIX.length()).trim();
@@ -61,7 +63,8 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
         try {
             prefix = ApiKeyHasher.prefix(rawKey);
         } catch (IllegalArgumentException e) {
-            errorWriter.write(request, response, ErrorCode.UNAUTHORIZED, "Malformed API key", (Map<String, String>) null);
+            errorWriter.write(
+                    request, response, ErrorCode.UNAUTHORIZED, "Malformed API key", (Map<String, String>) null);
             return;
         }
 

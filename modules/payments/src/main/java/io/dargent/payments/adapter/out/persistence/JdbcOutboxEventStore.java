@@ -1,22 +1,21 @@
 package io.dargent.payments.adapter.out.persistence;
 
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ObjectNode;
 import io.dargent.payments.domain.model.OutboxId;
 import io.dargent.payments.domain.port.out.OutboxEventStore;
 import io.dargent.payments.domain.port.out.OutboxEventStore.OutboxRow;
-import io.dargent.payments.domain.port.out.OutboxEventStore.RequeueResult;
 import io.dargent.payments.domain.port.out.OutboxEventStore.RepublishResult;
+import io.dargent.payments.domain.port.out.OutboxEventStore.RequeueResult;
 import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /** JdbcClient implementation of the webhook event store (E4 spec §5.4). */
 @Repository
@@ -50,8 +49,7 @@ public class JdbcOutboxEventStore implements OutboxEventStore {
                             rs.getInt("version"),
                             rs.getString("payload"),
                             rs.getString("request_id"),
-                            rs.getInt("attempt_count")
-                    );
+                            rs.getInt("attempt_count"));
                 })
                 .list();
     }
@@ -136,7 +134,8 @@ public class JdbcOutboxEventStore implements OutboxEventStore {
         params.put("from", Timestamp.from(from));
         params.put("to", Timestamp.from(to));
         if (types != null && !types.isEmpty()) {
-            String placeholders = types.stream().map(t -> ":" + t.replace(".", "_")).collect(Collectors.joining(", "));
+            String placeholders =
+                    types.stream().map(t -> ":" + t.replace(".", "_")).collect(Collectors.joining(", "));
             sql += " and type in (" + placeholders + ")";
             for (int i = 0; i < types.size(); i++) {
                 params.put(types.get(i).replace(".", "_"), types.get(i));
@@ -154,15 +153,15 @@ public class JdbcOutboxEventStore implements OutboxEventStore {
                         rs.getInt("version"),
                         rs.getString("payload"),
                         rs.getString("request_id"),
-                        rs.getString("event_id")
-                ))
+                        rs.getString("event_id")))
                 .list();
 
         int matched = candidates.size();
         int republished = 0;
         for (int i = 0; i < matched; i++) {
             RepublishCandidate c = candidates.get(i);
-            String newEventId = UUID.nameUUIDFromBytes((c.eventId() + ":r" + (i + 1)).getBytes(StandardCharsets.UTF_8)).toString();
+            String newEventId = UUID.nameUUIDFromBytes((c.eventId() + ":r" + (i + 1)).getBytes(StandardCharsets.UTF_8))
+                    .toString();
             try {
                 int inserted = jdbc.sql("""
                         insert into payments.outbox (id, aggregate_id, type, version, payload, request_id, status, attempt_count, next_attempt_at)
@@ -206,8 +205,7 @@ public class JdbcOutboxEventStore implements OutboxEventStore {
             int version,
             String payload,
             String requestId,
-            String eventId
-    ) {}
+            String eventId) {}
 
     @Override
     public int purgeSent(Instant cutoff, int limit) {

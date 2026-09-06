@@ -27,8 +27,8 @@ public class RequestIdFilter extends OncePerRequestFilter {
     private static final Pattern VALID = Pattern.compile("[A-Za-z0-9-]{8,64}");
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
-            FilterChain filterChain) throws ServletException, IOException {
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+            throws ServletException, IOException {
         String requestId = request.getHeader(HEADER);
         if (requestId == null || !VALID.matcher(requestId).matches()) {
             requestId = UUID.randomUUID().toString();

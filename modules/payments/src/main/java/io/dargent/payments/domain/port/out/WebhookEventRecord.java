@@ -14,5 +14,4 @@ public record WebhookEventRecord(
         boolean signatureValid,
         String status,
         Instant receivedAt,
-        Instant processedAt
-) {}
+        Instant processedAt) {}

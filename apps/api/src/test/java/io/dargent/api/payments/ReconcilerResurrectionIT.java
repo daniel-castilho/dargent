@@ -44,20 +44,15 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * {@code Thread.sleep}; injected {@link Clock}.
  */
 @SpringBootTest(
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    classes = {DargentApiApplication.class, ReconcilerResurrectionIT.ReconcilerTestConfig.class},
-    properties = {
-        "dargent.psp.webhook-secret=dev-only-secret",
-        "DARGENT_RECONCILER_ENABLED=true"
-    }
-)
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        classes = {DargentApiApplication.class, ReconcilerResurrectionIT.ReconcilerTestConfig.class},
+        properties = {"dargent.psp.webhook-secret=dev-only-secret", "DARGENT_RECONCILER_ENABLED=true"})
 @Testcontainers
 class ReconcilerResurrectionIT {
 
     private static final UUID MERCHANT = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID KEY_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
-    private static final Clock FIXED_CLOCK =
-            Clock.fixed(Instant.parse("2026-09-02T10:00:00Z"), ZoneOffset.UTC);
+    private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2026-09-02T10:00:00Z"), ZoneOffset.UTC);
 
     @Container
     @ServiceConnection
@@ -76,9 +71,9 @@ class ReconcilerResurrectionIT {
     void setUp() {
         psp.reset();
         jdbc.sql("truncate payments.webhook_events, payments.outbox, payments.idempotency_keys, "
-                + "payments.audit_log, payments.payments, payments.api_keys restart identity cascade").update();
-        jdbc.sql(
-                "insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
+                        + "payments.audit_log, payments.payments, payments.api_keys restart identity cascade")
+                .update();
+        jdbc.sql("insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
                         + "values (:id, :merchant, 'it-key', :prefix, :hash, now(), null)")
                 .param("id", KEY_ID)
                 .param("merchant", MERCHANT)
@@ -97,9 +92,10 @@ class ReconcilerResurrectionIT {
 
         assertThat(scheduler.runOnce()).isEqualTo(1);
 
-        var pmt = jdbc.sql("select status, late_confirmation, version, end_to_end_id from payments.payments where txid=:t")
+        var pmt = jdbc.sql(
+                        "select status, late_confirmation, version, end_to_end_id from payments.payments where txid=:t")
                 .param("t", txid)
-                .query((rs, i) -> new Object[]{rs.getString(1), rs.getBoolean(2), rs.getInt(3), rs.getString(4)})
+                .query((rs, i) -> new Object[] {rs.getString(1), rs.getBoolean(2), rs.getInt(3), rs.getString(4)})
                 .single();
         assertThat(pmt[0]).isEqualTo("CONFIRMED");
         assertThat(pmt[1]).isEqualTo(Boolean.TRUE); // late=true (resurrected from EXPIRED)
@@ -108,9 +104,15 @@ class ReconcilerResurrectionIT {
 
         // Outbox: payment.confirmed with {amount, fee, net, late:true}
         assertThat(jdbc.sql("select count(*) from payments.outbox where aggregate_id=:t and type='payment.confirmed'")
-                .param("t", txid).query(Long.class).single()).isEqualTo(1);
-        String payload = jdbc.sql("select payload::text from payments.outbox where aggregate_id=:t and type='payment.confirmed'")
-                .param("t", txid).query(String.class).single();
+                        .param("t", txid)
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(1);
+        String payload = jdbc.sql(
+                        "select payload::text from payments.outbox where aggregate_id=:t and type='payment.confirmed'")
+                .param("t", txid)
+                .query(String.class)
+                .single();
         var pj = new tools.jackson.databind.json.JsonMapper().readTree(payload);
         assertThat(pj.at("/payload/amount").asLong()).isEqualTo(10000);
         assertThat(pj.at("/payload/fee").asLong()).isEqualTo(100);
@@ -119,12 +121,17 @@ class ReconcilerResurrectionIT {
 
         // Audit: exactly one confirm_from_reconciliation, NULL actor, correct merchant.
         Long auditCount = jdbc.sql(
-                "select count(*) from payments.audit_log where command_name='confirm_from_reconciliation' and aggregate_id=:t")
-                .param("t", txid).query(Long.class).single();
+                        "select count(*) from payments.audit_log where command_name='confirm_from_reconciliation' and aggregate_id=:t")
+                .param("t", txid)
+                .query(Long.class)
+                .single();
         assertThat(auditCount).isEqualTo(1);
-        UUID auditActor = jdbc.sql(
-                "select actor_key_id from payments.audit_log where command_name='confirm_from_reconciliation' and aggregate_id=:t")
-                .param("t", txid).query((rs, i) -> rs.getObject("actor_key_id", UUID.class)).stream()
+        UUID auditActor = jdbc
+                .sql(
+                        "select actor_key_id from payments.audit_log where command_name='confirm_from_reconciliation' and aggregate_id=:t")
+                .param("t", txid)
+                .query((rs, i) -> rs.getObject("actor_key_id", UUID.class))
+                .stream()
                 .filter(java.util.Objects::nonNull)
                 .findFirst()
                 .orElse(null);
@@ -133,9 +140,16 @@ class ReconcilerResurrectionIT {
         // Second run: already CONFIRMED → no second confirm (exactly-once resurrection).
         assertThat(scheduler.runOnce()).isZero();
         assertThat(jdbc.sql("select count(*) from payments.outbox where aggregate_id=:t and type='payment.confirmed'")
-                .param("t", txid).query(Long.class).single()).isEqualTo(1);
-        assertThat(jdbc.sql("select count(*) from payments.audit_log where command_name='confirm_from_reconciliation' and aggregate_id=:t")
-                .param("t", txid).query(Long.class).single()).isEqualTo(1);
+                        .param("t", txid)
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(1);
+        assertThat(jdbc.sql(
+                                "select count(*) from payments.audit_log where command_name='confirm_from_reconciliation' and aggregate_id=:t")
+                        .param("t", txid)
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(1);
     }
 
     @Test
@@ -148,9 +162,16 @@ class ReconcilerResurrectionIT {
         // Resurrection is the shared confirm path: no payment.expired outbox (the local EXPIRED was
         // the terminal-origin), and no dedicated "resurrect" command — only confirm_from_reconciliation.
         assertThat(jdbc.sql("select count(*) from payments.outbox where aggregate_id=:t and type='payment.expired'")
-                .param("t", txid).query(Long.class).single()).isZero();
-        assertThat(jdbc.sql("select count(*) from payments.audit_log where command_name='resurrect' and aggregate_id=:t")
-                .param("t", txid).query(Long.class).single()).isZero();
+                        .param("t", txid)
+                        .query(Long.class)
+                        .single())
+                .isZero();
+        assertThat(jdbc.sql(
+                                "select count(*) from payments.audit_log where command_name='resurrect' and aggregate_id=:t")
+                        .param("t", txid)
+                        .query(Long.class)
+                        .single())
+                .isZero();
     }
 
     // ========================================================================== helpers
@@ -195,8 +216,7 @@ class ReconcilerResurrectionIT {
                     .locations(
                             "classpath:db/migration/payments",
                             "classpath:db/migration/ledger",
-                            "classpath:db/migration/notifications"
-                    )
+                            "classpath:db/migration/notifications")
                     .baselineOnMigrate(true)
                     .cleanDisabled(false)
                     .load();
@@ -234,7 +254,11 @@ class ReconcilerResurrectionIT {
 
     /** Stateful HttpHandler for the PSP stub: creates charges and serves GET /cobs/{txid} with a state. */
     static final class PspStub {
-        enum State { OPEN, PAID, EXPIRED }
+        enum State {
+            OPEN,
+            PAID,
+            EXPIRED
+        }
 
         volatile State state = State.PAID;
 
@@ -256,9 +280,9 @@ class ReconcilerResurrectionIT {
                 String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
                 String txid = extractTxid(body);
                 respBody = ("{\"txid\":\"" + txid + "\",\"status\":\"OPEN\",\"amount\":10000,"
-                        + "\"expiresAt\":\"2026-09-03T10:00:00Z\",\"callbackUrl\":\"http://callback.local/hook\","
-                        + "\"description\":null,\"pixKey\":\"dargent-dev-receber@example.com\","
-                        + "\"receiverName\":\"Dargent Dev LTDA\",\"receiverCity\":\"SAO PAULO\"}")
+                                + "\"expiresAt\":\"2026-09-03T10:00:00Z\",\"callbackUrl\":\"http://callback.local/hook\","
+                                + "\"description\":null,\"pixKey\":\"dargent-dev-receber@example.com\","
+                                + "\"receiverName\":\"Dargent Dev LTDA\",\"receiverCity\":\"SAO PAULO\"}")
                         .getBytes(StandardCharsets.UTF_8);
             } else if ("GET".equals(method) && path.startsWith("/cobs/")) {
                 String txid = path.substring("/cobs/".length());
@@ -266,7 +290,8 @@ class ReconcilerResurrectionIT {
                 String e2e = state == State.PAID ? "\"" + PSP_E2E + "\"" : "null";
                 String paidAt = state == State.PAID ? "\"2026-09-02T09:59:30Z\"" : "null";
                 respBody = ("{\"txid\":\"" + txid + "\",\"status\":\"" + state + "\",\"amount\":10000,"
-                        + "\"expiresAt\":\"2026-09-03T10:00:00Z\",\"endToEndId\":" + e2e + ",\"paidAt\":" + paidAt + "}")
+                                + "\"expiresAt\":\"2026-09-03T10:00:00Z\",\"endToEndId\":" + e2e + ",\"paidAt\":"
+                                + paidAt + "}")
                         .getBytes(StandardCharsets.UTF_8);
             } else {
                 status = 404;

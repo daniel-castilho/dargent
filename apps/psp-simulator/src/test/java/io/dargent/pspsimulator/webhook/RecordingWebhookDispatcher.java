@@ -1,9 +1,8 @@
 package io.dargent.pspsimulator.webhook;
 
+import io.dargent.pspsimulator.charge.Charge;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
-
-import io.dargent.pspsimulator.charge.Charge;
 
 /**
  * Test double for {@link WebhookDispatcher}: records every dispatched charge so tests can assert

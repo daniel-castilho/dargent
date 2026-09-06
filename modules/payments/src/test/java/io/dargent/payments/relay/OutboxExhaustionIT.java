@@ -13,7 +13,6 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.UUID;
-import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -56,9 +55,9 @@ class OutboxExhaustionIT {
     static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:16-alpine");
 
     @Container
-    static final LocalStackContainer localstack =
-            new LocalStackContainer(DockerImageName.parse("localstack/localstack:3.8.1"))
-                    .withServices(LocalStackContainer.Service.SNS, LocalStackContainer.Service.SQS);
+    static final LocalStackContainer localstack = new LocalStackContainer(
+                    DockerImageName.parse("localstack/localstack:3.8.1"))
+            .withServices(LocalStackContainer.Service.SNS, LocalStackContainer.Service.SQS);
 
     private static HikariDataSource dataSource;
     private static JdbcClient jdbc;
@@ -82,9 +81,9 @@ class OutboxExhaustionIT {
 
         sns = snsClient();
         topicArn = sns.createTopic(CreateTopicRequest.builder()
-                .name(TOPIC)
-                .attributes(Map.of("FifoTopic", "true"))
-                .build())
+                        .name(TOPIC)
+                        .attributes(Map.of("FifoTopic", "true"))
+                        .build())
                 .topicArn();
 
         jdbc = JdbcClient.create(dataSource);
@@ -118,9 +117,11 @@ class OutboxExhaustionIT {
         // A publisher aimed at a topic that does not exist fails fast — deterministic forced failure.
         String brokenArn = topicArn.replace(TOPIC, TOPIC + "-missing");
         OutboxDeliveryUseCase broken = new OutboxDeliveryUseCase(
-                new JdbcOutboxEventStore(jdbc), publisher(brokenArn), MAPPER, CLOCK,
-                new OutboxDeliveryUseCase.Policy(32, 2, 1000, 3,
-                        Duration.ofSeconds(30), Duration.ofMinutes(5), 7),
+                new JdbcOutboxEventStore(jdbc),
+                publisher(brokenArn),
+                MAPPER,
+                CLOCK,
+                new OutboxDeliveryUseCase.Policy(32, 2, 1000, 3, Duration.ofSeconds(30), Duration.ofMinutes(5), 7),
                 new TransactionTemplate(new DataSourceTransactionManager(dataSource)),
                 new io.dargent.payments.application.PaymentsMetrics(
                         new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
@@ -144,7 +145,8 @@ class OutboxExhaustionIT {
         assertThat(broken.runOnce(32)).isZero();
         assertRow(rowId, "EXHAUSTED", 3, null);
         Long pending = jdbc.sql("select count(*) from payments.outbox where status='PENDING'")
-                .query(Long.class).single();
+                .query(Long.class)
+                .single();
         assertThat(pending).isZero();
     }
 
@@ -154,18 +156,16 @@ class OutboxExhaustionIT {
         if (nextAttemptAt == null) {
             // EXHAUSTED: only status + attempt_count are contract (§2); next_attempt_at is stale
             // and irrelevant — EXHAUSTED rows are never re-claimed regardless of its value.
-            Object[] row = jdbc.sql(
-                    "select status, attempt_count from payments.outbox where id = :id")
+            Object[] row = jdbc.sql("select status, attempt_count from payments.outbox where id = :id")
                     .param("id", id)
-                    .query((rs, i) -> new Object[]{rs.getString(1), rs.getInt(2)})
+                    .query((rs, i) -> new Object[] {rs.getString(1), rs.getInt(2)})
                     .single();
             assertThat(row[0]).isEqualTo(status);
             assertThat(row[1]).isEqualTo(attempts);
         } else {
-            Object[] row = jdbc.sql(
-                    "select status, attempt_count, next_attempt_at from payments.outbox where id = :id")
+            Object[] row = jdbc.sql("select status, attempt_count, next_attempt_at from payments.outbox where id = :id")
                     .param("id", id)
-                    .query((rs, i) -> new Object[]{rs.getString(1), rs.getInt(2), rs.getTimestamp(3)})
+                    .query((rs, i) -> new Object[] {rs.getString(1), rs.getInt(2), rs.getTimestamp(3)})
                     .single();
             assertThat(row[0]).isEqualTo(status);
             assertThat(row[1]).isEqualTo(attempts);
@@ -190,18 +190,23 @@ class OutboxExhaustionIT {
     private static SnsClient snsClient() {
         return SnsClient.builder()
                 .region(Region.of(REGION))
-                .endpointOverride(URI.create(
-                        localstack.getEndpointOverride(LocalStackContainer.Service.SNS).toString()))
+                .endpointOverride(URI.create(localstack
+                        .getEndpointOverride(LocalStackContainer.Service.SNS)
+                        .toString()))
                 .httpClient(UrlConnectionHttpClient.builder().build())
-                .credentialsProvider(StaticCredentialsProvider.create(
-                        AwsBasicCredentials.create("test", "test")))
+                .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create("test", "test")))
                 .overrideConfiguration(c -> c.apiCallAttemptTimeout(Duration.ofSeconds(5)))
                 .build();
     }
 
     private static SnsEventPublisher publisher(String arn) {
-        return new SnsEventPublisher(arn, 2000, REGION,
-                localstack.getEndpointOverride(LocalStackContainer.Service.SNS).toString(), "test", "test");
+        return new SnsEventPublisher(
+                arn,
+                2000,
+                REGION,
+                localstack.getEndpointOverride(LocalStackContainer.Service.SNS).toString(),
+                "test",
+                "test");
     }
 
     /** Full E3 §5.6 envelope payload with eventId. */
@@ -231,11 +236,32 @@ class OutboxExhaustionIT {
     /** A clock whose instant can be advanced by exact ladder rungs (no sleeps). */
     static final class MutableClock extends Clock {
         private Instant now;
-        MutableClock(Instant now) { this.now = now; }
-        void reset() { this.now = START; }
-        void advance(Duration d) { this.now = this.now.plus(d); }
-        @Override public Instant instant() { return now; }
-        @Override public java.time.ZoneId getZone() { return ZoneOffset.UTC; }
-        @Override public Clock withZone(java.time.ZoneId zone) { return this; }
+
+        MutableClock(Instant now) {
+            this.now = now;
+        }
+
+        void reset() {
+            this.now = START;
+        }
+
+        void advance(Duration d) {
+            this.now = this.now.plus(d);
+        }
+
+        @Override
+        public Instant instant() {
+            return now;
+        }
+
+        @Override
+        public java.time.ZoneId getZone() {
+            return ZoneOffset.UTC;
+        }
+
+        @Override
+        public Clock withZone(java.time.ZoneId zone) {
+            return this;
+        }
     }
 }

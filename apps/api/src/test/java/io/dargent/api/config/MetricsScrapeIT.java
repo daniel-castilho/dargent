@@ -93,34 +93,33 @@ import tools.jackson.databind.json.JsonMapper;
  * </ol>
  */
 @SpringBootTest(
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    classes = {DargentApiApplication.class, MetricsScrapeIT.MetricsTestConfig.class},
-    properties = {
-        "spring.profiles.active=prod",
-        "management.server.port=9090",
-        "DARGENT_DB_PASSWORD=prod-test-password-that-is-at-least-32-chars-long",
-        "AWS_ACCESS_KEY_ID=test-access-key",
-        "AWS_SECRET_ACCESS_KEY=test-secret-key",
-        "PSP_BASE_URL=http://psp-stub:8090",
-        "PSP_WEBHOOK_SECRET=prod-test-webhook-secret-that-is-long-enough",
-        "dargent.psp.webhook-secret=prod-test-webhook-secret-that-is-long-enough",
-        "dargent.relay.enabled=true",
-        "dargent.ledger.consumer.enabled=true",
-        "DARGENT_RECONCILER_ENABLED=true",
-        "DARGENT_EXPIRATION_ENABLED=true",
-        // Huge intervals: scheduler beans boot (for direct runOnce()) but never fire on their own
-        "DARGENT_RECONCILER_SCAN_MS=3600000",
-        "DARGENT_EXPIRATION_INTERVAL_MS=3600000",
-        "DARGENT_RELAY_POLL_MS=3600000",
-        "DARGENT_RELAY_BATCH=32",
-        "DARGENT_RELAY_WORKERS=2",
-        "DARGENT_RELAY_MAX_ATTEMPTS=3",
-        "DARGENT_OUTBOX_RETENTION_DAYS=7",
-        "DARGENT_EVENTS_PUBLISH_TIMEOUT_MS=2000",
-        "DARGENT_RECONCILER_GIVE_UP_HOURS=72",
-        "DARGENT_RECONCILER_BACKOFF_MS=60000,300000,900000,3600000"
-    }
-)
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        classes = {DargentApiApplication.class, MetricsScrapeIT.MetricsTestConfig.class},
+        properties = {
+            "spring.profiles.active=prod",
+            "management.server.port=9090",
+            "DARGENT_DB_PASSWORD=prod-test-password-that-is-at-least-32-chars-long",
+            "AWS_ACCESS_KEY_ID=test-access-key",
+            "AWS_SECRET_ACCESS_KEY=test-secret-key",
+            "PSP_BASE_URL=http://psp-stub:8090",
+            "PSP_WEBHOOK_SECRET=prod-test-webhook-secret-that-is-long-enough",
+            "dargent.psp.webhook-secret=prod-test-webhook-secret-that-is-long-enough",
+            "dargent.relay.enabled=true",
+            "dargent.ledger.consumer.enabled=true",
+            "DARGENT_RECONCILER_ENABLED=true",
+            "DARGENT_EXPIRATION_ENABLED=true",
+            // Huge intervals: scheduler beans boot (for direct runOnce()) but never fire on their own
+            "DARGENT_RECONCILER_SCAN_MS=3600000",
+            "DARGENT_EXPIRATION_INTERVAL_MS=3600000",
+            "DARGENT_RELAY_POLL_MS=3600000",
+            "DARGENT_RELAY_BATCH=32",
+            "DARGENT_RELAY_WORKERS=2",
+            "DARGENT_RELAY_MAX_ATTEMPTS=3",
+            "DARGENT_OUTBOX_RETENTION_DAYS=7",
+            "DARGENT_EVENTS_PUBLISH_TIMEOUT_MS=2000",
+            "DARGENT_RECONCILER_GIVE_UP_HOURS=72",
+            "DARGENT_RECONCILER_BACKOFF_MS=60000,300000,900000,3600000"
+        })
 @Testcontainers
 class MetricsScrapeIT {
 
@@ -141,9 +140,9 @@ class MetricsScrapeIT {
     static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:16-alpine");
 
     @Container
-    static final LocalStackContainer localstack =
-            new LocalStackContainer(DockerImageName.parse("localstack/localstack:3.8.1"))
-                    .withServices(LocalStackContainer.Service.SNS, LocalStackContainer.Service.SQS);
+    static final LocalStackContainer localstack = new LocalStackContainer(
+                    DockerImageName.parse("localstack/localstack:3.8.1"))
+            .withServices(LocalStackContainer.Service.SNS, LocalStackContainer.Service.SQS);
 
     private static SnsClient sns;
     private static SqsClient sqs;
@@ -196,7 +195,8 @@ class MetricsScrapeIT {
     static void awsEnvironment(DynamicPropertyRegistry registry) {
         ensureTopology();
         registry.add("AWS_ENDPOINT_URL", () -> localstack
-                .getEndpointOverride(LocalStackContainer.Service.SNS).toString());
+                .getEndpointOverride(LocalStackContainer.Service.SNS)
+                .toString());
         registry.add("AWS_REGION", () -> REGION);
         registry.add("DARGENT_EVENTS_TOPIC_ARN", () -> topicArn);
         registry.add("DARGENT_LEDGER_QUEUE_URL", () -> ledgerUrl);
@@ -209,12 +209,12 @@ class MetricsScrapeIT {
         psp.reset();
         clock.reset();
         jdbc.sql("truncate ledger.events, ledger.postings, ledger.journal_entries, ledger.balances, "
-                + "ledger.settlements, ledger.audit_log, "
-                + "payments.webhook_events, payments.outbox, payments.idempotency_keys, "
-                + "payments.refunds, payments.audit_log, payments.payments, payments.api_keys "
-                + "restart identity cascade").update();
-        jdbc.sql(
-                "insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
+                        + "ledger.settlements, ledger.audit_log, "
+                        + "payments.webhook_events, payments.outbox, payments.idempotency_keys, "
+                        + "payments.refunds, payments.audit_log, payments.payments, payments.api_keys "
+                        + "restart identity cascade")
+                .update();
+        jdbc.sql("insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
                         + "values (:id, :merchant, 'it-key', :prefix, :hash, now(), null)")
                 .param("id", KEY_ID)
                 .param("merchant", MERCHANT)
@@ -236,11 +236,11 @@ class MetricsScrapeIT {
     void allEightFrozenSeries_present_nonZero_withFrozenTags_afterAllLegs() throws Exception {
         // ----------------------------------------------------------------- leg A: create + relay
         String txidMain = createPayment("idem-metrics-01", 10000, "Metrics leg A");
-        createPayment("idem-metrics-01", 10000, "Metrics leg A");              // replayed
+        createPayment("idem-metrics-01", 10000, "Metrics leg A"); // replayed
         createPaymentExpect("idem-metrics-01", 409, 1000, "Metrics conflict"); // conflict: different body
         String inFlightBody = "{\"amount\":10000,\"description\":\"Metrics in-flight\"}";
         seedInFlightRow("idem-metrics-inflight", fingerprintOf(inFlightBody));
-        createPaymentBodyExpect("idem-metrics-inflight", 425, inFlightBody);   // in_flight
+        createPaymentBodyExpect("idem-metrics-inflight", 425, inFlightBody); // in_flight
 
         int relayed = relay.runOnce(relayPolicy.batchSize());
         assertThat(relayed).isGreaterThan(0);
@@ -248,38 +248,39 @@ class MetricsScrapeIT {
         // ------------------------------------------------- leg B: webhook confirm + signature failures
         postSignedWebhook(paymentConfirmedBody(txidMain, 10000));
         postWebhookExpiredTimestamp(paymentConfirmedBody(txidMain, 10000));
-        postWebhookInvalidSignature("{\"eventId\":\"evt-bad\",\"type\":\"payment.confirmed\","
-                + "\"txid\":\"" + txidMain + "\"}");
+        postWebhookInvalidSignature(
+                "{\"eventId\":\"evt-bad\",\"type\":\"payment.confirmed\"," + "\"txid\":\"" + txidMain + "\"}");
 
         // ---------------------------------------- leg C: reconciler confirm + resurrect + expire
         String txidConfirm = seedPendingPayment("RECCONFIRM", START.minusSeconds(60), START.plusSeconds(7200));
         psp.paidFor(txidConfirm);
         assertThat(reconciliationScheduler.runOnce()).isEqualTo(1);
 
-
         String txidResurrect = seedExpiredPayment("RECRESUR");
         psp.paidFor(txidResurrect);
         assertThat(reconciliationScheduler.runOnce()).isEqualTo(1);
 
-
         String txidReconExpire = seedPendingPayment("RECEXP", START.minusSeconds(60), START.minusSeconds(30));
         psp.expiredFor(txidReconExpire);
         assertThat(reconciliationScheduler.runOnce()).isEqualTo(1);
-
 
         // ------------------------------------------------------------------- leg D: expiration
         String txidExpiry = seedPendingPayment("EXPLEG", null, START.minusSeconds(30));
         assertThat(expirationScheduler.runOnce()).isEqualTo(1);
 
         // ------------------------------------------------------------------ leg E: refund legs
-        postRefundExpect(txidExpiry, 5000, "idem-ref-notrefundable", 409);  // not_refundable (EXPIRED)
+        postRefundExpect(txidExpiry, 5000, "idem-ref-notrefundable", 409); // not_refundable (EXPIRED)
         String txidRefundBase = seedConfirmedPayment("REFBASE", 10000, 0);
-        postRefundExpect(txidRefundBase, 20000, "idem-ref-exceeds", 409);  // exceeds_remaining
-        postRefundExpect(txidRefundBase, 4000, "idem-ref-ok", 201);         // valid refund
+        postRefundExpect(txidRefundBase, 20000, "idem-ref-exceeds", 409); // exceeds_remaining
+        postRefundExpect(txidRefundBase, 4000, "idem-ref-ok", 201); // valid refund
 
         // ---------------------------------------- leg F: outbox failed + exhausted (broken relay)
-        UUID brokenRow = seedOutboxRow("payment.created", UUID.randomUUID().toString(),
-                txidMain, "req-metrics-broken", START.minusSeconds(30));
+        UUID brokenRow = seedOutboxRow(
+                "payment.created",
+                UUID.randomUUID().toString(),
+                txidMain,
+                "req-metrics-broken",
+                START.minusSeconds(30));
         OutboxDeliveryUseCase broken = brokenRelay();
         assertThat(broken.runOnce(32)).isZero(); // attempt 1 → failed
         clock.advance(Duration.ofSeconds(30));
@@ -287,11 +288,18 @@ class MetricsScrapeIT {
         clock.advance(Duration.ofMinutes(2));
         assertThat(broken.runOnce(32)).isZero(); // attempt 3 → EXHAUSTED
         assertThat(jdbc.sql("select status from payments.outbox where id = :id")
-                .param("id", brokenRow).query(String.class).single()).isEqualTo("EXHAUSTED");
+                        .param("id", brokenRow)
+                        .query(String.class)
+                        .single())
+                .isEqualTo("EXHAUSTED");
 
         // --------------------------------------------------------------------- leg G: lag gauge
-        seedOutboxRow("payment.created", UUID.randomUUID().toString(),
-                txidMain, "req-metrics-lag", START.minusSeconds(600)); // due 10 min ago → lag ≥ 600 s
+        seedOutboxRow(
+                "payment.created",
+                UUID.randomUUID().toString(),
+                txidMain,
+                "req-metrics-lag",
+                START.minusSeconds(600)); // due 10 min ago → lag ≥ 600 s
 
         // ----------------------------------------------------------------------- leg H: DLQ gauge
         sqs.sendMessage(b -> b.queueUrl(ledgerDlqUrl)
@@ -306,11 +314,16 @@ class MetricsScrapeIT {
         // at 0 with both frozen scopes. The setUp seeded a journal-less available balance for the
         // refund guard (leg E already consumed it) — drop it so the proof sees the real ledger.
         jdbc.sql("delete from ledger.balances where account = :a")
-                .param("a", "merchant:" + MERCHANT + ":available").update();
-        String proofBody = http.send(HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl + "/v1/ledger/proof"))
-                .header("Authorization", "Bearer " + rawKey)
-                .GET().build(), HttpResponse.BodyHandlers.ofString()).body();
+                .param("a", "merchant:" + MERCHANT + ":available")
+                .update();
+        String proofBody = http.send(
+                        HttpRequest.newBuilder()
+                                .uri(URI.create(baseUrl + "/v1/ledger/proof"))
+                                .header("Authorization", "Bearer " + rawKey)
+                                .GET()
+                                .build(),
+                        HttpResponse.BodyHandlers.ofString())
+                .body();
         assertThat(proofBody).contains("\"ok\":true");
 
         // ======================================================================= scrape + asserts
@@ -322,20 +335,44 @@ class MetricsScrapeIT {
 
     private void assertAllSeries(String scrape) {
         // 1. transitions — one assert per exercised vocabulary entry
-        assertSeries(scrape, "dargent_payments_transitions_total",
-                "from=\"none\"", "to=\"PENDING\"", "outcome=\"create\"");
-        assertSeries(scrape, "dargent_payments_transitions_total",
-                "from=\"PENDING\"", "to=\"CONFIRMED\"", "outcome=\"webhook_confirm\"");
-        assertSeries(scrape, "dargent_payments_transitions_total",
-                "from=\"PENDING\"", "to=\"CONFIRMED\"", "outcome=\"reconciler_confirm\"");
-        assertSeries(scrape, "dargent_payments_transitions_total",
-                "from=\"EXPIRED\"", "to=\"CONFIRMED\"", "outcome=\"reconciler_confirm\"");
-        assertSeries(scrape, "dargent_payments_transitions_total",
-                "from=\"PENDING\"", "to=\"EXPIRED\"", "outcome=\"reconciler_expire\"");
-        assertSeries(scrape, "dargent_payments_transitions_total",
-                "from=\"PENDING\"", "to=\"EXPIRED\"", "outcome=\"expiry\"");
-        assertSeries(scrape, "dargent_payments_transitions_total",
-                "from=\"CONFIRMED\"", "to=\"PARTIALLY_REFUNDED\"", "outcome=\"refund\"");
+        assertSeries(
+                scrape, "dargent_payments_transitions_total", "from=\"none\"", "to=\"PENDING\"", "outcome=\"create\"");
+        assertSeries(
+                scrape,
+                "dargent_payments_transitions_total",
+                "from=\"PENDING\"",
+                "to=\"CONFIRMED\"",
+                "outcome=\"webhook_confirm\"");
+        assertSeries(
+                scrape,
+                "dargent_payments_transitions_total",
+                "from=\"PENDING\"",
+                "to=\"CONFIRMED\"",
+                "outcome=\"reconciler_confirm\"");
+        assertSeries(
+                scrape,
+                "dargent_payments_transitions_total",
+                "from=\"EXPIRED\"",
+                "to=\"CONFIRMED\"",
+                "outcome=\"reconciler_confirm\"");
+        assertSeries(
+                scrape,
+                "dargent_payments_transitions_total",
+                "from=\"PENDING\"",
+                "to=\"EXPIRED\"",
+                "outcome=\"reconciler_expire\"");
+        assertSeries(
+                scrape,
+                "dargent_payments_transitions_total",
+                "from=\"PENDING\"",
+                "to=\"EXPIRED\"",
+                "outcome=\"expiry\"");
+        assertSeries(
+                scrape,
+                "dargent_payments_transitions_total",
+                "from=\"CONFIRMED\"",
+                "to=\"PARTIALLY_REFUNDED\"",
+                "outcome=\"refund\"");
 
         // 2. outbox lag: seeded row due 10 minutes ago → ≥ 600 s
         assertGaugeAtLeast(scrape, "dargent_outbox_lag_seconds", 600.0);
@@ -372,8 +409,7 @@ class MetricsScrapeIT {
 
         // 10. N12 SLO buckets: the 0.25s bucket line exists (http_server_requests_seconds_bucket).
         assertThat(scrape).contains("http_server_requests_seconds_bucket{");
-        assertThat(scrape).containsPattern(
-                "http_server_requests_seconds_bucket\\{[^}]*le=\"0.25\"[^}]*\\}");
+        assertThat(scrape).containsPattern("http_server_requests_seconds_bucket\\{[^}]*le=\"0.25\"[^}]*\\}");
     }
 
     // ================================================================================ helpers
@@ -382,20 +418,22 @@ class MetricsScrapeIT {
         return createPaymentExpect(idemKey, 201, amount, description);
     }
 
-    private String createPaymentExpect(String idemKey, int expectedStatus, long amount,
-            String description) throws Exception {
-        return createPaymentBodyExpect(idemKey, expectedStatus,
-                "{\"amount\":" + amount + ",\"description\":\"" + description + "\"}");
+    private String createPaymentExpect(String idemKey, int expectedStatus, long amount, String description)
+            throws Exception {
+        return createPaymentBodyExpect(
+                idemKey, expectedStatus, "{\"amount\":" + amount + ",\"description\":\"" + description + "\"}");
     }
 
     private String createPaymentBodyExpect(String idemKey, int expectedStatus, String body) throws Exception {
-        var resp = http.send(HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl + "/v1/payments"))
-                .header("Authorization", "Bearer " + rawKey)
-                .header("Content-Type", "application/json")
-                .header("Idempotency-Key", idemKey)
-                .POST(HttpRequest.BodyPublishers.ofString(body))
-                .build(), HttpResponse.BodyHandlers.ofString());
+        var resp = http.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create(baseUrl + "/v1/payments"))
+                        .header("Authorization", "Bearer " + rawKey)
+                        .header("Content-Type", "application/json")
+                        .header("Idempotency-Key", idemKey)
+                        .POST(HttpRequest.BodyPublishers.ofString(body))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
         assertThat(resp.statusCode()).isEqualTo(expectedStatus);
         return expectedStatus == 201 ? extractTxid(resp.body()) : null;
     }
@@ -408,8 +446,8 @@ class MetricsScrapeIT {
     /** SHA-256 hex of the raw body — the same canonical fingerprint the controller computes. */
     private static String fingerprintOf(String body) {
         try {
-            return HexFormat.of().formatHex(
-                    MessageDigest.getInstance("SHA-256").digest(body.getBytes(StandardCharsets.UTF_8)));
+            return HexFormat.of()
+                    .formatHex(MessageDigest.getInstance("SHA-256").digest(body.getBytes(StandardCharsets.UTF_8)));
         } catch (Exception e) {
             throw new IllegalStateException(e);
         }
@@ -437,14 +475,16 @@ class MetricsScrapeIT {
     }
 
     private void postWebhookRaw(String body, String ts, String signature, int expectedStatus) throws Exception {
-        var resp = http.send(HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl + "/webhooks/psp"))
-                .header("Content-Type", "application/json")
-                .header("X-PSP-Timestamp", ts)
-                .header("X-PSP-Signature", signature)
-                .header("X-Request-Id", "req-metrics-" + UUID.randomUUID())
-                .POST(HttpRequest.BodyPublishers.ofString(body))
-                .build(), HttpResponse.BodyHandlers.ofString());
+        var resp = http.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create(baseUrl + "/webhooks/psp"))
+                        .header("Content-Type", "application/json")
+                        .header("X-PSP-Timestamp", ts)
+                        .header("X-PSP-Signature", signature)
+                        .header("X-Request-Id", "req-metrics-" + UUID.randomUUID())
+                        .POST(HttpRequest.BodyPublishers.ofString(body))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
         assertThat(resp.statusCode()).isEqualTo(expectedStatus);
     }
 
@@ -460,13 +500,15 @@ class MetricsScrapeIT {
     }
 
     private void postRefundExpect(String txid, long amount, String idemKey, int expectedStatus) throws Exception {
-        var resp = http.send(HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl + "/v1/payments/" + txid + "/refunds"))
-                .header("Authorization", "Bearer " + rawKey)
-                .header("Content-Type", "application/json")
-                .header("Idempotency-Key", idemKey)
-                .POST(HttpRequest.BodyPublishers.ofString("{\"amount\":" + amount + "}"))
-                .build(), HttpResponse.BodyHandlers.ofString());
+        var resp = http.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create(baseUrl + "/v1/payments/" + txid + "/refunds"))
+                        .header("Authorization", "Bearer " + rawKey)
+                        .header("Content-Type", "application/json")
+                        .header("Idempotency-Key", idemKey)
+                        .POST(HttpRequest.BodyPublishers.ofString("{\"amount\":" + amount + "}"))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
         assertThat(resp.statusCode()).isEqualTo(expectedStatus);
     }
 
@@ -491,7 +533,8 @@ class MetricsScrapeIT {
     private String seedPendingPayment(String tag, Instant nextReconcileAt, Instant expiresAt) {
         UUID id = UUID.randomUUID();
         String txid = (tag + UUID.randomUUID().toString().replace("-", ""))
-                .toUpperCase().substring(0, 25);
+                .toUpperCase()
+                .substring(0, 25);
         jdbc.sql("""
                 insert into payments.payments (id, txid, merchant_id, description, amount_cents, status, version,
                     expires_at, end_to_end_id, fee_cents, net_cents, late_confirmation, refunded_cents, created_at,
@@ -505,8 +548,7 @@ class MetricsScrapeIT {
                 .param("merchant", MERCHANT)
                 .param("expiresAt", java.sql.Timestamp.from(expiresAt))
                 .param("created", java.sql.Timestamp.from(START.minusSeconds(3600)))
-                .param("nextReconcileAt",
-                        nextReconcileAt == null ? null : java.sql.Timestamp.from(nextReconcileAt))
+                .param("nextReconcileAt", nextReconcileAt == null ? null : java.sql.Timestamp.from(nextReconcileAt))
                 .update();
         return txid;
     }
@@ -518,7 +560,8 @@ class MetricsScrapeIT {
     private String seedExpiredPayment(String tag) {
         UUID id = UUID.randomUUID();
         String txid = (tag + UUID.randomUUID().toString().replace("-", ""))
-                .toUpperCase().substring(0, 25);
+                .toUpperCase()
+                .substring(0, 25);
         jdbc.sql("""
                 insert into payments.payments (id, txid, merchant_id, description, amount_cents, status, version,
                     expires_at, end_to_end_id, fee_cents, net_cents, late_confirmation, refunded_cents, created_at,
@@ -588,8 +631,7 @@ class MetricsScrapeIT {
                 broken,
                 MAPPER,
                 clock,
-                new OutboxDeliveryUseCase.Policy(32, 2, 1000, 3,
-                        Duration.ofSeconds(30), Duration.ofMinutes(5), 7),
+                new OutboxDeliveryUseCase.Policy(32, 2, 1000, 3, Duration.ofSeconds(30), Duration.ofMinutes(5), 7),
                 txTemplate,
                 new PaymentsMetrics(meterRegistry));
     }
@@ -597,10 +639,12 @@ class MetricsScrapeIT {
     // ================================================================================ scrape
 
     private String scrapePrometheus() throws Exception {
-        var resp = http.send(HttpRequest.newBuilder()
-                .uri(URI.create("http://localhost:9090/actuator/prometheus"))
-                .GET()
-                .build(), HttpResponse.BodyHandlers.ofString());
+        var resp = http.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create("http://localhost:9090/actuator/prometheus"))
+                        .GET()
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
         assertThat(resp.statusCode()).isEqualTo(200);
         return resp.body();
     }
@@ -628,8 +672,8 @@ class MetricsScrapeIT {
                 return;
             }
         }
-        throw new AssertionError("Missing metric series " + name + " with tags " + tagString
-                + "\nscrape excerpt:\n" + excerpt(scrape, name));
+        throw new AssertionError("Missing metric series " + name + " with tags " + tagString + "\nscrape excerpt:\n"
+                + excerpt(scrape, name));
     }
 
     /** Asserts a counter series line exists and equals the expected value (N8 presence-at-zero). */
@@ -644,8 +688,8 @@ class MetricsScrapeIT {
                 return;
             }
         }
-        throw new AssertionError("Missing metric series " + name + " with tag " + tag
-                + "\nscrape excerpt:\n" + excerpt(scrape, name));
+        throw new AssertionError(
+                "Missing metric series " + name + " with tag " + tag + "\nscrape excerpt:\n" + excerpt(scrape, name));
     }
 
     /** Asserts a gauge line {@code name value} (no tags) exists with value ≥ min. */
@@ -657,8 +701,8 @@ class MetricsScrapeIT {
                 return;
             }
         }
-        throw new AssertionError("Gauge " + name + " never reached " + min
-                + "\nscrape excerpt:\n" + excerpt(scrape, name));
+        throw new AssertionError(
+                "Gauge " + name + " never reached " + min + "\nscrape excerpt:\n" + excerpt(scrape, name));
     }
 
     /** Asserts a gauge line with the given tag exists and equals the expected value. */
@@ -673,8 +717,8 @@ class MetricsScrapeIT {
                 return;
             }
         }
-        throw new AssertionError("Missing gauge " + name + " with tag " + tag
-                + "\nscrape excerpt:\n" + excerpt(scrape, name));
+        throw new AssertionError(
+                "Missing gauge " + name + " with tag " + tag + "\nscrape excerpt:\n" + excerpt(scrape, name));
     }
 
     private static String excerpt(String scrape, String name) {
@@ -696,14 +740,12 @@ class MetricsScrapeIT {
         sqs = SqsClient.builder()
                 .endpointOverride(localstack.getEndpointOverride(LocalStackContainer.Service.SQS))
                 .region(Region.of(REGION))
-                .credentialsProvider(StaticCredentialsProvider.create(
-                        AwsBasicCredentials.create("test", "test")))
+                .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create("test", "test")))
                 .build();
         sns = SnsClient.builder()
                 .endpointOverride(localstack.getEndpointOverride(LocalStackContainer.Service.SNS))
                 .region(Region.of(REGION))
-                .credentialsProvider(StaticCredentialsProvider.create(
-                        AwsBasicCredentials.create("test", "test")))
+                .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create("test", "test")))
                 .build();
         String ledgerDlqQueueUrl = createFifoQueue(sqs, LEDGER_DLQ, null);
         String notifsDlqQueueUrl = createFifoQueue(sqs, NOTIFS_DLQ, null);
@@ -716,9 +758,12 @@ class MetricsScrapeIT {
         ledgerDlqUrl = sqs.getQueueUrl(r -> r.queueName(LEDGER_DLQ)).queueUrl();
         String ledgerArn = arnOf(ledgerUrl);
         topicArn = sns.createTopic(r -> r.name(TOPIC_NAME)
-                .attributes(Map.of("FifoTopic", "true", "ContentBasedDeduplication", "false"))).topicArn();
+                        .attributes(Map.of("FifoTopic", "true", "ContentBasedDeduplication", "false")))
+                .topicArn();
         // RawMessageDelivery so the consumer passes the envelope straight to the use case.
-        sns.subscribe(r -> r.topicArn(topicArn).protocol("sqs").endpoint(ledgerArn)
+        sns.subscribe(r -> r.topicArn(topicArn)
+                .protocol("sqs")
+                .endpoint(ledgerArn)
                 .attributes(Map.of("RawMessageDelivery", "true")));
     }
 
@@ -732,9 +777,9 @@ class MetricsScrapeIT {
     }
 
     private static String arnOf(String url) {
-        return sqs.getQueueAttributes(r -> r.queueUrl(url)
-                .attributeNames(QueueAttributeName.QUEUE_ARN))
-                .attributes().get(QueueAttributeName.QUEUE_ARN);
+        return sqs.getQueueAttributes(r -> r.queueUrl(url).attributeNames(QueueAttributeName.QUEUE_ARN))
+                .attributes()
+                .get(QueueAttributeName.QUEUE_ARN);
     }
 
     // ================================================================================ PSP stub
@@ -742,7 +787,11 @@ class MetricsScrapeIT {
     /** PSP stub with per-txid state: create serves the ChargeResult shape, GET serves cob state. */
     static final class PspStub {
 
-        enum State { OPEN, PAID, EXPIRED }
+        enum State {
+            OPEN,
+            PAID,
+            EXPIRED
+        }
 
         private final Map<String, State> states = new java.util.concurrent.ConcurrentHashMap<>();
 
@@ -770,12 +819,11 @@ class MetricsScrapeIT {
             try {
                 if ("POST".equals(method) && "/cobs".equals(path)) {
                     status = 200;
-                    String requestBody = new String(exchange.getRequestBody().readAllBytes(),
-                            StandardCharsets.UTF_8);
+                    String requestBody = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
                     String txid = extractTxid(requestBody);
                     states.putIfAbsent(txid, State.OPEN);
                     respBody = ("{\"txid\":\"" + txid + "\",\"expiresAt\":\"2027-01-01T13:00:00Z\","
-                            + "\"endToEndId\":\"E2E-METRICS-1\",\"brcode\":\"000201-metrics-it-brcode\"}")
+                                    + "\"endToEndId\":\"E2E-METRICS-1\",\"brcode\":\"000201-metrics-it-brcode\"}")
                             .getBytes(StandardCharsets.UTF_8);
                 } else if ("GET".equals(method) && path.startsWith("/cobs/")) {
                     String txid = path.substring("/cobs/".length());
@@ -784,8 +832,8 @@ class MetricsScrapeIT {
                     String paidAt = state == State.PAID ? "\"2027-01-01T11:59:30Z\"" : "null";
                     status = 200;
                     respBody = ("{\"txid\":\"" + txid + "\",\"status\":\"" + state + "\",\"amount\":10000,"
-                            + "\"expiresAt\":\"2027-01-01T13:00:00Z\",\"endToEndId\":" + e2e
-                            + ",\"paidAt\":" + paidAt + "}")
+                                    + "\"expiresAt\":\"2027-01-01T13:00:00Z\",\"endToEndId\":" + e2e
+                                    + ",\"paidAt\":" + paidAt + "}")
                             .getBytes(StandardCharsets.UTF_8);
                 } else {
                     status = 404;
@@ -814,12 +862,33 @@ class MetricsScrapeIT {
     /** A clock whose instant can be advanced by exact ladder rungs (no sleeps). */
     static final class MutableClock extends Clock {
         private Instant now;
-        MutableClock(Instant now) { this.now = now; }
-        void advance(Duration d) { this.now = this.now.plus(d); }
-        void reset() { this.now = START; }
-        @Override public Instant instant() { return now; }
-        @Override public java.time.ZoneId getZone() { return ZoneOffset.UTC; }
-        @Override public Clock withZone(java.time.ZoneId zone) { return this; }
+
+        MutableClock(Instant now) {
+            this.now = now;
+        }
+
+        void advance(Duration d) {
+            this.now = this.now.plus(d);
+        }
+
+        void reset() {
+            this.now = START;
+        }
+
+        @Override
+        public Instant instant() {
+            return now;
+        }
+
+        @Override
+        public java.time.ZoneId getZone() {
+            return ZoneOffset.UTC;
+        }
+
+        @Override
+        public Clock withZone(java.time.ZoneId zone) {
+            return this;
+        }
     }
 
     // ================================================================================ test config
@@ -834,8 +903,7 @@ class MetricsScrapeIT {
                     .locations(
                             "classpath:db/migration/payments",
                             "classpath:db/migration/ledger",
-                            "classpath:db/migration/notifications"
-                    )
+                            "classpath:db/migration/notifications")
                     .baselineOnMigrate(true)
                     .load();
             flyway.migrate();
@@ -871,8 +939,7 @@ class MetricsScrapeIT {
         @Primary
         PspPort pspTestPort(HttpServer server, PspStub psp) {
             int port = server.getAddress().getPort();
-            return new SimulatorChargeAdapter("http://127.0.0.1:" + port, 3,
-                    Duration.ofMillis(20), psp::sleeper);
+            return new SimulatorChargeAdapter("http://127.0.0.1:" + port, 3, Duration.ofMillis(20), psp::sleeper);
         }
     }
 }

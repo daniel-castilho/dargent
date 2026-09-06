@@ -9,11 +9,5 @@ import java.time.Instant;
  * never recompute it (D7).
  */
 public record PaymentConfirmed(
-        Txid txid,
-        EndToEndId endToEndId,
-        Money amount,
-        Money fee,
-        Money net,
-        boolean late,
-        Instant occurredAt) implements PaymentEvent {
-}
+        Txid txid, EndToEndId endToEndId, Money amount, Money fee, Money net, boolean late, Instant occurredAt)
+        implements PaymentEvent {}

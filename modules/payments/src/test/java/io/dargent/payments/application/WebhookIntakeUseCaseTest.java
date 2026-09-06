@@ -1,7 +1,9 @@
 package io.dargent.payments.application;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import io.dargent.payments.domain.model.EndToEndId;
-import io.dargent.payments.domain.model.FeeBreakdown;
 import io.dargent.payments.domain.model.Payment;
 import io.dargent.payments.domain.model.PaymentStatus;
 import io.dargent.payments.domain.model.Txid;
@@ -12,27 +14,22 @@ import io.dargent.payments.domain.port.out.PaymentRepository;
 import io.dargent.payments.domain.port.out.WebhookEventRecord;
 import io.dargent.payments.domain.port.out.WebhookEventStore;
 import io.dargent.shared.money.Money;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.springframework.transaction.TransactionStatus;
-import org.springframework.transaction.support.TransactionCallback;
-import org.springframework.transaction.support.TransactionTemplate;
-
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
-import tools.jackson.core.type.TypeReference;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.json.JsonMapper;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * TDD for WebhookIntakeUseCase (E4 spec §5.3).
@@ -60,9 +57,19 @@ class WebhookIntakeUseCaseTest {
         public void markProcessed(String providerEventId) {
             WebhookEventRecord r = store.get(providerEventId);
             if (r != null) {
-                store.put(providerEventId, new WebhookEventRecord(
-                        r.id(), r.providerEventId(), r.pspEventId(), r.type(), r.txid(),
-                        r.payloadRaw(), r.signatureValid(), "PROCESSED", r.receivedAt(), Instant.now()));
+                store.put(
+                        providerEventId,
+                        new WebhookEventRecord(
+                                r.id(),
+                                r.providerEventId(),
+                                r.pspEventId(),
+                                r.type(),
+                                r.txid(),
+                                r.payloadRaw(),
+                                r.signatureValid(),
+                                "PROCESSED",
+                                r.receivedAt(),
+                                Instant.now()));
             }
         }
 
@@ -70,9 +77,19 @@ class WebhookIntakeUseCaseTest {
         public void markIgnored(String providerEventId) {
             WebhookEventRecord r = store.get(providerEventId);
             if (r != null) {
-                store.put(providerEventId, new WebhookEventRecord(
-                        r.id(), r.providerEventId(), r.pspEventId(), r.type(), r.txid(),
-                        r.payloadRaw(), r.signatureValid(), "IGNORED", r.receivedAt(), Instant.now()));
+                store.put(
+                        providerEventId,
+                        new WebhookEventRecord(
+                                r.id(),
+                                r.providerEventId(),
+                                r.pspEventId(),
+                                r.type(),
+                                r.txid(),
+                                r.payloadRaw(),
+                                r.signatureValid(),
+                                "IGNORED",
+                                r.receivedAt(),
+                                Instant.now()));
             }
         }
 
@@ -98,11 +115,21 @@ class WebhookIntakeUseCaseTest {
             if (stored == null) return Optional.empty();
             // Return a copy so mutations don't affect the stored version
             return Optional.of(Payment.restore(
-                    stored.id(), stored.txid(), stored.merchantId(), stored.amount(),
-                    stored.description(), stored.expiresAt(), stored.createdAt(),
-                    stored.status(), stored.version(), stored.endToEndId(),
-                    stored.fee(), stored.net(), stored.lateConfirmation(),
-                    stored.confirmedAt(), stored.refunded().cents()));
+                    stored.id(),
+                    stored.txid(),
+                    stored.merchantId(),
+                    stored.amount(),
+                    stored.description(),
+                    stored.expiresAt(),
+                    stored.createdAt(),
+                    stored.status(),
+                    stored.version(),
+                    stored.endToEndId(),
+                    stored.fee(),
+                    stored.net(),
+                    stored.lateConfirmation(),
+                    stored.confirmedAt(),
+                    stored.refunded().cents()));
         }
 
         @Override
@@ -129,16 +156,27 @@ class WebhookIntakeUseCaseTest {
         @Override
         public boolean expireIfDue(Payment payment, java.time.Instant now) {
             Payment stored = store.get(payment.txid());
-            if (stored == null || stored.status() != io.dargent.payments.domain.model.PaymentStatus.PENDING
+            if (stored == null
+                    || stored.status() != io.dargent.payments.domain.model.PaymentStatus.PENDING
                     || !stored.expiresAt().isBefore(now)) {
                 return false;
             }
             Payment expired = Payment.restore(
-                    stored.id(), stored.txid(), stored.merchantId(), stored.amount(),
-                    stored.description(), stored.expiresAt(), stored.createdAt(),
-                    io.dargent.payments.domain.model.PaymentStatus.EXPIRED, stored.version() + 1,
-                    stored.endToEndId(), stored.fee(), stored.net(), stored.lateConfirmation(),
-                    stored.confirmedAt(), stored.refunded().cents());
+                    stored.id(),
+                    stored.txid(),
+                    stored.merchantId(),
+                    stored.amount(),
+                    stored.description(),
+                    stored.expiresAt(),
+                    stored.createdAt(),
+                    io.dargent.payments.domain.model.PaymentStatus.EXPIRED,
+                    stored.version() + 1,
+                    stored.endToEndId(),
+                    stored.fee(),
+                    stored.net(),
+                    stored.lateConfirmation(),
+                    stored.confirmedAt(),
+                    stored.refunded().cents());
             store.put(payment.txid(), expired);
             committedVersions.put(payment.txid(), stored.version() + 1);
             return true;
@@ -149,13 +187,15 @@ class WebhookIntakeUseCaseTest {
             return store.values().stream()
                     .filter(p -> p.status() == io.dargent.payments.domain.model.PaymentStatus.PENDING
                             || p.status() == io.dargent.payments.domain.model.PaymentStatus.EXPIRED)
-                    .filter(p -> p.nextReconcileAt() != null && p.nextReconcileAt().isBefore(now))
+                    .filter(p ->
+                            p.nextReconcileAt() != null && p.nextReconcileAt().isBefore(now))
                     .limit(limit)
                     .toList();
         }
 
         @Override
-        public boolean updateReconciliationSchedule(Payment payment, java.time.Instant nextReconcileAt, int reconcileAttempts, int expectedVersion) {
+        public boolean updateReconciliationSchedule(
+                Payment payment, java.time.Instant nextReconcileAt, int reconcileAttempts, int expectedVersion) {
             Integer committed = committedVersions.get(payment.txid());
             if (committed == null || committed != expectedVersion) {
                 return false;
@@ -163,18 +203,31 @@ class WebhookIntakeUseCaseTest {
             Payment stored = store.get(payment.txid());
             if (stored == null) return false;
             Payment updated = Payment.restore(
-                    stored.id(), stored.txid(), stored.merchantId(), stored.amount(),
-                    stored.description(), stored.expiresAt(), stored.createdAt(),
-                    stored.status(), expectedVersion + 1,
-                    stored.endToEndId(), stored.fee(), stored.net(), stored.lateConfirmation(),
-                    stored.confirmedAt(), stored.refunded().cents(), nextReconcileAt, reconcileAttempts);
+                    stored.id(),
+                    stored.txid(),
+                    stored.merchantId(),
+                    stored.amount(),
+                    stored.description(),
+                    stored.expiresAt(),
+                    stored.createdAt(),
+                    stored.status(),
+                    expectedVersion + 1,
+                    stored.endToEndId(),
+                    stored.fee(),
+                    stored.net(),
+                    stored.lateConfirmation(),
+                    stored.confirmedAt(),
+                    stored.refunded().cents(),
+                    nextReconcileAt,
+                    reconcileAttempts);
             store.put(payment.txid(), updated);
             committedVersions.put(payment.txid(), expectedVersion + 1);
             return true;
         }
 
         @Override
-        public boolean clearReconciliationScheduleIfPastWindow(Payment payment, java.time.Instant windowEnd, int expectedVersion) {
+        public boolean clearReconciliationScheduleIfPastWindow(
+                Payment payment, java.time.Instant windowEnd, int expectedVersion) {
             Integer committed = committedVersions.get(payment.txid());
             if (committed == null || committed != expectedVersion) {
                 return false;
@@ -184,38 +237,60 @@ class WebhookIntakeUseCaseTest {
                 return false;
             }
             Payment updated = Payment.restore(
-                    stored.id(), stored.txid(), stored.merchantId(), stored.amount(),
-                    stored.description(), stored.expiresAt(), stored.createdAt(),
-                    stored.status(), expectedVersion + 1,
-                    stored.endToEndId(), stored.fee(), stored.net(), stored.lateConfirmation(),
-                    stored.confirmedAt(), stored.refunded().cents(), null, 0);
+                    stored.id(),
+                    stored.txid(),
+                    stored.merchantId(),
+                    stored.amount(),
+                    stored.description(),
+                    stored.expiresAt(),
+                    stored.createdAt(),
+                    stored.status(),
+                    expectedVersion + 1,
+                    stored.endToEndId(),
+                    stored.fee(),
+                    stored.net(),
+                    stored.lateConfirmation(),
+                    stored.confirmedAt(),
+                    stored.refunded().cents(),
+                    null,
+                    0);
             store.put(payment.txid(), updated);
             committedVersions.put(payment.txid(), expectedVersion + 1);
             return true;
-}
-
-    @Override
-    public Optional<Payment> findByTxidForUpdate(String txid) {
-        Txid txidObj = new Txid(txid);
-        Payment stored = store.get(txidObj);
-        if (stored == null) {
-            return Optional.empty();
         }
-        // Return a copy so mutations don't affect the stored version
-        return Optional.of(Payment.restore(
-                stored.id(), stored.txid(), stored.merchantId(), stored.amount(),
-                stored.description(), stored.expiresAt(), stored.createdAt(),
-                stored.status(), stored.version(), stored.endToEndId(),
-                stored.fee(), stored.net(), stored.lateConfirmation(),
-                stored.confirmedAt(), stored.refunded().cents()));
-    }
 
-    @Override
-    public void insertRefund(UUID paymentId, String txid, long amountCents, long feeReversalCents,
-            long netCents, String requestId) {
-        // No-op for test
+        @Override
+        public Optional<Payment> findByTxidForUpdate(String txid) {
+            Txid txidObj = new Txid(txid);
+            Payment stored = store.get(txidObj);
+            if (stored == null) {
+                return Optional.empty();
+            }
+            // Return a copy so mutations don't affect the stored version
+            return Optional.of(Payment.restore(
+                    stored.id(),
+                    stored.txid(),
+                    stored.merchantId(),
+                    stored.amount(),
+                    stored.description(),
+                    stored.expiresAt(),
+                    stored.createdAt(),
+                    stored.status(),
+                    stored.version(),
+                    stored.endToEndId(),
+                    stored.fee(),
+                    stored.net(),
+                    stored.lateConfirmation(),
+                    stored.confirmedAt(),
+                    stored.refunded().cents()));
+        }
+
+        @Override
+        public void insertRefund(
+                UUID paymentId, String txid, long amountCents, long feeReversalCents, long netCents, String requestId) {
+            // No-op for test
+        }
     }
-}
 
     static class FakeOutboxWriter implements OutboxWriter {
         final List<OutboxEntry> entries = new java.util.ArrayList<>();
@@ -297,7 +372,8 @@ class WebhookIntakeUseCaseTest {
     private static final String PSP_EVENT_ID = "psp-evt-test-001";
     private static final String TYPE = "payment.confirmed";
     private static final String CORRELATION_ID = "req-webhook-intake-test-1";
-    private static final String PAYLOAD_RAW = "{\"eventId\":\"psp-evt-test-001\",\"type\":\"payment.confirmed\",\"txid\":\"8KD4Z9X2Q7W1M5T3R6Y0A1B2C\",\"endToEndId\":\"E9040381234567890123456789012345\",\"amount\":10000,\"paidAt\":\"2026-08-29T00:00:00Z\"}";
+    private static final String PAYLOAD_RAW =
+            "{\"eventId\":\"psp-evt-test-001\",\"type\":\"payment.confirmed\",\"txid\":\"8KD4Z9X2Q7W1M5T3R6Y0A1B2C\",\"endToEndId\":\"E9040381234567890123456789012345\",\"amount\":10000,\"paidAt\":\"2026-08-29T00:00:00Z\"}";
 
     @BeforeEach
     void setUp() {
@@ -310,8 +386,16 @@ class WebhookIntakeUseCaseTest {
         clock = FIXED_CLOCK;
         testMapper = new JsonMapper();
 
-        useCase = new WebhookIntakeUseCase(webhookStore, paymentRepo, outboxWriter, auditWriter,
-                signatureValidator, new DirectTransactionTemplate(), envelopeFactory, clock, testMapper,
+        useCase = new WebhookIntakeUseCase(
+                webhookStore,
+                paymentRepo,
+                outboxWriter,
+                auditWriter,
+                signatureValidator,
+                new DirectTransactionTemplate(),
+                envelopeFactory,
+                clock,
+                testMapper,
                 new PaymentsMetrics(new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
     }
 
@@ -323,19 +407,27 @@ class WebhookIntakeUseCaseTest {
                 || status == PaymentStatus.REFUNDED;
         Instant created = Instant.parse("2026-08-29T12:00:00Z");
         Payment payment = Payment.restore(
-                UUID.randomUUID(), TXID, MERCHANT, Money.of(10000, "BRL"), "Order #1",
-                Instant.parse("2026-08-29T12:02:00Z"), created,
-                status, 0,
+                UUID.randomUUID(),
+                TXID,
+                MERCHANT,
+                Money.of(10000, "BRL"),
+                "Order #1",
+                Instant.parse("2026-08-29T12:02:00Z"),
+                created,
+                status,
+                0,
                 confirmedFamily ? END_TO_END_ID : null,
                 confirmedFamily ? Money.of(100, "BRL") : null,
                 confirmedFamily ? Money.of(9900, "BRL") : null,
-                confirmedFamily, confirmedFamily ? created.plusSeconds(60) : null, 0
-        );
+                confirmedFamily,
+                confirmedFamily ? created.plusSeconds(60) : null,
+                0);
         paymentRepo.save(payment);
     }
 
     private WebhookIntakeUseCase.Input input() {
-        return new WebhookIntakeUseCase.Input(PROVIDER_EVENT_ID, PSP_EVENT_ID, TYPE, TXID.value(), PAYLOAD_RAW, true, CORRELATION_ID);
+        return new WebhookIntakeUseCase.Input(
+                PROVIDER_EVENT_ID, PSP_EVENT_ID, TYPE, TXID.value(), PAYLOAD_RAW, true, CORRELATION_ID);
     }
 
     // ============================================================================ TESTS
@@ -397,9 +489,16 @@ class WebhookIntakeUseCaseTest {
         seedPayment(PaymentStatus.PENDING);
 
         WebhookEventRecord received = new WebhookEventRecord(
-                UUID.randomUUID(), PROVIDER_EVENT_ID, PSP_EVENT_ID, TYPE, TXID.value(),
-                PAYLOAD_RAW, true, "RECEIVED", FIXED_CLOCK.instant(), null
-        );
+                UUID.randomUUID(),
+                PROVIDER_EVENT_ID,
+                PSP_EVENT_ID,
+                TYPE,
+                TXID.value(),
+                PAYLOAD_RAW,
+                true,
+                "RECEIVED",
+                FIXED_CLOCK.instant(),
+                null);
         webhookStore.store.put(PROVIDER_EVENT_ID, received);
 
         var outcome = useCase.execute(input());
@@ -416,7 +515,8 @@ class WebhookIntakeUseCaseTest {
         String badProviderId = END_TO_END_ID.value() + "|" + badType;
         String badPayload = PAYLOAD_RAW.replace("\"payment.confirmed\"", "\"payment.unknown\"");
 
-        var input = new WebhookIntakeUseCase.Input(badProviderId, PSP_EVENT_ID, badType, TXID.value(), badPayload, true, null);
+        var input = new WebhookIntakeUseCase.Input(
+                badProviderId, PSP_EVENT_ID, badType, TXID.value(), badPayload, true, null);
         var outcome = useCase.execute(input);
 
         assertThat(outcome).isInstanceOf(WebhookIntakeUseCase.Outcome.Ignored.class);
@@ -444,7 +544,8 @@ class WebhookIntakeUseCaseTest {
         String badPayload = PAYLOAD_RAW.replace("10000", "9999");
         String badProviderId = END_TO_END_ID.value() + "|" + TYPE;
 
-        var input = new WebhookIntakeUseCase.Input(badProviderId, PSP_EVENT_ID, TYPE, TXID.value(), badPayload, true, null);
+        var input =
+                new WebhookIntakeUseCase.Input(badProviderId, PSP_EVENT_ID, TYPE, TXID.value(), badPayload, true, null);
         var outcome = useCase.execute(input);
 
         assertThat(outcome).isInstanceOf(WebhookIntakeUseCase.Outcome.Ignored.class);
@@ -508,12 +609,18 @@ class WebhookIntakeUseCaseTest {
         };
 
         SnapshotRollbackTransactionTemplate rollbackTx = new SnapshotRollbackTransactionTemplate(
-                () -> rollbackSnapshot = snapshotState(),
-                () -> restoreFromSnapshot(rollbackSnapshot));
+                () -> rollbackSnapshot = snapshotState(), () -> restoreFromSnapshot(rollbackSnapshot));
 
         WebhookIntakeUseCase atomicUseCase = new WebhookIntakeUseCase(
-                webhookStore, paymentRepo, failingOutbox, auditWriter,
-                signatureValidator, rollbackTx, envelopeFactory, clock, new tools.jackson.databind.json.JsonMapper(),
+                webhookStore,
+                paymentRepo,
+                failingOutbox,
+                auditWriter,
+                signatureValidator,
+                rollbackTx,
+                envelopeFactory,
+                clock,
+                new tools.jackson.databind.json.JsonMapper(),
                 new PaymentsMetrics(new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
 
         assertThatThrownBy(() -> atomicUseCase.execute(input()))
@@ -546,9 +653,19 @@ class WebhookIntakeUseCaseTest {
     private Map<String, WebhookEventRecord> deepCopyWebhook(Map<String, WebhookEventRecord> src) {
         Map<String, WebhookEventRecord> copy = new LinkedHashMap<>();
         for (WebhookEventRecord r : src.values()) {
-            copy.put(r.providerEventId(), new WebhookEventRecord(
-                    r.id(), r.providerEventId(), r.pspEventId(), r.type(), r.txid(),
-                    r.payloadRaw(), r.signatureValid(), r.status(), r.receivedAt(), r.processedAt()));
+            copy.put(
+                    r.providerEventId(),
+                    new WebhookEventRecord(
+                            r.id(),
+                            r.providerEventId(),
+                            r.pspEventId(),
+                            r.type(),
+                            r.txid(),
+                            r.payloadRaw(),
+                            r.signatureValid(),
+                            r.status(),
+                            r.receivedAt(),
+                            r.processedAt()));
         }
         return copy;
     }
@@ -556,11 +673,24 @@ class WebhookIntakeUseCaseTest {
     private Map<Txid, Payment> deepCopyPayments(Map<Txid, Payment> src) {
         Map<Txid, Payment> copy = new LinkedHashMap<>();
         for (Payment p : src.values()) {
-            copy.put(p.txid(), Payment.restore(
-                    p.id(), p.txid(), p.merchantId(), p.amount(), p.description(),
-                    p.expiresAt(), p.createdAt(), p.status(), p.version(), p.endToEndId(),
-                    p.fee(), p.net(), p.lateConfirmation(), p.confirmedAt(),
-                    p.refunded() == null ? 0L : p.refunded().cents()));
+            copy.put(
+                    p.txid(),
+                    Payment.restore(
+                            p.id(),
+                            p.txid(),
+                            p.merchantId(),
+                            p.amount(),
+                            p.description(),
+                            p.expiresAt(),
+                            p.createdAt(),
+                            p.status(),
+                            p.version(),
+                            p.endToEndId(),
+                            p.fee(),
+                            p.net(),
+                            p.lateConfirmation(),
+                            p.confirmedAt(),
+                            p.refunded() == null ? 0L : p.refunded().cents()));
         }
         return copy;
     }

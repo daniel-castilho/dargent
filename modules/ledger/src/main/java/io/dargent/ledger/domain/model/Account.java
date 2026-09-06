@@ -21,10 +21,21 @@ public final class Account {
         this.lastEventId = lastEventId;
     }
 
-    public String account() { return account; }
-    public long balanceCents() { return balanceCents; }
-    public Instant updatedAt() { return updatedAt; }
-    public UUID lastEventId() { return lastEventId; }
+    public String account() {
+        return account;
+    }
+
+    public long balanceCents() {
+        return balanceCents;
+    }
+
+    public Instant updatedAt() {
+        return updatedAt;
+    }
+
+    public UUID lastEventId() {
+        return lastEventId;
+    }
 
     public Account credit(long amountCents, Instant now, UUID eventId) {
         return new Account(account, balanceCents + amountCents, now, eventId);

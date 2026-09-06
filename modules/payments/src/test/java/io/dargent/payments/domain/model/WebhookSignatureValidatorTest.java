@@ -1,14 +1,12 @@
 package io.dargent.payments.domain.model;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
 
 /**
  * TDD for WebhookSignatureValidator (E4 spec §5.2, E3R R5).
@@ -21,7 +19,8 @@ class WebhookSignatureValidatorTest {
     private static final String SECRET = "dev-only-secret";
     // Shared E2 §5.4 vector
     private static final String TS_VECTOR1 = "1787932800"; // 2026-06-27T00:00:00Z
-    private static final String BODY_VECTOR1 = "{\"eventId\":\"psp-evt-test-001\",\"type\":\"payment.confirmed\",\"txid\":\"8KD4Z9X2Q7W1M5T3R6Y0A1B2C\",\"endToEndId\":\"E9040381234567890123456789012345\",\"amount\":10000,\"paidAt\":\"2026-08-29T00:00:00Z\"}";
+    private static final String BODY_VECTOR1 =
+            "{\"eventId\":\"psp-evt-test-001\",\"type\":\"payment.confirmed\",\"txid\":\"8KD4Z9X2Q7W1M5T3R6Y0A1B2C\",\"endToEndId\":\"E9040381234567890123456789012345\",\"amount\":10000,\"paidAt\":\"2026-08-29T00:00:00Z\"}";
     private static final String VECTOR1_SIG = "549eabc4c6f862fdb9322861f43091039de9c75de8107a60945d464755549113";
     // Independent vector
     private static final String TS_VECTOR2 = "1";
@@ -52,7 +51,8 @@ class WebhookSignatureValidatorTest {
     @Test
     void unparsable_timestamp_is_INVALID() {
         WebhookSignatureValidator validator = new WebhookSignatureValidator(Clock.systemUTC());
-        var verdict = validator.verify("not-an-instant", BODY_VECTOR1.getBytes(StandardCharsets.UTF_8), VECTOR1_SIG, SECRET);
+        var verdict =
+                validator.verify("not-an-instant", BODY_VECTOR1.getBytes(StandardCharsets.UTF_8), VECTOR1_SIG, SECRET);
         assertThat(verdict).isEqualTo(WebhookSignatureValidator.Verdict.INVALID);
     }
 
@@ -63,14 +63,16 @@ class WebhookSignatureValidatorTest {
         assertThat(verdict).isEqualTo(WebhookSignatureValidator.Verdict.INVALID);
     }
 
-    // ------------------------------------------------------------------ verdict order: anti-replay ±300s window → EXPIRED
+    // ------------------------------------------------------------------ verdict order: anti-replay ±300s window →
+    // EXPIRED
 
     @Test
     void timestamp_301_seconds_in_future_is_EXPIRED() {
         Clock clock = Clock.fixed(Instant.parse("2026-08-29T12:00:00Z"), ZoneOffset.UTC);
         WebhookSignatureValidator validator = new WebhookSignatureValidator(clock);
         // ts = now + 301s
-        String futureTs = String.valueOf(Instant.parse("2026-08-29T12:00:00Z").plusSeconds(301).getEpochSecond());
+        String futureTs = String.valueOf(
+                Instant.parse("2026-08-29T12:00:00Z").plusSeconds(301).getEpochSecond());
         var verdict = validator.verify(futureTs, BODY_VECTOR1.getBytes(StandardCharsets.UTF_8), VECTOR1_SIG, SECRET);
         assertThat(verdict).isEqualTo(WebhookSignatureValidator.Verdict.EXPIRED);
     }
@@ -80,7 +82,8 @@ class WebhookSignatureValidatorTest {
         Clock clock = Clock.fixed(Instant.parse("2026-08-29T12:00:00Z"), ZoneOffset.UTC);
         WebhookSignatureValidator validator = new WebhookSignatureValidator(clock);
         // ts = now - 301s
-        String pastTs = String.valueOf(Instant.parse("2026-08-29T12:00:00Z").minusSeconds(301).getEpochSecond());
+        String pastTs = String.valueOf(
+                Instant.parse("2026-08-29T12:00:00Z").minusSeconds(301).getEpochSecond());
         var verdict = validator.verify(pastTs, BODY_VECTOR1.getBytes(StandardCharsets.UTF_8), VECTOR1_SIG, SECRET);
         assertThat(verdict).isEqualTo(WebhookSignatureValidator.Verdict.EXPIRED);
     }
@@ -89,7 +92,8 @@ class WebhookSignatureValidatorTest {
     void timestamp_exactly_300_seconds_in_future_is_VALID() throws Exception {
         Clock clock = Clock.fixed(Instant.parse("2026-08-29T12:00:00Z"), ZoneOffset.UTC);
         WebhookSignatureValidator validator = new WebhookSignatureValidator(clock);
-        String futureTs = String.valueOf(Instant.parse("2026-08-29T12:00:00Z").plusSeconds(300).getEpochSecond());
+        String futureTs = String.valueOf(
+                Instant.parse("2026-08-29T12:00:00Z").plusSeconds(300).getEpochSecond());
         String correctSig = validator.computeSignatureForTest(futureTs, BODY_VECTOR1, SECRET);
         var verdict = validator.verify(futureTs, BODY_VECTOR1.getBytes(StandardCharsets.UTF_8), correctSig, SECRET);
         assertThat(verdict).isEqualTo(WebhookSignatureValidator.Verdict.VALID);
@@ -99,7 +103,8 @@ class WebhookSignatureValidatorTest {
     void timestamp_exactly_300_seconds_in_past_is_VALID() throws Exception {
         Clock clock = Clock.fixed(Instant.parse("2026-08-29T12:00:00Z"), ZoneOffset.UTC);
         WebhookSignatureValidator validator = new WebhookSignatureValidator(clock);
-        String pastTs = String.valueOf(Instant.parse("2026-08-29T12:00:00Z").minusSeconds(300).getEpochSecond());
+        String pastTs = String.valueOf(
+                Instant.parse("2026-08-29T12:00:00Z").minusSeconds(300).getEpochSecond());
         String correctSig = validator.computeSignatureForTest(pastTs, BODY_VECTOR1, SECRET);
         var verdict = validator.verify(pastTs, BODY_VECTOR1.getBytes(StandardCharsets.UTF_8), correctSig, SECRET);
         assertThat(verdict).isEqualTo(WebhookSignatureValidator.Verdict.VALID);
@@ -112,7 +117,11 @@ class WebhookSignatureValidatorTest {
         Clock clock = Clock.fixed(Instant.parse("2026-08-29T12:00:00Z"), ZoneOffset.UTC);
         WebhookSignatureValidator validator = new WebhookSignatureValidator(clock);
         String ts = String.valueOf(Instant.parse("2026-08-29T12:00:00Z").getEpochSecond());
-        var verdict = validator.verify(ts, BODY_VECTOR1.getBytes(StandardCharsets.UTF_8), "0000000000000000000000000000000000000000000000000000000000000000", SECRET);
+        var verdict = validator.verify(
+                ts,
+                BODY_VECTOR1.getBytes(StandardCharsets.UTF_8),
+                "0000000000000000000000000000000000000000000000000000000000000000",
+                SECRET);
         assertThat(verdict).isEqualTo(WebhookSignatureValidator.Verdict.INVALID);
     }
 

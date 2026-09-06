@@ -1,7 +1,12 @@
 package io.dargent.pspsimulator.charge;
 
-import java.time.Instant;
+import static org.hamcrest.Matchers.containsString;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -10,13 +15,6 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
-
-import static org.hamcrest.Matchers.containsString;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
  * Slice tests for {@link ChargesController} against the real MockMvc dispatcher. Boot 4.1.1 ships no
@@ -114,11 +112,13 @@ class ChargesControllerTest {
     @Test
     void creating_a_duplicate_txid_returns_409_txid_already_exists() throws Exception {
         String txid = "FKD4Z9X2Q7W1M5T3R6Y0A1B2C";
-        mockMvc.perform(post("/cobs").contentType(MediaType.APPLICATION_JSON)
-                .content(body(txid, "10000", FUTURE, CALLBACK)))
+        mockMvc.perform(post("/cobs")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body(txid, "10000", FUTURE, CALLBACK)))
                 .andExpect(status().isCreated());
-        mockMvc.perform(post("/cobs").contentType(MediaType.APPLICATION_JSON)
-                .content(body(txid, "5000", FUTURE, CALLBACK)))
+        mockMvc.perform(post("/cobs")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body(txid, "5000", FUTURE, CALLBACK)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("txid_already_exists"));
     }
@@ -126,8 +126,9 @@ class ChargesControllerTest {
     @Test
     void getting_an_open_charge_returns_200_with_open_status() throws Exception {
         String txid = "GKD4Z9X2Q7W1M5T3R6Y0A1B2C";
-        mockMvc.perform(post("/cobs").contentType(MediaType.APPLICATION_JSON)
-                .content(body(txid, "10000", FUTURE, CALLBACK)))
+        mockMvc.perform(post("/cobs")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body(txid, "10000", FUTURE, CALLBACK)))
                 .andExpect(status().isCreated());
 
         mockMvc.perform(get("/cobs/{txid}", txid))
@@ -141,8 +142,7 @@ class ChargesControllerTest {
     @Test
     void getting_an_expired_unpaid_charge_reports_status_expired() throws Exception {
         String txid = "HKD4Z9X2Q7W1M5T3R6Y0A1B2C";
-        store.putIfAbsent(new Charge(txid, 10_000,
-                Instant.parse("2020-01-01T00:00:00Z"), CALLBACK, "stale order"));
+        store.putIfAbsent(new Charge(txid, 10_000, Instant.parse("2020-01-01T00:00:00Z"), CALLBACK, "stale order"));
 
         mockMvc.perform(get("/cobs/{txid}", txid))
                 .andExpect(status().isOk())

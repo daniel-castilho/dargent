@@ -55,17 +55,15 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * sleep (AGENTS §5.3).
  */
 @SpringBootTest(
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    classes = {DargentApiApplication.class, CreatePaymentIT.PspTestConfig.class},
-    properties = {"dargent.psp.webhook-secret=dev-only-secret", "dargent.relay.enabled=false"}
-)
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        classes = {DargentApiApplication.class, CreatePaymentIT.PspTestConfig.class},
+        properties = {"dargent.psp.webhook-secret=dev-only-secret", "dargent.relay.enabled=false"})
 @Testcontainers
 class CreatePaymentIT {
 
     private static final UUID MERCHANT = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID KEY_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
-    private static final Clock FIXED_CLOCK =
-            Clock.fixed(Instant.parse("2026-08-29T12:00:00Z"), ZoneOffset.UTC);
+    private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2026-08-29T12:00:00Z"), ZoneOffset.UTC);
     private static final String PSP_EXPIRES_AT = "2026-08-29T12:02:00Z";
     private static final String ENDPOINT = "POST /v1/payments";
 
@@ -88,17 +86,20 @@ class CreatePaymentIT {
 
     @Value("${dargent.pix.profile.pix-key}")
     String pixKey;
+
     @Value("${dargent.pix.profile.receiver-name}")
     String receiverName;
+
     @Value("${dargent.pix.profile.receiver-city}")
     String receiverCity;
 
     @BeforeEach
     void setUp() throws Exception {
         baseUrl = "http://localhost:" + port;
-        jdbc.sql("truncate payments.outbox, payments.idempotency_keys, payments.audit_log, payments.payments, payments.api_keys restart identity cascade").update();
         jdbc.sql(
-                "insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
+                        "truncate payments.outbox, payments.idempotency_keys, payments.audit_log, payments.payments, payments.api_keys restart identity cascade")
+                .update();
+        jdbc.sql("insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
                         + "values (:id, :merchant, 'it-key', :prefix, :hash, now(), null)")
                 .param("id", KEY_ID)
                 .param("merchant", MERCHANT)
@@ -116,7 +117,9 @@ class CreatePaymentIT {
         String requestId = "req-create-01";
         String idemKey = "idem-happy-01";
 
-        var resp = post("/v1/payments", body("{\"amount\":10000,\"description\":\"Order #123\",\"expiresIn\":\"PT30M\"}"),
+        var resp = post(
+                "/v1/payments",
+                body("{\"amount\":10000,\"description\":\"Order #123\",\"expiresIn\":\"PT30M\"}"),
                 authHeaders(idemKey, requestId));
 
         assertThat(resp.statusCode()).isEqualTo(201);
@@ -146,9 +149,15 @@ class CreatePaymentIT {
         // and PSP-truth expires_at persisted to the DB (A0 stale-aggregate guard — the response body
         // alone would hide a PSP truth that never reached the row).
         var pmt = jdbc.sql(
-                "select status, amount_cents, version, merchant_id, expires_at from payments.payments where txid = :txid")
+                        "select status, amount_cents, version, merchant_id, expires_at from payments.payments where txid = :txid")
                 .param("txid", txid)
-                .query((rs, i) -> new Object[]{rs.getString(1), rs.getLong(2), rs.getInt(3), rs.getObject(4, UUID.class), rs.getTimestamp(5).toInstant()})
+                .query((rs, i) -> new Object[] {
+                    rs.getString(1),
+                    rs.getLong(2),
+                    rs.getInt(3),
+                    rs.getObject(4, UUID.class),
+                    rs.getTimestamp(5).toInstant()
+                })
                 .single();
         assertThat(pmt[0]).isEqualTo("PENDING");
         assertThat(pmt[1]).isEqualTo(10000L);
@@ -157,21 +166,21 @@ class CreatePaymentIT {
         assertThat((Instant) pmt[4]).isEqualTo(Instant.parse(PSP_EXPIRES_AT));
 
         // idempotency COMPLETED with exact 201 snapshot
-        var idem = jdbc.sql(
-                "select state, response_status, response_body::text from payments.idempotency_keys "
+        var idem = jdbc.sql("select state, response_status, response_body::text from payments.idempotency_keys "
                         + "where merchant_id=:m and idempotency_key=:k and endpoint=:e")
-                .param("m", MERCHANT).param("k", idemKey).param("e", ENDPOINT)
-                .query((rs, i) -> new Object[]{rs.getString(1), rs.getInt(2), rs.getString(3)})
+                .param("m", MERCHANT)
+                .param("k", idemKey)
+                .param("e", ENDPOINT)
+                .query((rs, i) -> new Object[] {rs.getString(1), rs.getInt(2), rs.getString(3)})
                 .single();
         assertThat(idem[0]).isEqualTo("COMPLETED");
         assertThat(idem[1]).isEqualTo(201);
         assertThat((String) idem[2]).contains(txid);
 
         // exactly one outbox event, payment.created, with the echoed request id
-        var ob = jdbc.sql(
-                "select type, request_id, payload::text from payments.outbox where aggregate_id=:t")
+        var ob = jdbc.sql("select type, request_id, payload::text from payments.outbox where aggregate_id=:t")
                 .param("t", txid)
-                .query((rs, i) -> new Object[]{rs.getString(1), rs.getString(2), rs.getString(3)})
+                .query((rs, i) -> new Object[] {rs.getString(1), rs.getString(2), rs.getString(3)})
                 .list();
         assertThat(ob).hasSize(1);
         assertThat(ob.get(0)[0]).isEqualTo("payment.created");
@@ -179,11 +188,14 @@ class CreatePaymentIT {
         assertThat((String) ob.get(0)[2]).contains(txid);
 
         // audit_log keyed by the authenticated key id and the request id
-        Integer audit = jdbc.sql(
-                "select count(*) from payments.audit_log where merchant_id=:m and actor_key_id=:k "
+        Integer audit = jdbc.sql("select count(*) from payments.audit_log where merchant_id=:m and actor_key_id=:k "
                         + "and command_name='create_payment' and request_id=:r and aggregate_id=:t")
-                .param("m", MERCHANT).param("k", KEY_ID).param("r", requestId).param("t", txid)
-                .query(Integer.class).single();
+                .param("m", MERCHANT)
+                .param("k", KEY_ID)
+                .param("r", requestId)
+                .param("t", txid)
+                .query(Integer.class)
+                .single();
         assertThat(audit).isEqualTo(1);
     }
 
@@ -229,10 +241,14 @@ class CreatePaymentIT {
         psp.mode = PspStub.Mode.SUCCESS;
         String idemKey = "idem-inflight-01";
         String flightBody = body("{\"amount\":5000}");
-        jdbc.sql("insert into payments.idempotency_keys (merchant_id, idempotency_key, endpoint, request_fingerprint, state) "
-                + "values (:m, :k, :e, :fp, 'IN_FLIGHT')")
-                .param("m", MERCHANT).param("k", idemKey).param("e", ENDPOINT)
-                .param("fp", fingerprint(flightBody.getBytes(StandardCharsets.UTF_8))).update();
+        jdbc.sql(
+                        "insert into payments.idempotency_keys (merchant_id, idempotency_key, endpoint, request_fingerprint, state) "
+                                + "values (:m, :k, :e, :fp, 'IN_FLIGHT')")
+                .param("m", MERCHANT)
+                .param("k", idemKey)
+                .param("e", ENDPOINT)
+                .param("fp", fingerprint(flightBody.getBytes(StandardCharsets.UTF_8)))
+                .update();
 
         var resp = post("/v1/payments", flightBody, authHeaders(idemKey, "req-inflight-01"));
 
@@ -247,7 +263,9 @@ class CreatePaymentIT {
     @Test
     void missing_idempotency_key_returns_400() throws Exception {
         psp.mode = PspStub.Mode.SUCCESS;
-        var resp = post("/v1/payments", body("{\"amount\":5000}"),
+        var resp = post(
+                "/v1/payments",
+                body("{\"amount\":5000}"),
                 java.util.Map.of("Authorization", "Bearer " + rawKey, "Content-Type", "application/json"));
         assertThat(resp.statusCode()).isEqualTo(400);
         assertThat(parse(resp).at("/fields/idempotency_key").isMissingNode()).isFalse();
@@ -281,7 +299,9 @@ class CreatePaymentIT {
     @Test
     void unknown_api_key_returns_401() throws Exception {
         psp.mode = PspStub.Mode.SUCCESS;
-        var resp = post("/v1/payments", body("{\"amount\":5000}"),
+        var resp = post(
+                "/v1/payments",
+                body("{\"amount\":5000}"),
                 java.util.Map.of(
                         "Authorization", "Bearer psp_test_ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ",
                         "Content-Type", "application/json"));
@@ -309,25 +329,37 @@ class CreatePaymentIT {
         // payment FAILED, idempotency row deleted on exhaustion, failed outbox event
         assertThat(paymentCount()).isEqualTo(1);
         String txid = jdbc.sql("select txid from payments.payments where merchant_id = :m")
-                .param("m", MERCHANT).query(String.class).single();
+                .param("m", MERCHANT)
+                .query(String.class)
+                .single();
         String status = jdbc.sql("select status from payments.payments where txid=:t")
-                .param("t", txid).query(String.class).single();
+                .param("t", txid)
+                .query(String.class)
+                .single();
         assertThat(status).isEqualTo("FAILED");
 
         Integer idemLeft = jdbc.sql(
-                "select count(*) from payments.idempotency_keys where merchant_id=:m and idempotency_key=:k and endpoint=:e")
-                .param("m", MERCHANT).param("k", idemKey).param("e", ENDPOINT).query(Integer.class).single();
+                        "select count(*) from payments.idempotency_keys where merchant_id=:m and idempotency_key=:k and endpoint=:e")
+                .param("m", MERCHANT)
+                .param("k", idemKey)
+                .param("e", ENDPOINT)
+                .query(Integer.class)
+                .single();
         assertThat(idemLeft).isZero();
 
         List<String> outboxTypes = jdbc.sql("select type from payments.outbox where aggregate_id=:t")
-                .param("t", txid).query(String.class).list();
+                .param("t", txid)
+                .query(String.class)
+                .list();
         assertThat(outboxTypes).contains("payment.failed");
 
         // A0: the exhaustion failure reason is persisted (in the outbox payload, since the payments
         // table has no failure_reason column and no migration is permitted in this block).
         String failedReason = jdbc.sql(
-                "select payload -> 'payload' ->> 'reason' from payments.outbox where aggregate_id=:t and type='payment.failed'")
-                .param("t", txid).query(String.class).single();
+                        "select payload -> 'payload' ->> 'reason' from payments.outbox where aggregate_id=:t and type='payment.failed'")
+                .param("t", txid)
+                .query(String.class)
+                .single();
         assertThat(failedReason).isEqualTo("psp_create_exhausted");
 
         // A0: the idempotency key row was deleted (audit_log keeps the trail), so a retry with the
@@ -348,10 +380,13 @@ class CreatePaymentIT {
         var created = post("/v1/payments", body("{\"amount\":12345}"), authHeaders("idem-detail-01", "req-detail-01"));
         String txid = parse(created).at("/txid").asText();
 
-        var detail = http.send(HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl + "/v1/payments/" + txid))
-                .header("Authorization", "Bearer " + rawKey)
-                .GET().build(), HttpResponse.BodyHandlers.ofString());
+        var detail = http.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create(baseUrl + "/v1/payments/" + txid))
+                        .header("Authorization", "Bearer " + rawKey)
+                        .GET()
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
 
         assertThat(detail.statusCode()).isEqualTo(200);
         var dj = parse(detail);
@@ -374,11 +409,11 @@ class CreatePaymentIT {
         // Revoke the owner key first so the other merchant's key can take the shared dev key_prefix
         // (uq_api_keys_key_prefix_active is partial over non-revoked keys).
         jdbc.sql("update payments.api_keys set revoked_at = now() where id = :id")
-                .param("id", KEY_ID).update();
+                .param("id", KEY_ID)
+                .update();
         UUID otherMerchant = UUID.fromString("33333333-3333-3333-3333-333333333333");
         String otherRawKey = ApiKeyHasher.generateRawKey();
-        jdbc.sql(
-                "insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
+        jdbc.sql("insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
                         + "values (:id, :merchant, 'other-key', :prefix, :hash, now(), null)")
                 .param("id", UUID.fromString("44444444-4444-4444-4444-444444444444"))
                 .param("merchant", otherMerchant)
@@ -386,10 +421,13 @@ class CreatePaymentIT {
                 .param("hash", ApiKeyHasher.hash(otherRawKey))
                 .update();
 
-        var detail = http.send(HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl + "/v1/payments/" + txid))
-                .header("Authorization", "Bearer " + otherRawKey)
-                .GET().build(), HttpResponse.BodyHandlers.ofString());
+        var detail = http.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create(baseUrl + "/v1/payments/" + txid))
+                        .header("Authorization", "Bearer " + otherRawKey)
+                        .GET()
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
 
         assertThat(detail.statusCode()).isEqualTo(404);
     }
@@ -439,7 +477,8 @@ class CreatePaymentIT {
         return new tools.jackson.databind.json.JsonMapper().readTree(resp.body());
     }
 
-    private HttpResponse<String> post(String path, String body, java.util.Map<String, String> headers) throws Exception {
+    private HttpResponse<String> post(String path, String body, java.util.Map<String, String> headers)
+            throws Exception {
         var builder = HttpRequest.newBuilder()
                 .uri(URI.create(baseUrl + path))
                 .POST(HttpRequest.BodyPublishers.ofString(body));
@@ -473,13 +512,21 @@ class CreatePaymentIT {
     }
 
     private long paymentCount() {
-        return (Long) jdbc.sql("select count(*) from payments.payments").query(Long.class).single();
+        return (Long) jdbc.sql("select count(*) from payments.payments")
+                .query(Long.class)
+                .single();
     }
 
     private long rowCounts() {
-        Long payments = jdbc.sql("select count(*) from payments.payments").query(Long.class).single();
-        Long outbox = jdbc.sql("select count(*) from payments.outbox").query(Long.class).single();
-        Long audit = jdbc.sql("select count(*) from payments.audit_log").query(Long.class).single();
+        Long payments = jdbc.sql("select count(*) from payments.payments")
+                .query(Long.class)
+                .single();
+        Long outbox = jdbc.sql("select count(*) from payments.outbox")
+                .query(Long.class)
+                .single();
+        Long audit = jdbc.sql("select count(*) from payments.audit_log")
+                .query(Long.class)
+                .single();
         return payments + outbox + audit;
     }
 
@@ -494,8 +541,7 @@ class CreatePaymentIT {
                     .locations(
                             "classpath:db/migration/payments",
                             "classpath:db/migration/ledger",
-                            "classpath:db/migration/notifications"
-                    )
+                            "classpath:db/migration/notifications")
                     .baselineOnMigrate(true)
                     .load();
             flyway.migrate();
@@ -536,7 +582,10 @@ class CreatePaymentIT {
 
     /** Stateful HttpHandler for the PSP stub with a recorded, zero-wait sleeper (AGENTS §5.3). */
     static final class PspStub {
-        enum Mode { SUCCESS, FAIL }
+        enum Mode {
+            SUCCESS,
+            FAIL
+        }
 
         volatile Mode mode = Mode.SUCCESS;
         volatile long latencyMs = 0L; // simulates a slow external PSP (not a test synchronization sleep)
@@ -578,14 +627,14 @@ class CreatePaymentIT {
                     String requestBody = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
                     String txid = extractTxid(requestBody);
                     respBody = ("{\"txid\":\"" + txid + "\",\"expiresAt\":\"" + PSP_EXPIRES_AT
-                            + "\",\"endToEndId\":\"E2E-1\",\"brcode\":\"000201-terribly-long-brcode\"}")
+                                    + "\",\"endToEndId\":\"E2E-1\",\"brcode\":\"000201-terribly-long-brcode\"}")
                             .getBytes(StandardCharsets.UTF_8);
                 }
             } else if ("GET".equals(method) && path.startsWith("/cobs/")) {
                 String txid = path.substring("/cobs/".length());
                 status = 200;
                 respBody = ("{\"txid\":\"" + txid + "\",\"expiresAt\":\"" + PSP_EXPIRES_AT
-                        + "\",\"endToEndId\":\"E2E-1\",\"brcode\":\"000201-terribly-long-brcode\"}")
+                                + "\",\"endToEndId\":\"E2E-1\",\"brcode\":\"000201-terribly-long-brcode\"}")
                         .getBytes(StandardCharsets.UTF_8);
             } else {
                 status = 404;

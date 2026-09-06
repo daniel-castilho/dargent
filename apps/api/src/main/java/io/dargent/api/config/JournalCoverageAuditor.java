@@ -1,18 +1,12 @@
 package io.dargent.api.config;
 
 import io.dargent.payments.domain.port.out.AuditWriter;
-import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.simple.JdbcClient;
-
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
 
 /**
  * Journal coverage auditor (E5 spec §6, DEBT-4) — composition-root only, so it may read both
@@ -67,7 +61,7 @@ public final class JournalCoverageAuditor {
         List<Object[]> confirmedRows = jdbc.sql("""
                 select txid, merchant_id from payments.payments where status = 'CONFIRMED'
                 """)
-                .query((rs, i) -> new Object[]{rs.getString("txid"), rs.getObject("merchant_id", UUID.class)})
+                .query((rs, i) -> new Object[] {rs.getString("txid"), rs.getObject("merchant_id", UUID.class)})
                 .list();
         Map<String, UUID> confirmed = indexByTxid(confirmedRows);
 
@@ -75,7 +69,7 @@ public final class JournalCoverageAuditor {
                 select txid, merchant_id from ledger.events
                 where status = 'POSTED' and type = 'payment.confirmed'
                 """)
-                .query((rs, i) -> new Object[]{rs.getString("txid"), rs.getObject("merchant_id", UUID.class)})
+                .query((rs, i) -> new Object[] {rs.getString("txid"), rs.getObject("merchant_id", UUID.class)})
                 .list();
         Map<String, UUID> posted = indexByTxid(postedRows);
 
@@ -87,7 +81,7 @@ public final class JournalCoverageAuditor {
                 from payments.refunds r
                 join payments.payments p on p.id = r.payment_id
                 """)
-                .query((rs, i) -> new Object[]{rs.getString("txid"), rs.getObject("merchant_id", UUID.class)})
+                .query((rs, i) -> new Object[] {rs.getString("txid"), rs.getObject("merchant_id", UUID.class)})
                 .list();
         Map<String, UUID> refunded = indexByTxid(refundedRows);
 
@@ -95,7 +89,7 @@ public final class JournalCoverageAuditor {
                 select txid, merchant_id from ledger.events
                 where status = 'POSTED' and type = 'refund.created'
                 """)
-                .query((rs, i) -> new Object[]{rs.getString("txid"), rs.getObject("merchant_id", UUID.class)})
+                .query((rs, i) -> new Object[] {rs.getString("txid"), rs.getObject("merchant_id", UUID.class)})
                 .list();
         Map<String, UUID> postedRefunds = indexByTxid(postedRefundRows);
 
@@ -103,14 +97,22 @@ public final class JournalCoverageAuditor {
         // Phase A: confirmed payment without a posted journal event.
         for (Map.Entry<String, UUID> e : confirmed.entrySet()) {
             if (!posted.containsKey(e.getKey())) {
-                coverageGap(PHASE_A, e.getValue(), e.getKey(), "confirmed payment has no POSTED payment.confirmed journal event");
+                coverageGap(
+                        PHASE_A,
+                        e.getValue(),
+                        e.getKey(),
+                        "confirmed payment has no POSTED payment.confirmed journal event");
                 gaps++;
             }
         }
         // Phase B: posted journal event without a confirmed payment.
         for (Map.Entry<String, UUID> e : posted.entrySet()) {
             if (!confirmed.containsKey(e.getKey())) {
-                coverageGap(PHASE_B, e.getValue(), e.getKey(), "POSTED payment.confirmed journal event has no CONFIRMED payment");
+                coverageGap(
+                        PHASE_B,
+                        e.getValue(),
+                        e.getKey(),
+                        "POSTED payment.confirmed journal event has no CONFIRMED payment");
                 gaps++;
             }
         }
@@ -118,14 +120,22 @@ public final class JournalCoverageAuditor {
         // Phase C: refunded payment (a refund row exists) with no POSTED refund.created journal event.
         for (Map.Entry<String, UUID> e : refunded.entrySet()) {
             if (!postedRefunds.containsKey(e.getKey())) {
-                coverageGap(PHASE_C, e.getValue(), e.getKey(), "refunded payment has no POSTED refund.created journal event");
+                coverageGap(
+                        PHASE_C,
+                        e.getValue(),
+                        e.getKey(),
+                        "refunded payment has no POSTED refund.created journal event");
                 gaps++;
             }
         }
         // Phase D: POSTED refund.created journal event with no corresponding refunded payment.
         for (Map.Entry<String, UUID> e : postedRefunds.entrySet()) {
             if (!refunded.containsKey(e.getKey())) {
-                coverageGap(PHASE_D, e.getValue(), e.getKey(), "POSTED refund.created journal event has no matching refunded payment");
+                coverageGap(
+                        PHASE_D,
+                        e.getValue(),
+                        e.getKey(),
+                        "POSTED refund.created journal event has no matching refunded payment");
                 gaps++;
             }
         }

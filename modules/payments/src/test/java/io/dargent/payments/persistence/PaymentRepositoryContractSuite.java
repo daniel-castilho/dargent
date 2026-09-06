@@ -60,9 +60,7 @@ public abstract class PaymentRepositoryContractSuite {
     @Test
     void resurrection_late_flag_round_trips() {
         var txid = newTxid();
-        var p = newPayment(txid)
-                .expire(NOW.plusSeconds(4_000))
-                .confirm(E2E, BREAKDOWN, NOW.plusSeconds(7_000));
+        var p = newPayment(txid).expire(NOW.plusSeconds(4_000)).confirm(E2E, BREAKDOWN, NOW.plusSeconds(7_000));
         repository().save(p);
 
         var found = repository().findByTxid(txid).orElseThrow();
@@ -132,13 +130,13 @@ public abstract class PaymentRepositoryContractSuite {
     void duplicate_txid_save_is_rejected() {
         var txid = newTxid();
         repository().save(newPayment(txid));
-        assertThatThrownBy(() -> repository().save(newPayment(txid)))
-                .isInstanceOf(DuplicatePaymentTxidException.class);
+        assertThatThrownBy(() -> repository().save(newPayment(txid))).isInstanceOf(DuplicatePaymentTxidException.class);
     }
 
     @Test
     void guarded_update_on_unknown_txid_returns_false() {
-        assertThat(repository().updateIfVersionMatches(newPayment(newTxid()), 0)).isFalse();
+        assertThat(repository().updateIfVersionMatches(newPayment(newTxid()), 0))
+                .isFalse();
     }
 
     @Test
@@ -147,8 +145,7 @@ public abstract class PaymentRepositoryContractSuite {
     }
 
     private static Payment newPayment(Txid txid) {
-        return Payment.create(txid, MERCHANT_ID, Money.of(10_000, "BRL"), "order-1",
-                NOW.plusSeconds(1_800), NOW);
+        return Payment.create(txid, MERCHANT_ID, Money.of(10_000, "BRL"), "order-1", NOW.plusSeconds(1_800), NOW);
     }
 
     private static Txid newTxid() {

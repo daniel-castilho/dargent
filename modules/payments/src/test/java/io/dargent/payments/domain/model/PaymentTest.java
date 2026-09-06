@@ -37,8 +37,7 @@ class PaymentTest {
     }
 
     private static Payment partiallyRefunded() {
-        return confirmed()
-                .refund(Money.of(4_000, "BRL"), BREAKDOWN.feeReversalFor(4_000), NOW.plusSeconds(120));
+        return confirmed().refund(Money.of(4_000, "BRL"), BREAKDOWN.feeReversalFor(4_000), NOW.plusSeconds(120));
     }
 
     private static Payment expired() {
@@ -50,8 +49,7 @@ class PaymentTest {
     }
 
     private static Payment refunded() {
-        return confirmed()
-                .refund(Money.of(10_000, "BRL"), BREAKDOWN.feeReversalFor(10_000), NOW.plusSeconds(120));
+        return confirmed().refund(Money.of(10_000, "BRL"), BREAKDOWN.feeReversalFor(10_000), NOW.plusSeconds(120));
     }
 
     // ---- birth ----
@@ -136,7 +134,8 @@ class PaymentTest {
     @Test
     void confirm_with_mismatched_breakdown_amount_is_rejected() {
         var p = create();
-        assertThatThrownBy(() -> p.confirm(END_TO_END_ID, FeeBreakdown.of(9_999, new BpsRate(100)), NOW.plusSeconds(60)))
+        assertThatThrownBy(
+                        () -> p.confirm(END_TO_END_ID, FeeBreakdown.of(9_999, new BpsRate(100)), NOW.plusSeconds(60)))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThat(p.status()).isEqualTo(PaymentStatus.PENDING);
     }
@@ -161,10 +160,8 @@ class PaymentTest {
 
     @Test
     void expire_at_or_before_deadline_is_rejected() {
-        assertThatThrownBy(() -> create().expire(NOW.plusSeconds(1_800)))
-                .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> create().expire(NOW.plusSeconds(60)))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> create().expire(NOW.plusSeconds(1_800))).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> create().expire(NOW.plusSeconds(60))).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -175,12 +172,13 @@ class PaymentTest {
     @Test
     void is_due_for_expiration_true_only_for_pending_past_deadline() {
         assertThat(create().isDueForExpiration(NOW.plusSeconds(1_801))).isTrue();
-        assertThat(create().isDueForExpiration(EXPIRES_AT)).isFalse();       // exactly at deadline
+        assertThat(create().isDueForExpiration(EXPIRES_AT)).isFalse(); // exactly at deadline
         assertThat(create().isDueForExpiration(EXPIRES_AT.minusSeconds(1))).isFalse(); // before
-        assertThat(confirmed().isDueForExpiration(NOW.plusSeconds(9_999))).isFalse();   // CONFIRMED never expires
-        assertThat(expired().isDueForExpiration(NOW.plusSeconds(9_999))).isFalse();     // already EXPIRED (D6: may resurrect)
+        assertThat(confirmed().isDueForExpiration(NOW.plusSeconds(9_999))).isFalse(); // CONFIRMED never expires
+        assertThat(expired().isDueForExpiration(NOW.plusSeconds(9_999)))
+                .isFalse(); // already EXPIRED (D6: may resurrect)
         assertThat(failed().isDueForExpiration(NOW.plusSeconds(9_999))).isFalse();
-        assertThat(create().isDueForExpiration(null)).isFalse();             // Clock-injected; null now = not due
+        assertThat(create().isDueForExpiration(null)).isFalse(); // Clock-injected; null now = not due
     }
 
     // ---- markFailed ----
@@ -231,8 +229,8 @@ class PaymentTest {
 
     @Test
     void second_partial_refund_on_partially_refunded_keeps_it_partially_refunded() {
-        var p = partiallyRefunded().refund(
-                Money.of(3_000, "BRL"), BREAKDOWN.feeReversalFor(3_000), NOW.plusSeconds(240));
+        var p = partiallyRefunded()
+                .refund(Money.of(3_000, "BRL"), BREAKDOWN.feeReversalFor(3_000), NOW.plusSeconds(240));
         assertThat(p.status()).isEqualTo(PaymentStatus.PARTIALLY_REFUNDED);
         assertThat(p.remaining().cents()).isEqualTo(3_000);
         assertThat(p.version()).isEqualTo(3);
@@ -240,8 +238,8 @@ class PaymentTest {
 
     @Test
     void zeroing_refund_on_partially_refunded_moves_to_terminal_refunded() {
-        var p = partiallyRefunded().refund(
-                Money.of(6_000, "BRL"), BREAKDOWN.feeReversalFor(6_000), NOW.plusSeconds(240));
+        var p = partiallyRefunded()
+                .refund(Money.of(6_000, "BRL"), BREAKDOWN.feeReversalFor(6_000), NOW.plusSeconds(240));
         assertThat(p.status()).isEqualTo(PaymentStatus.REFUNDED);
         assertThat(p.remaining().cents()).isZero();
         assertThat(p.refunded().cents()).isEqualTo(10_000);
@@ -251,8 +249,8 @@ class PaymentTest {
     @Test
     void refund_beyond_remaining_throws_refund_exceeds_remaining_with_context() {
         var p = confirmed();
-        assertThatThrownBy(() -> p.refund(
-                Money.of(10_001, "BRL"), BREAKDOWN.feeReversalFor(10_001), NOW.plusSeconds(120)))
+        assertThatThrownBy(
+                        () -> p.refund(Money.of(10_001, "BRL"), BREAKDOWN.feeReversalFor(10_001), NOW.plusSeconds(120)))
                 .isInstanceOf(RefundExceedsRemainingException.class)
                 .satisfies(ex -> {
                     var typed = (RefundExceedsRemainingException) ex;
@@ -274,7 +272,8 @@ class PaymentTest {
 
     @Test
     void refund_is_illegal_from_pending_expired_refunded_and_failed() {
-        assertRefundIllegalFrom(PaymentStatus.PENDING, PaymentStatus.EXPIRED, PaymentStatus.REFUNDED, PaymentStatus.FAILED);
+        assertRefundIllegalFrom(
+                PaymentStatus.PENDING, PaymentStatus.EXPIRED, PaymentStatus.REFUNDED, PaymentStatus.FAILED);
     }
 
     // ---- hydration seam rejecting contract (DEBT-1, AGENTS §8) ----
@@ -282,32 +281,80 @@ class PaymentTest {
     @Test
     void restore_rejects_a_confirmed_snapshot_without_fee_or_net_or_confirmed_at() {
         assertThatThrownBy(() -> Payment.restore(
-                UUID.randomUUID(), TXID, MERCHANT_ID, AMOUNT, "order-1",
-                EXPIRES_AT, NOW, PaymentStatus.CONFIRMED, 1,
-                END_TO_END_ID, null, null, false, null, 0))
+                        UUID.randomUUID(),
+                        TXID,
+                        MERCHANT_ID,
+                        AMOUNT,
+                        "order-1",
+                        EXPIRES_AT,
+                        NOW,
+                        PaymentStatus.CONFIRMED,
+                        1,
+                        END_TO_END_ID,
+                        null,
+                        null,
+                        false,
+                        null,
+                        0))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void restore_rejects_a_snapshot_whose_amount_is_not_positive_brl() {
         assertThatThrownBy(() -> Payment.restore(
-                UUID.randomUUID(), TXID, MERCHANT_ID, Money.of(0, "BRL"), "order-1",
-                EXPIRES_AT, NOW, PaymentStatus.PENDING, 0,
-                null, null, null, false, null, 0))
+                        UUID.randomUUID(),
+                        TXID,
+                        MERCHANT_ID,
+                        Money.of(0, "BRL"),
+                        "order-1",
+                        EXPIRES_AT,
+                        NOW,
+                        PaymentStatus.PENDING,
+                        0,
+                        null,
+                        null,
+                        null,
+                        false,
+                        null,
+                        0))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> Payment.restore(
-                UUID.randomUUID(), TXID, MERCHANT_ID, Money.of(100, "USD"), "order-1",
-                EXPIRES_AT, NOW, PaymentStatus.PENDING, 0,
-                null, null, null, false, null, 0))
+                        UUID.randomUUID(),
+                        TXID,
+                        MERCHANT_ID,
+                        Money.of(100, "USD"),
+                        "order-1",
+                        EXPIRES_AT,
+                        NOW,
+                        PaymentStatus.PENDING,
+                        0,
+                        null,
+                        null,
+                        null,
+                        false,
+                        null,
+                        0))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void restore_rejects_a_snapshot_whose_expiry_predates_creation() {
         assertThatThrownBy(() -> Payment.restore(
-                UUID.randomUUID(), TXID, MERCHANT_ID, AMOUNT, "order-1",
-                NOW, NOW.plusSeconds(10), PaymentStatus.PENDING, 0,
-                null, null, null, false, null, 0))
+                        UUID.randomUUID(),
+                        TXID,
+                        MERCHANT_ID,
+                        AMOUNT,
+                        "order-1",
+                        NOW,
+                        NOW.plusSeconds(10),
+                        PaymentStatus.PENDING,
+                        0,
+                        null,
+                        null,
+                        null,
+                        false,
+                        null,
+                        0))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -315,21 +362,108 @@ class PaymentTest {
     void restore_round_trips_every_legal_snapshot_without_raising() {
         // The seam must not reject the legitimate hydration of any aggregate a valid
         // lifecycle can produce (PENDING, EXPIRED, FAILED, CONFIRMED, PARTIALLY_REFUNDED, REFUNDED).
-        assertThat(Payment.restore(UUID.randomUUID(), TXID, MERCHANT_ID, AMOUNT, "order-1", EXPIRES_AT, NOW,
-                PaymentStatus.PENDING, 0, null, null, null, false, null, 0)).isNotNull();
-        assertThat(Payment.restore(UUID.randomUUID(), TXID, MERCHANT_ID, AMOUNT, "order-1", EXPIRES_AT, NOW,
-                PaymentStatus.EXPIRED, 1, null, null, null, false, null, 0)).isNotNull();
-        assertThat(Payment.restore(UUID.randomUUID(), TXID, MERCHANT_ID, AMOUNT, "order-1", EXPIRES_AT, NOW,
-                PaymentStatus.FAILED, 1, null, null, null, false, null, 0)).isNotNull();
-        assertThat(Payment.restore(UUID.randomUUID(), TXID, MERCHANT_ID, AMOUNT, "order-1", EXPIRES_AT, NOW,
-                PaymentStatus.CONFIRMED, 1, END_TO_END_ID, Money.of(100, "BRL"), Money.of(9_900, "BRL"),
-                false, NOW.plusSeconds(60), 0)).isNotNull();
-        assertThat(Payment.restore(UUID.randomUUID(), TXID, MERCHANT_ID, AMOUNT, "order-1", EXPIRES_AT, NOW,
-                PaymentStatus.PARTIALLY_REFUNDED, 2, END_TO_END_ID, Money.of(100, "BRL"), Money.of(9_900, "BRL"),
-                false, NOW.plusSeconds(60), 4_000)).isNotNull();
-        assertThat(Payment.restore(UUID.randomUUID(), TXID, MERCHANT_ID, AMOUNT, "order-1", EXPIRES_AT, NOW,
-                PaymentStatus.REFUNDED, 2, END_TO_END_ID, Money.of(100, "BRL"), Money.of(9_900, "BRL"),
-                false, NOW.plusSeconds(60), 10_000)).isNotNull();
+        assertThat(Payment.restore(
+                        UUID.randomUUID(),
+                        TXID,
+                        MERCHANT_ID,
+                        AMOUNT,
+                        "order-1",
+                        EXPIRES_AT,
+                        NOW,
+                        PaymentStatus.PENDING,
+                        0,
+                        null,
+                        null,
+                        null,
+                        false,
+                        null,
+                        0))
+                .isNotNull();
+        assertThat(Payment.restore(
+                        UUID.randomUUID(),
+                        TXID,
+                        MERCHANT_ID,
+                        AMOUNT,
+                        "order-1",
+                        EXPIRES_AT,
+                        NOW,
+                        PaymentStatus.EXPIRED,
+                        1,
+                        null,
+                        null,
+                        null,
+                        false,
+                        null,
+                        0))
+                .isNotNull();
+        assertThat(Payment.restore(
+                        UUID.randomUUID(),
+                        TXID,
+                        MERCHANT_ID,
+                        AMOUNT,
+                        "order-1",
+                        EXPIRES_AT,
+                        NOW,
+                        PaymentStatus.FAILED,
+                        1,
+                        null,
+                        null,
+                        null,
+                        false,
+                        null,
+                        0))
+                .isNotNull();
+        assertThat(Payment.restore(
+                        UUID.randomUUID(),
+                        TXID,
+                        MERCHANT_ID,
+                        AMOUNT,
+                        "order-1",
+                        EXPIRES_AT,
+                        NOW,
+                        PaymentStatus.CONFIRMED,
+                        1,
+                        END_TO_END_ID,
+                        Money.of(100, "BRL"),
+                        Money.of(9_900, "BRL"),
+                        false,
+                        NOW.plusSeconds(60),
+                        0))
+                .isNotNull();
+        assertThat(Payment.restore(
+                        UUID.randomUUID(),
+                        TXID,
+                        MERCHANT_ID,
+                        AMOUNT,
+                        "order-1",
+                        EXPIRES_AT,
+                        NOW,
+                        PaymentStatus.PARTIALLY_REFUNDED,
+                        2,
+                        END_TO_END_ID,
+                        Money.of(100, "BRL"),
+                        Money.of(9_900, "BRL"),
+                        false,
+                        NOW.plusSeconds(60),
+                        4_000))
+                .isNotNull();
+        assertThat(Payment.restore(
+                        UUID.randomUUID(),
+                        TXID,
+                        MERCHANT_ID,
+                        AMOUNT,
+                        "order-1",
+                        EXPIRES_AT,
+                        NOW,
+                        PaymentStatus.REFUNDED,
+                        2,
+                        END_TO_END_ID,
+                        Money.of(100, "BRL"),
+                        Money.of(9_900, "BRL"),
+                        false,
+                        NOW.plusSeconds(60),
+                        10_000))
+                .isNotNull();
     }
 
     // ---- terminal reachability ----
@@ -355,7 +489,8 @@ class PaymentTest {
         for (var source : sources) {
             assertThatThrownBy(() -> build(source).confirm(END_TO_END_ID, BREAKDOWN, NOW.plusSeconds(60)))
                     .isInstanceOf(InvalidTransitionException.class)
-                    .satisfies(ex -> assertTransitionContext((InvalidTransitionException) ex, source, PaymentStatus.CONFIRMED));
+                    .satisfies(ex ->
+                            assertTransitionContext((InvalidTransitionException) ex, source, PaymentStatus.CONFIRMED));
         }
     }
 
@@ -363,7 +498,8 @@ class PaymentTest {
         for (var source : sources) {
             assertThatThrownBy(() -> build(source).expire(NOW.plusSeconds(4_000)))
                     .isInstanceOf(InvalidTransitionException.class)
-                    .satisfies(ex -> assertTransitionContext((InvalidTransitionException) ex, source, PaymentStatus.EXPIRED));
+                    .satisfies(ex ->
+                            assertTransitionContext((InvalidTransitionException) ex, source, PaymentStatus.EXPIRED));
         }
     }
 
@@ -371,15 +507,18 @@ class PaymentTest {
         for (var source : sources) {
             assertThatThrownBy(() -> build(source).markFailed("x", NOW.plusSeconds(60)))
                     .isInstanceOf(InvalidTransitionException.class)
-                    .satisfies(ex -> assertTransitionContext((InvalidTransitionException) ex, source, PaymentStatus.FAILED));
+                    .satisfies(ex ->
+                            assertTransitionContext((InvalidTransitionException) ex, source, PaymentStatus.FAILED));
         }
     }
 
     private void assertRefundIllegalFrom(PaymentStatus... sources) {
         for (var source : sources) {
-            assertThatThrownBy(() -> build(source).refund(Money.of(1, "BRL"), BREAKDOWN.feeReversalFor(1), NOW.plusSeconds(60)))
+            assertThatThrownBy(() ->
+                            build(source).refund(Money.of(1, "BRL"), BREAKDOWN.feeReversalFor(1), NOW.plusSeconds(60)))
                     .isInstanceOf(InvalidTransitionException.class)
-                    .satisfies(ex -> assertTransitionContext((InvalidTransitionException) ex, source, PaymentStatus.PARTIALLY_REFUNDED));
+                    .satisfies(ex -> assertTransitionContext(
+                            (InvalidTransitionException) ex, source, PaymentStatus.PARTIALLY_REFUNDED));
         }
     }
 

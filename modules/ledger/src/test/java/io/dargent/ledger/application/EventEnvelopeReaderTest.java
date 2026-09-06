@@ -1,11 +1,11 @@
 package io.dargent.ledger.application;
 
-import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import java.util.UUID;
 import java.time.Instant;
+import java.util.UUID;
+import org.junit.jupiter.api.Test;
 
 class EventEnvelopeReaderTest {
 
@@ -74,8 +74,7 @@ class EventEnvelopeReaderTest {
                 }
                 """;
 
-        assertThatThrownBy(() -> reader.read(raw))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> reader.read(raw)).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -88,8 +87,7 @@ class EventEnvelopeReaderTest {
                 UUID.fromString("11111111-1111-1111-1111-111111111111"),
                 "req-123",
                 Instant.now(),
-                "{\"txid\":\"txid-123\",\"merchantId\":\"11111111-1111-1111-1111-111111111111\",\"amount\":10000,\"fee\":100,\"net\":9900,\"late\":false}"
-        );
+                "{\"txid\":\"txid-123\",\"merchantId\":\"11111111-1111-1111-1111-111111111111\",\"amount\":10000,\"fee\":100,\"net\":9900,\"late\":false}");
 
         var payload = reader.extractPaymentPayload(envelope);
 
@@ -111,8 +109,7 @@ class EventEnvelopeReaderTest {
                 UUID.fromString("11111111-1111-1111-1111-111111111111"),
                 null,
                 Instant.now(),
-                "{}"
-        );
+                "{}");
 
         assertThatThrownBy(() -> reader.extractPaymentPayload(envelope))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -129,8 +126,7 @@ class EventEnvelopeReaderTest {
                 UUID.fromString("11111111-1111-1111-1111-111111111111"),
                 null,
                 Instant.now(),
-                "not valid json"
-        );
+                "not valid json");
 
         assertThatThrownBy(() -> reader.extractPaymentPayload(envelope))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -147,8 +143,7 @@ class EventEnvelopeReaderTest {
                 UUID.fromString("11111111-1111-1111-1111-111111111111"),
                 null,
                 Instant.now(),
-                "{\"txid\":\"txid-123\",\"merchantId\":\"11111111-1111-1111-1111-111111111111\",\"amount\":10000,\"fee\":200,\"net\":9900,\"late\":false}"
-        );
+                "{\"txid\":\"txid-123\",\"merchantId\":\"11111111-1111-1111-1111-111111111111\",\"amount\":10000,\"fee\":200,\"net\":9900,\"late\":false}");
 
         assertThatThrownBy(() -> reader.extractPaymentPayload(envelope))
                 .isInstanceOf(IllegalArgumentException.class)

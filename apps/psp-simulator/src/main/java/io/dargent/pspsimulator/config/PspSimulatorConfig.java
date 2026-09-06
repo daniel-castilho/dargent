@@ -1,11 +1,10 @@
 package io.dargent.pspsimulator.config;
 
-import java.time.Clock;
-import java.util.Random;
-
 import io.dargent.pspsimulator.charge.ChargeStore;
 import io.dargent.pspsimulator.charge.EndToEndIdGenerator;
 import io.dargent.pspsimulator.charge.EventIdGenerator;
+import java.time.Clock;
+import java.util.Random;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

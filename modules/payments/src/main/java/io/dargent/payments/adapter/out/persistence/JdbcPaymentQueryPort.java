@@ -44,7 +44,7 @@ public class JdbcPaymentQueryPort implements PaymentQueryPort {
                     order by created_at desc, txid desc
                     limit :limit
                     """;
-            params = new Object[]{"merchant", merchantId, "limit", limit};
+            params = new Object[] {"merchant", merchantId, "limit", limit};
         } else {
             // cursor = "txId|createdAtMicros" — already decoded once by the controller (BD-10)
             String[] parts = cursor.split("\\|", 2);
@@ -58,11 +58,11 @@ public class JdbcPaymentQueryPort implements PaymentQueryPort {
                     order by created_at desc, txid desc
                     limit :limit
                     """;
-            params = new Object[]{
-                    "merchant", merchantId,
-                    "afterMicros", afterMicros,
-                    "afterTxid", afterTxid,
-                    "limit", limit
+            params = new Object[] {
+                "merchant", merchantId,
+                "afterMicros", afterMicros,
+                "afterTxid", afterTxid,
+                "limit", limit
             };
         }
         return jdbc.sql(sql).params(params).query(PaymentEntity.class).list().stream()

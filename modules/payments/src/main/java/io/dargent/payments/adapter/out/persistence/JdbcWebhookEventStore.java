@@ -3,7 +3,6 @@ package io.dargent.payments.adapter.out.persistence;
 import io.dargent.payments.domain.port.out.WebhookEventRecord;
 import io.dargent.payments.domain.port.out.WebhookEventStore;
 import java.util.Optional;
-import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -61,9 +60,7 @@ public class JdbcWebhookEventStore implements WebhookEventStore {
                 update payments.webhook_events
                 set status = 'PROCESSED', processed_at = now()
                 where provider_event_id = :id
-                """)
-                .param("id", providerEventId)
-                .update();
+                """).param("id", providerEventId).update();
     }
 
     @Override
@@ -72,9 +69,7 @@ public class JdbcWebhookEventStore implements WebhookEventStore {
                 update payments.webhook_events
                 set status = 'IGNORED', processed_at = now()
                 where provider_event_id = :id
-                """)
-                .param("id", providerEventId)
-                .update();
+                """).param("id", providerEventId).update();
     }
 
     @Override

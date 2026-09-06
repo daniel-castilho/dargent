@@ -24,8 +24,7 @@ public record FeeBreakdown(Money amount, Money fee, Money net) {
             throw new IllegalArgumentException("amount must be positive: " + amount.cents());
         }
         if (fee.cents() < 0 || fee.cents() > amount.cents()) {
-            throw new IllegalArgumentException(
-                    "fee must be within [0, amount]: " + fee.cents() + "/" + amount.cents());
+            throw new IllegalArgumentException("fee must be within [0, amount]: " + fee.cents() + "/" + amount.cents());
         }
         if (fee.plus(net).compareTo(amount) != 0) {
             throw new IllegalArgumentException(
@@ -35,10 +34,7 @@ public record FeeBreakdown(Money amount, Money fee, Money net) {
 
     public static FeeBreakdown of(long amountCents, BpsRate bps) {
         long fee = amountCents * bps.value() / 10_000L;
-        return new FeeBreakdown(
-                Money.of(amountCents, BRL),
-                Money.of(fee, BRL),
-                Money.of(amountCents - fee, BRL));
+        return new FeeBreakdown(Money.of(amountCents, BRL), Money.of(fee, BRL), Money.of(amountCents - fee, BRL));
     }
 
     /** Proportional fee reversal for a refund (spec §7): {@code floor(fee × refund / amount)}. */

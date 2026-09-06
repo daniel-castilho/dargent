@@ -2,6 +2,8 @@ package io.dargent.api.notifications;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
 import io.dargent.api.DargentApiApplication;
 import io.dargent.api.security.ApiKeyHasher;
 import io.dargent.notifications.adapter.out.messaging.SqsNotificationConsumer;
@@ -9,8 +11,6 @@ import io.dargent.notifications.application.NotificationIngestionUseCase;
 import io.dargent.payments.adapter.out.psp.SimulatorChargeAdapter;
 import io.dargent.payments.application.OutboxDeliveryUseCase;
 import io.dargent.payments.domain.port.out.PspPort;
-import org.flywaydb.core.Flyway;
-import javax.sql.DataSource;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URI;
@@ -27,6 +27,8 @@ import java.util.Map;
 import java.util.UUID;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import javax.sql.DataSource;
+import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -50,8 +52,6 @@ import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.QueueAttributeName;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpServer;
 
 /**
  * S5 — E10 Integration Tests (E10 spec §8).
@@ -67,12 +67,9 @@ import com.sun.net.httpserver.HttpServer;
  * notification test's container from delivering via SNS→SQS despite identical config.
  */
 @SpringBootTest(
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    classes = {DargentApiApplication.class, NotificationLoopIT.NotificationsTestConfig.class},
-    properties = {
-        "dargent.relay.enabled=true",
-        "dargent.psp.webhook-secret=dev-only-secret"
-    })
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        classes = {DargentApiApplication.class, NotificationLoopIT.NotificationsTestConfig.class},
+        properties = {"dargent.relay.enabled=true", "dargent.psp.webhook-secret=dev-only-secret"})
 @Testcontainers
 class NotificationLoopIT {
 
@@ -82,8 +79,7 @@ class NotificationLoopIT {
     private static final String NOTIFS_DLQ = "dargent-payments-notif-dlq-ml.fifo";
     private static final UUID MERCHANT = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID KEY_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
-    private static final Clock FIXED_CLOCK =
-            Clock.fixed(Instant.parse("2027-01-01T12:00:00Z"), ZoneOffset.UTC);
+    private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2027-01-01T12:00:00Z"), ZoneOffset.UTC);
     private static final long FIXED_NOW_SECS = FIXED_CLOCK.instant().getEpochSecond();
     private static final String PAID_AT = FIXED_CLOCK.instant().plusSeconds(120).toString();
     private static final String SECRET = "dev-only-secret";
@@ -94,9 +90,9 @@ class NotificationLoopIT {
     static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:16-alpine");
 
     @Container
-    static final LocalStackContainer localstack =
-            new LocalStackContainer(DockerImageName.parse("localstack/localstack:3.8.1"))
-                    .withServices(LocalStackContainer.Service.SNS, LocalStackContainer.Service.SQS);
+    static final LocalStackContainer localstack = new LocalStackContainer(
+                    DockerImageName.parse("localstack/localstack:3.8.1"))
+            .withServices(LocalStackContainer.Service.SNS, LocalStackContainer.Service.SQS);
 
     private static SnsClient sns;
     private static SqsClient sqs;
@@ -132,7 +128,8 @@ class NotificationLoopIT {
     static void awsEnvironment(org.springframework.test.context.DynamicPropertyRegistry registry) {
         ensureTopology();
         registry.add("AWS_ENDPOINT_URL", () -> localstack
-                .getEndpointOverride(LocalStackContainer.Service.SNS).toString());
+                .getEndpointOverride(LocalStackContainer.Service.SNS)
+                .toString());
         registry.add("AWS_REGION", () -> REGION);
         registry.add("AWS_ACCESS_KEY_ID", () -> "test");
         registry.add("AWS_SECRET_ACCESS_KEY", () -> "test");
@@ -148,14 +145,15 @@ class NotificationLoopIT {
     }
 
     @BeforeEach
-void setUp() {
+    void setUp() {
         baseUrl = "http://localhost:" + port;
-        jdbc.sql("truncate notifications.notification, ledger.events, ledger.postings, ledger.journal_entries, ledger.balances, "
-                + "ledger.settlements, ledger.audit_log, "
-                + "payments.webhook_events, payments.outbox, payments.idempotency_keys, "
-                + "payments.audit_log, payments.payments, payments.api_keys restart identity cascade").update();
         jdbc.sql(
-                "insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
+                        "truncate notifications.notification, ledger.events, ledger.postings, ledger.journal_entries, ledger.balances, "
+                                + "ledger.settlements, ledger.audit_log, "
+                                + "payments.webhook_events, payments.outbox, payments.idempotency_keys, "
+                                + "payments.audit_log, payments.payments, payments.api_keys restart identity cascade")
+                .update();
+        jdbc.sql("insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
                         + "values (:id, :merchant, 'notifs-it-key', :prefix, :hash, now(), null)")
                 .param("id", KEY_ID)
                 .param("merchant", MERCHANT)
@@ -186,13 +184,15 @@ void setUp() {
                 .messageBody(envelope));
 
         // Brief pause for SQS eventual consistency
-        try { Thread.sleep(500); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        try {
+            Thread.sleep(500);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
 
         // Verify message is in queue by receiving it directly (LocalStack long-poll may not work in this container)
-        var receiveResp = sqs.receiveMessage(r -> r.queueUrl(notifsUrl)
-                .maxNumberOfMessages(10)
-                .waitTimeSeconds(2)
-                .build());
+        var receiveResp = sqs.receiveMessage(r ->
+                r.queueUrl(notifsUrl).maxNumberOfMessages(10).waitTimeSeconds(2).build());
         assertThat(receiveResp.messages()).as("message should be in queue").isNotEmpty();
         String receivedBody = receiveResp.messages().get(0).body();
         String receiptHandle = receiveResp.messages().get(0).receiptHandle();
@@ -204,11 +204,12 @@ void setUp() {
         // Delete the message from queue (consumer would do this on ack)
         sqs.deleteMessage(r -> r.queueUrl(notifsUrl).receiptHandle(receiptHandle));
 
-        assertThat(notificationCount()).as("confirmed should create a notification row").isEqualTo(1);
+        assertThat(notificationCount())
+                .as("confirmed should create a notification row")
+                .isEqualTo(1);
 
         // Verify event row
-        Map<String, Object> row = jdbc.sql(
-                "select event_id, type, txid, merchant_id, payload, occurred_at, created_at "
+        Map<String, Object> row = jdbc.sql("select event_id, type, txid, merchant_id, payload, occurred_at, created_at "
                         + "from notifications.notification where txid = :t")
                 .param("t", txid)
                 .query((rs, i) -> {
@@ -232,18 +233,24 @@ void setUp() {
         String rawEnvelope = buildEnvelopeWithEventId(eventId, "payment.confirmed", txid, 10000, 100, endToEndId);
         boolean ack2 = ingestion.processMessage(rawEnvelope);
         assertThat(ack2).as("redelivery must ack").isTrue();
-        assertThat(notificationCount()).as("redelivery must not create second row").isEqualTo(1);
+        assertThat(notificationCount())
+                .as("redelivery must not create second row")
+                .isEqualTo(1);
     }
 
     // ------------------------------------------------------------------ helpers
 
     private long notificationCount() {
-        return jdbc.sql("select count(*) from notifications.notification").query(Long.class).single();
+        return jdbc.sql("select count(*) from notifications.notification")
+                .query(Long.class)
+                .single();
     }
 
     private String createPayment(String idemKey) throws Exception {
         psp.mode = PspStub.Mode.SUCCESS;
-        var resp = post("/v1/payments", "{\"amount\":10000,\"description\":\"Notifs loop IT\",\"expiresIn\":\"PT30M\"}",
+        var resp = post(
+                "/v1/payments",
+                "{\"amount\":10000,\"description\":\"Notifs loop IT\",\"expiresIn\":\"PT30M\"}",
                 authHeaders(idemKey));
         assertThat(resp.statusCode())
                 .withFailMessage(() -> "create failed: " + resp.statusCode() + " body=" + resp.body())
@@ -253,7 +260,9 @@ void setUp() {
 
     private String paymentStatus(String txid) {
         return jdbc.sql("select status from payments.payments where txid=:t")
-                .param("t", txid).query(String.class).single();
+                .param("t", txid)
+                .query(String.class)
+                .single();
     }
 
     private String buildConfirmedEnvelope(String txid, String endToEndId, int amount) {
@@ -275,7 +284,8 @@ void setUp() {
                 + "\",\"endToEndId\":\"" + endToEndId + "\"}}";
     }
 
-    private String buildEnvelopeWithEventId(UUID eventId, String type, String txid, int amount, int fee, String endToEndId) {
+    private String buildEnvelopeWithEventId(
+            UUID eventId, String type, String txid, int amount, int fee, String endToEndId) {
         int net = amount - fee;
         return "{\"eventId\":\"" + eventId + "\",\"type\":\"" + type
                 + "\",\"version\":1,\"aggregateId\":\"" + txid
@@ -297,13 +307,15 @@ void setUp() {
     }
 
     private HttpResponse<String> sendWebhook(String ts, String body, String sig) throws Exception {
-        return http.send(HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl + "/webhooks/psp"))
-                .header("Content-Type", "application/json")
-                .header("X-PSP-Timestamp", ts)
-                .header("X-PSP-Signature", sig)
-                .POST(HttpRequest.BodyPublishers.ofString(body))
-                .build(), HttpResponse.BodyHandlers.ofString());
+        return http.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create(baseUrl + "/webhooks/psp"))
+                        .header("Content-Type", "application/json")
+                        .header("X-PSP-Timestamp", ts)
+                        .header("X-PSP-Signature", sig)
+                        .POST(HttpRequest.BodyPublishers.ofString(body))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
     }
 
     private HttpResponse<String> post(String path, String body, Map<String, String> headers) throws Exception {
@@ -316,10 +328,14 @@ void setUp() {
 
     private Map<String, String> authHeaders(String idemKey) {
         return Map.of(
-                "Authorization", "Bearer " + rawKey,
-                "Content-Type", "application/json",
-                "Idempotency-Key", idemKey,
-                "X-Request-Id", "req-" + idemKey);
+                "Authorization",
+                "Bearer " + rawKey,
+                "Content-Type",
+                "application/json",
+                "Idempotency-Key",
+                idemKey,
+                "X-Request-Id",
+                "req-" + idemKey);
     }
 
     private JsonNode parse(HttpResponse<String> resp) throws IOException {
@@ -344,24 +360,25 @@ void setUp() {
         sqs = SqsClient.builder()
                 .endpointOverride(localstack.getEndpointOverride(LocalStackContainer.Service.SQS))
                 .region(Region.of(REGION))
-                .credentialsProvider(StaticCredentialsProvider.create(
-                        AwsBasicCredentials.create("test", "test")))
+                .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create("test", "test")))
                 .build();
         sns = SnsClient.builder()
                 .endpointOverride(localstack.getEndpointOverride(LocalStackContainer.Service.SNS))
                 .region(Region.of(REGION))
-                .credentialsProvider(StaticCredentialsProvider.create(
-                        AwsBasicCredentials.create("test", "test")))
+                .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create("test", "test")))
                 .build();
         String dlqArn = createFifoQueue(sqs, "dargent-payments-notif-dlq-ml.fifo", null, null);
         String redrive = "{\"deadLetterTargetArn\":\"" + dlqArn + "\",\"maxReceiveCount\":\"5\"}";
         notifsUrl = createFifoQueue(sqs, "dargent-payments-notif-ml.fifo", redrive, dlqArn);
         String notifsArn = arnOf(notifsUrl);
         topicArn = sns.createTopic(r -> r.name("dargent-payments-events-notif-ml.fifo")
-                .attributes(Map.of("FifoTopic", "true", "ContentBasedDeduplication", "false"))).topicArn();
+                        .attributes(Map.of("FifoTopic", "true", "ContentBasedDeduplication", "false")))
+                .topicArn();
         // RawMessageDelivery: the ledger consumer passes msg.body() straight to EventIngestionUseCase
         // (§5.3), so the SNS→SQS edge must deliver the raw envelope, not the SNS wrapper.
-        var subResp = sns.subscribe(r -> r.topicArn(topicArn).protocol("sqs").endpoint(notifsArn)
+        var subResp = sns.subscribe(r -> r.topicArn(topicArn)
+                .protocol("sqs")
+                .endpoint(notifsArn)
                 .attributes(Map.of("RawMessageDelivery", "true")));
         String subscriptionArn = subResp.subscriptionArn();
         if ("pending confirmation".equalsIgnoreCase(subscriptionArn)) {
@@ -374,9 +391,10 @@ void setUp() {
         // Poll for the subscription confirmation message
         for (int i = 0; i < 30; i++) {
             var msgs = sqs.receiveMessage(r -> r.queueUrl(queueUrl)
-                    .maxNumberOfMessages(10)
-                    .waitTimeSeconds(2)
-                    .build()).messages();
+                            .maxNumberOfMessages(10)
+                            .waitTimeSeconds(2)
+                            .build())
+                    .messages();
             for (var msg : msgs) {
                 try {
                     var node = MAPPER.readTree(msg.body());
@@ -403,9 +421,9 @@ void setUp() {
     }
 
     private static String arnOf(String url) {
-        return sqs.getQueueAttributes(r -> r.queueUrl(url)
-                .attributeNames(QueueAttributeName.QUEUE_ARN))
-                .attributes().get(QueueAttributeName.QUEUE_ARN);
+        return sqs.getQueueAttributes(r -> r.queueUrl(url).attributeNames(QueueAttributeName.QUEUE_ARN))
+                .attributes()
+                .get(QueueAttributeName.QUEUE_ARN);
     }
 
     @TestConfiguration
@@ -419,8 +437,7 @@ void setUp() {
                     .locations(
                             "classpath:db/migration/payments",
                             "classpath:db/migration/ledger",
-                            "classpath:db/migration/notifications"
-                    )
+                            "classpath:db/migration/notifications")
                     .baselineOnMigrate(true)
                     .load();
             flyway.migrate();
@@ -465,7 +482,10 @@ void setUp() {
     }
 
     static final class PspStub {
-        enum Mode { SUCCESS, FAIL }
+        enum Mode {
+            SUCCESS,
+            FAIL
+        }
 
         volatile Mode mode = Mode.SUCCESS;
 
@@ -486,7 +506,7 @@ void setUp() {
                 String requestBody = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
                 String txid = extractTxid(requestBody);
                 respBody = ("{\"txid\":\"" + txid + "\",\"expiresAt\":\"" + PAID_AT
-                        + "\",\"endToEndId\":\"E2E-1\",\"brcode\":\"000201-terribly-long-brcode\"}")
+                                + "\",\"endToEndId\":\"E2E-1\",\"brcode\":\"000201-terribly-long-brcode\"}")
                         .getBytes(StandardCharsets.UTF_8);
             } else {
                 status = 404;

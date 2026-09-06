@@ -1,5 +1,7 @@
 package io.dargent.pspsimulator.webhook;
 
+import io.dargent.pspsimulator.charge.Charge;
+import io.dargent.pspsimulator.config.ChaosProperties;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.Random;
@@ -11,10 +13,6 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import tools.jackson.databind.ObjectMapper;
-import io.dargent.pspsimulator.charge.Charge;
-import io.dargent.pspsimulator.config.ChaosProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.DisposableBean;
@@ -22,6 +20,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The signed webhook delivery engine (E2 spec §5.4): serialize the event once, sign the exact bytes,
@@ -50,18 +49,22 @@ public class AsyncWebhookDispatcher implements WebhookDispatcher, DisposableBean
     private final ExecutorService executor;
     private final ScheduledExecutorService scheduler;
 
-    public AsyncWebhookDispatcher(WebhookSigner signer, ObjectMapper mapper, ChaosProperties chaos,
-            Random random, Clock clock) {
+    public AsyncWebhookDispatcher(
+            WebhookSigner signer, ObjectMapper mapper, ChaosProperties chaos, Random random, Clock clock) {
         this.signer = signer;
         this.mapper = mapper;
         this.chaos = chaos;
         this.random = random;
         this.clock = clock;
         this.restClient = RestClient.builder().requestFactory(clientFactory()).build();
-        this.executor = new ThreadPoolExecutor(4, 4, 0L, TimeUnit.MILLISECONDS,
-                new LinkedBlockingQueue<>(), deliveryThreadFactory("webhook-delivery"));
-        this.scheduler = Executors.newSingleThreadScheduledExecutor(
-                deliveryThreadFactory("webhook-scheduler"));
+        this.executor = new ThreadPoolExecutor(
+                4,
+                4,
+                0L,
+                TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<>(),
+                deliveryThreadFactory("webhook-delivery"));
+        this.scheduler = Executors.newSingleThreadScheduledExecutor(deliveryThreadFactory("webhook-scheduler"));
     }
 
     @Override
@@ -99,7 +102,8 @@ public class AsyncWebhookDispatcher implements WebhookDispatcher, DisposableBean
         String signature = signer.sign(timestamp, body);
         log.debug("delivering webhook for txid {} to {}", charge.txid(), charge.callbackUrl());
         try {
-            restClient.post()
+            restClient
+                    .post()
                     .uri(charge.callbackUrl())
                     .contentType(MediaType.APPLICATION_JSON)
                     .header("X-PSP-Timestamp", timestamp)

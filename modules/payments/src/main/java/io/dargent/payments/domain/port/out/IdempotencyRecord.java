@@ -12,5 +12,4 @@ public record IdempotencyRecord(
         String state,
         String paymentTxid,
         Integer responseStatus,
-        Map<String, Object> responseBody
-) {}
+        Map<String, Object> responseBody) {}

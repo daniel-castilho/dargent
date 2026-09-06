@@ -14,8 +14,8 @@ public final class RefundExceedsRemainingException extends PaymentDomainExceptio
     private final long requestedCents;
 
     public RefundExceedsRemainingException(Txid txid, long remainingCents, long requestedCents) {
-        super("refund of " + requestedCents + " cents exceeds the remaining " + remainingCents
-                + " cents on payment " + txid.value());
+        super("refund of " + requestedCents + " cents exceeds the remaining " + remainingCents + " cents on payment "
+                + txid.value());
         this.txid = txid;
         this.remainingCents = remainingCents;
         this.requestedCents = requestedCents;

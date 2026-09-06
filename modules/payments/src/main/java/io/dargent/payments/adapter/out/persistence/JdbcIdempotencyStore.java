@@ -49,8 +49,8 @@ public class JdbcIdempotencyStore implements IdempotencyStore {
     }
 
     @Override
-    public Optional<IdempotencyRecord> insertIfAbsent(UUID merchantId, String idempotencyKey,
-            String endpoint, String requestFingerprint) {
+    public Optional<IdempotencyRecord> insertIfAbsent(
+            UUID merchantId, String idempotencyKey, String endpoint, String requestFingerprint) {
         // On a fresh insert, RETURNING yields the new row; on the conflict path it yields NO rows.
         // Contract (CreatePaymentUseCase): empty => this caller inserted (won the race); present =>
         // a row already existed (replay or in-flight). So a row returned by the insert means "we
@@ -84,8 +84,13 @@ public class JdbcIdempotencyStore implements IdempotencyStore {
     }
 
     @Override
-    public void markCompleted(UUID merchantId, String idempotencyKey, String endpoint,
-            Txid paymentTxid, int responseStatus, Map<String, Object> responseBody) {
+    public void markCompleted(
+            UUID merchantId,
+            String idempotencyKey,
+            String endpoint,
+            Txid paymentTxid,
+            int responseStatus,
+            Map<String, Object> responseBody) {
         String bodyJson;
         try {
             bodyJson = responseBody != null

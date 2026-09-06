@@ -42,21 +42,20 @@ import tools.jackson.databind.json.JsonMapper;
  * drives the refund through the real HTTP surface, then asserts ledger balances and proof.
  */
 @SpringBootTest(
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    classes = {DargentApiApplication.class, RefundFlowIT.RefundTestConfig.class},
-    properties = {
-        "dargent.relay.enabled=false",
-        "dargent.ledger.consumer.enabled=false",
-        "dargent.psp.webhook-secret=dev-only-secret"
-    })
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        classes = {DargentApiApplication.class, RefundFlowIT.RefundTestConfig.class},
+        properties = {
+            "dargent.relay.enabled=false",
+            "dargent.ledger.consumer.enabled=false",
+            "dargent.psp.webhook-secret=dev-only-secret"
+        })
 @Testcontainers
 class RefundFlowIT {
 
     private static final UUID MERCHANT = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID KEY_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
     private static final UUID OTHER_MERCHANT = UUID.fromString("99999999-9999-9999-9999-999999999999");
-    private static final Clock FIXED_CLOCK =
-            Clock.fixed(Instant.parse("2026-09-02T12:00:00Z"), ZoneOffset.UTC);
+    private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2026-09-02T12:00:00Z"), ZoneOffset.UTC);
     private static final JsonMapper MAPPER = new JsonMapper();
 
     @Container
@@ -83,11 +82,11 @@ class RefundFlowIT {
     void setUp() {
         baseUrl = "http://localhost:" + port;
         jdbc.sql("truncate payments.webhook_events, payments.outbox, payments.idempotency_keys, "
-                + "payments.audit_log, payments.payments, payments.api_keys, payments.refunds, "
-                + "ledger.events, ledger.postings, ledger.journal_entries, ledger.balances, "
-                + "ledger.audit_log restart identity cascade").update();
-        jdbc.sql(
-                "insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
+                        + "payments.audit_log, payments.payments, payments.api_keys, payments.refunds, "
+                        + "ledger.events, ledger.postings, ledger.journal_entries, ledger.balances, "
+                        + "ledger.audit_log restart identity cascade")
+                .update();
+        jdbc.sql("insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
                         + "values (:id, :merchant, 'it-key', :prefix, :hash, now(), null)")
                 .param("id", KEY_ID)
                 .param("merchant", MERCHANT)
@@ -98,7 +97,8 @@ class RefundFlowIT {
 
     /** Generates a valid 25-char txid: prefix (3) + 22 chars from UUID. */
     private String txid(String prefix) {
-        return prefix + UUID.randomUUID().toString().replace("-", "").toUpperCase().substring(0, 22);
+        return prefix
+                + UUID.randomUUID().toString().replace("-", "").toUpperCase().substring(0, 22);
     }
 
     /** S5 golden vector: confirm 100.00/fee 1.00 → refund 40.00 → journal [3]+[4] → available 59.40. */
@@ -120,7 +120,7 @@ class RefundFlowIT {
         // 4. Assert the refund representation.
         assertThat(body.at("/payment").asText()).isEqualTo(txid);
         assertThat(body.at("/amount").asLong()).isEqualTo(4000);
-        assertThat(body.at("/feeReversal").asLong()).isEqualTo(40);   // floor(100 × 4000 / 10000)
+        assertThat(body.at("/feeReversal").asLong()).isEqualTo(40); // floor(100 × 4000 / 10000)
         assertThat(body.at("/net").asLong()).isEqualTo(3960);
         assertThat(body.at("/status").asText()).isEqualTo("SUCCEEDED");
 
@@ -129,9 +129,12 @@ class RefundFlowIT {
         String refundEventId = UUID.randomUUID().toString();
 
         // Verify the confirmed payment actually seeded the ledger (CI guard)
-        assertThat(balance("merchant:" + MERCHANT + ":available")).as("available after confirm").isEqualTo(9900);
+        assertThat(balance("merchant:" + MERCHANT + ":available"))
+                .as("available after confirm")
+                .isEqualTo(9900);
 
-        boolean refundProcessed = ingestion.processMessage(refundEnvelopeWithEventId(refundEventId, txid, 4000, 40, 3960));
+        boolean refundProcessed =
+                ingestion.processMessage(refundEnvelopeWithEventId(refundEventId, txid, 4000, 40, 3960));
         assertThat(refundProcessed).isTrue();
 
         // Verify the refund event was actually POSTED (not IGNORED/REJECTED)
@@ -155,7 +158,8 @@ class RefundFlowIT {
 
         // 7. Redelivery of the same refund.created event is an idempotent no-op.
         // Reuse the SAME eventId to test consumer idempotency.
-        assertThat(ingestion.processMessage(refundEnvelopeWithEventId(refundEventId, txid, 4000, 40, 3960))).isTrue();
+        assertThat(ingestion.processMessage(refundEnvelopeWithEventId(refundEventId, txid, 4000, 40, 3960)))
+                .isTrue();
         assertThat(balance("merchant:" + MERCHANT + ":available")).isEqualTo(5940);
         assertThat(balance("payments:processing")).isEqualTo(-6000);
         assertThat(balance("fees:revenue")).isEqualTo(60);
@@ -169,7 +173,8 @@ class RefundFlowIT {
         assertThat(fullBody.at("/feeReversal").asLong()).isEqualTo(60); // floor(100 × 6000 / 10000)
         assertThat(fullBody.at("/net").asLong()).isEqualTo(5940);
 
-        assertThat(ingestion.processMessage(refundEnvelope(txid, 6000, 60, 5940))).isTrue();
+        assertThat(ingestion.processMessage(refundEnvelope(txid, 6000, 60, 5940)))
+                .isTrue();
         assertThat(paymentStatus(txid)).isEqualTo("REFUNDED");
         // Post-full-refund: available 0, processing 0, fees 0.
         assertThat(balance("merchant:" + MERCHANT + ":available")).isZero();
@@ -187,8 +192,7 @@ class RefundFlowIT {
 
         var resp = postRefund(txid, "refund-key-exceed-01", "req-refund-exceed-01", "{\"amount\":10001}");
         assertThat(resp.statusCode()).isEqualTo(409);
-        assertThat(MAPPER.readTree(resp.body()).path("code").asText())
-                .isEqualTo("refund_exceeds_remaining");
+        assertThat(MAPPER.readTree(resp.body()).path("code").asText()).isEqualTo("refund_exceeds_remaining");
 
         // Nothing changed: payment still CONFIRMED, zero refunds, zero postings.
         assertThat(paymentStatus(txid)).isEqualTo("CONFIRMED");
@@ -201,7 +205,8 @@ class RefundFlowIT {
     /** Funds the ledger by ingesting a confirmed payment envelope (net amount - fee). */
     private void fundConfirmedPayment(String txid, long amount, long fee) {
         long net = amount - fee;
-        assertThat(ingestion.processMessage(confirmedEnvelope(txid, amount, fee))).isTrue();
+        assertThat(ingestion.processMessage(confirmedEnvelope(txid, amount, fee)))
+                .isTrue();
     }
 
     private String confirmedEnvelope(String txid, long amount, long fee) {
@@ -254,41 +259,57 @@ class RefundFlowIT {
                 .update();
     }
 
-    private HttpResponse<String> postRefund(String txid, String idemKey, String requestId, String json) throws Exception {
-        return http.send(HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl + "/v1/payments/" + txid + "/refunds"))
-                .header("Authorization", "Bearer " + rawKey)
-                .header("Content-Type", "application/json")
-                .header("Idempotency-Key", idemKey)
-                .header("X-Request-Id", requestId)
-                .POST(HttpRequest.BodyPublishers.ofString(json))
-                .build(), HttpResponse.BodyHandlers.ofString());
+    private HttpResponse<String> postRefund(String txid, String idemKey, String requestId, String json)
+            throws Exception {
+        return http.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create(baseUrl + "/v1/payments/" + txid + "/refunds"))
+                        .header("Authorization", "Bearer " + rawKey)
+                        .header("Content-Type", "application/json")
+                        .header("Idempotency-Key", idemKey)
+                        .header("X-Request-Id", requestId)
+                        .POST(HttpRequest.BodyPublishers.ofString(json))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
     }
 
     private long balance(String account) {
         return jdbc.sql("select balance_cents from ledger.balances where account = :a")
-                .param("a", account).query(Long.class).optional().orElse(0L);
+                .param("a", account)
+                .query(Long.class)
+                .optional()
+                .orElse(0L);
     }
 
     private String paymentStatus(String txid) {
         return jdbc.sql("select status from payments.payments where txid = :t")
-                .param("t", txid).query(String.class).single();
+                .param("t", txid)
+                .query(String.class)
+                .single();
     }
 
     private long refundCount(String txid) {
         return jdbc.sql("select count(*) from payments.refunds where txid = :t")
-                .param("t", txid).query(Long.class).single();
+                .param("t", txid)
+                .query(Long.class)
+                .single();
     }
 
     private long refundPostings(String journalId) {
         return jdbc.sql("select count(*) from ledger.postings where entry_id = :j")
-                .param("j", UUID.fromString(journalId)).query(Long.class).single();
+                .param("j", UUID.fromString(journalId))
+                .query(Long.class)
+                .single();
     }
 
     private String journalIdFor(String txid) {
-        return jdbc.sql("select id from ledger.journal_entries where event_id in "
-                + "(select event_id from ledger.events where txid = :t and type = 'refund.created' order by received_at desc limit 1)")
-                .param("t", txid).query(String.class).optional().orElse(null);
+        return jdbc.sql(
+                        "select id from ledger.journal_entries where event_id in "
+                                + "(select event_id from ledger.events where txid = :t and type = 'refund.created' order by received_at desc limit 1)")
+                .param("t", txid)
+                .query(String.class)
+                .optional()
+                .orElse(null);
     }
 
     private void assertProofOk() {
@@ -308,8 +329,7 @@ class RefundFlowIT {
                     .locations(
                             "classpath:db/migration/payments",
                             "classpath:db/migration/ledger",
-                            "classpath:db/migration/notifications"
-                    )
+                            "classpath:db/migration/notifications")
                     .baselineOnMigrate(true)
                     .cleanDisabled(false)
                     .load();

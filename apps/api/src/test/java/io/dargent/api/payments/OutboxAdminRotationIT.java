@@ -14,6 +14,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.UUID;
+import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -30,7 +31,6 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
-import javax.sql.DataSource;
 
 /**
  * E9 §6.2 / Q11 rotation-window leg. Under the committed one-active-key-per-prefix schema
@@ -42,18 +42,14 @@ import javax.sql.DataSource;
  * Both assertions share one context: admin env = revoked predecessor raw.
  */
 @SpringBootTest(
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    classes = {DargentApiApplication.class, OutboxAdminRotationIT.RotationTestConfig.class},
-    properties = {
-        "dargent.relay.enabled=true",
-        "dargent.psp.webhook-secret=dev-only-secret"
-    })
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        classes = {DargentApiApplication.class, OutboxAdminRotationIT.RotationTestConfig.class},
+        properties = {"dargent.relay.enabled=true", "dargent.psp.webhook-secret=dev-only-secret"})
 @Testcontainers
 class OutboxAdminRotationIT {
 
     private static final UUID MERCHANT = UUID.fromString("11111111-1111-1111-1111-111111111111");
-    private static final Clock FIXED_CLOCK =
-            Clock.fixed(Instant.parse("2027-01-01T12:00:00Z"), ZoneOffset.UTC);
+    private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2027-01-01T12:00:00Z"), ZoneOffset.UTC);
 
     /** The log-lived, now-revoked predecessor — still the designated admin key (stale rotation). */
     private static final String PREV_RAW_KEY = ApiKeyHasher.generateRawKey();
@@ -65,9 +61,9 @@ class OutboxAdminRotationIT {
     static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:16-alpine");
 
     @Container
-    static final LocalStackContainer localstack =
-            new LocalStackContainer(DockerImageName.parse("localstack/localstack:3.8.1"))
-                    .withServices(LocalStackContainer.Service.SNS, LocalStackContainer.Service.SQS);
+    static final LocalStackContainer localstack = new LocalStackContainer(
+                    DockerImageName.parse("localstack/localstack:3.8.1"))
+            .withServices(LocalStackContainer.Service.SNS, LocalStackContainer.Service.SQS);
 
     @Autowired
     JdbcClient jdbc;
@@ -81,7 +77,8 @@ class OutboxAdminRotationIT {
     @org.springframework.test.context.DynamicPropertySource
     static void env(org.springframework.test.context.DynamicPropertyRegistry registry) {
         registry.add("AWS_ENDPOINT_URL", () -> localstack
-                .getEndpointOverride(LocalStackContainer.Service.SNS).toString());
+                .getEndpointOverride(LocalStackContainer.Service.SNS)
+                .toString());
         registry.add("AWS_REGION", () -> "us-east-1");
         registry.add("AWS_ACCESS_KEY_ID", () -> "test");
         registry.add("AWS_SECRET_ACCESS_KEY", () -> "test");
@@ -98,8 +95,8 @@ class OutboxAdminRotationIT {
     @BeforeEach
     void setUp() {
         baseUrl = "http://localhost:" + port;
-        jdbc.sql("truncate payments.outbox, payments.audit_log, payments.api_keys "
-                + "restart identity cascade").update();
+        jdbc.sql("truncate payments.outbox, payments.audit_log, payments.api_keys " + "restart identity cascade")
+                .update();
         // The rotation state: the predecessor R is revoked, the successor M is the only active key.
         insertKey("33333333-3333-3333-3333-333333333333", PREV_RAW_KEY, "2027-01-01T11:00:00Z");
         insertKey("44444444-4444-4444-4444-444444444444", SUCC_RAW_KEY, null);
@@ -161,8 +158,7 @@ class OutboxAdminRotationIT {
     }
 
     private void insertKey(String id, String rawKey, String revokedAt) {
-        jdbc.sql(
-                "insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
+        jdbc.sql("insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
                         + "values (:id, :merchant, 'it-key', :prefix, :hash, now(), :revoked)")
                 .param("id", UUID.fromString(id))
                 .param("merchant", MERCHANT)
@@ -174,11 +170,15 @@ class OutboxAdminRotationIT {
 
     private String status(UUID id) {
         return jdbc.sql("select status from payments.outbox where id = :id")
-                .param("id", id).query(String.class).single();
+                .param("id", id)
+                .query(String.class)
+                .single();
     }
 
     private long auditCount() {
-        return jdbc.sql("select count(*) from payments.audit_log").query(Long.class).single();
+        return jdbc.sql("select count(*) from payments.audit_log")
+                .query(Long.class)
+                .single();
     }
 
     private static String txid(UUID id) {

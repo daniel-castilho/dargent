@@ -1,16 +1,15 @@
 package io.dargent.ledger.application;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import io.dargent.ledger.domain.model.Account;
 import io.dargent.ledger.domain.port.out.LedgerStore;
 import io.dargent.ledger.domain.port.out.LedgerStore.ProofResult;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import java.time.Instant;
 import java.util.Optional;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 class LedgerReconciliationUseCaseTest {
 
@@ -79,9 +78,11 @@ class LedgerReconciliationUseCaseTest {
         useCase = new LedgerReconciliationUseCase(store, metrics);
         useCase.proof();
 
-        assertThat(registry.counter(LedgerMetrics.PROOF_FAIL, "scope", "balance").count())
+        assertThat(registry.counter(LedgerMetrics.PROOF_FAIL, "scope", "balance")
+                        .count())
                 .isEqualTo(1.0);
-        assertThat(registry.counter(LedgerMetrics.PROOF_FAIL, "scope", "projection").count())
+        assertThat(registry.counter(LedgerMetrics.PROOF_FAIL, "scope", "projection")
+                        .count())
                 .isEqualTo(1.0);
     }
 
@@ -92,8 +93,12 @@ class LedgerReconciliationUseCaseTest {
         useCase = new LedgerReconciliationUseCase(store, new LedgerMetrics(registry));
         useCase.proof();
         useCase.proof();
-        assertThat(registry.counter(LedgerMetrics.PROOF_FAIL, "scope", "balance").count()).isZero();
-        assertThat(registry.counter(LedgerMetrics.PROOF_FAIL, "scope", "projection").count()).isZero();
+        assertThat(registry.counter(LedgerMetrics.PROOF_FAIL, "scope", "balance")
+                        .count())
+                .isZero();
+        assertThat(registry.counter(LedgerMetrics.PROOF_FAIL, "scope", "projection")
+                        .count())
+                .isZero();
     }
 
     @Test
@@ -101,8 +106,12 @@ class LedgerReconciliationUseCaseTest {
         io.micrometer.core.instrument.simple.SimpleMeterRegistry registry =
                 new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
         new LedgerMetrics(registry);
-        assertThat(registry.counter(LedgerMetrics.PROOF_FAIL, "scope", "balance").count()).isZero();
-        assertThat(registry.counter(LedgerMetrics.PROOF_FAIL, "scope", "projection").count()).isZero();
+        assertThat(registry.counter(LedgerMetrics.PROOF_FAIL, "scope", "balance")
+                        .count())
+                .isZero();
+        assertThat(registry.counter(LedgerMetrics.PROOF_FAIL, "scope", "projection")
+                        .count())
+                .isZero();
     }
 
     static class FakeLedgerStore implements LedgerStore {
@@ -125,14 +134,19 @@ class LedgerReconciliationUseCaseTest {
         }
 
         @Override
-        public boolean insertEventIfAbsent(java.util.UUID eventId, String type, String txid,
-                java.util.UUID merchantId, String payload, String status, String note) {
+        public boolean insertEventIfAbsent(
+                java.util.UUID eventId,
+                String type,
+                String txid,
+                java.util.UUID merchantId,
+                String payload,
+                String status,
+                String note) {
             return false;
         }
 
         @Override
-        public void postJournal(io.dargent.ledger.domain.model.JournalEntry entry) {
-        }
+        public void postJournal(io.dargent.ledger.domain.model.JournalEntry entry) {}
 
         @Override
         public void upsertBalance(Account account) {
@@ -151,7 +165,9 @@ class LedgerReconciliationUseCaseTest {
 
         @Override
         public long availableBalance(java.util.UUID merchantId) {
-            return findAccount("merchant:" + merchantId + ":available").map(Account::balanceCents).orElse(0L);
+            return findAccount("merchant:" + merchantId + ":available")
+                    .map(Account::balanceCents)
+                    .orElse(0L);
         }
 
         @Override
@@ -176,8 +192,7 @@ class LedgerReconciliationUseCaseTest {
         }
 
         @Override
-        public void recordAudit(LedgerStore.AuditEntry audit) {
-        }
+        public void recordAudit(LedgerStore.AuditEntry audit) {}
 
         @Override
         public ProofResult verifyProof() {
@@ -190,9 +205,15 @@ class LedgerReconciliationUseCaseTest {
         }
 
         @Override
-        public boolean postRefund(java.util.UUID eventId, String txid, java.util.UUID merchantId,
-                long amountCents, long feeReversalCents, String description,
-                java.time.Instant createdAt, java.time.Clock clock) {
+        public boolean postRefund(
+                java.util.UUID eventId,
+                String txid,
+                java.util.UUID merchantId,
+                long amountCents,
+                long feeReversalCents,
+                String description,
+                java.time.Instant createdAt,
+                java.time.Clock clock) {
             return false;
         }
 

@@ -62,12 +62,9 @@ import tools.jackson.databind.json.JsonMapper;
  * IT4 corrupt → proof ok:false → rebuild → proof ok.
  */
 @SpringBootTest(
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    classes = {DargentApiApplication.class, LedgerMoneyLoopIT.MoneyLoopTestConfig.class},
-    properties = {
-        "dargent.relay.enabled=true",
-        "dargent.psp.webhook-secret=dev-only-secret"
-    })
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        classes = {DargentApiApplication.class, LedgerMoneyLoopIT.MoneyLoopTestConfig.class},
+        properties = {"dargent.relay.enabled=true", "dargent.psp.webhook-secret=dev-only-secret"})
 @Testcontainers
 class LedgerMoneyLoopIT {
 
@@ -77,8 +74,7 @@ class LedgerMoneyLoopIT {
     private static final String LEDGER_DLQ = "dargent-payments-ledger-dlq-ml.fifo";
     private static final UUID MERCHANT = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID KEY_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
-    private static final Clock FIXED_CLOCK =
-            Clock.fixed(Instant.parse("2027-01-01T12:00:00Z"), ZoneOffset.UTC);
+    private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2027-01-01T12:00:00Z"), ZoneOffset.UTC);
     private static final long FIXED_NOW_SECS = FIXED_CLOCK.instant().getEpochSecond();
     private static final String PAID_AT = FIXED_CLOCK.instant().plusSeconds(120).toString();
     private static final String SECRET = "dev-only-secret";
@@ -89,9 +85,9 @@ class LedgerMoneyLoopIT {
     static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:16-alpine");
 
     @Container
-    static final LocalStackContainer localstack =
-            new LocalStackContainer(DockerImageName.parse("localstack/localstack:3.8.1"))
-                    .withServices(LocalStackContainer.Service.SNS, LocalStackContainer.Service.SQS);
+    static final LocalStackContainer localstack = new LocalStackContainer(
+                    DockerImageName.parse("localstack/localstack:3.8.1"))
+            .withServices(LocalStackContainer.Service.SNS, LocalStackContainer.Service.SQS);
 
     private static SnsClient sns;
     private static SqsClient sqs;
@@ -130,7 +126,8 @@ class LedgerMoneyLoopIT {
     static void awsEnvironment(org.springframework.test.context.DynamicPropertyRegistry registry) {
         ensureTopology();
         registry.add("AWS_ENDPOINT_URL", () -> localstack
-                .getEndpointOverride(LocalStackContainer.Service.SNS).toString());
+                .getEndpointOverride(LocalStackContainer.Service.SNS)
+                .toString());
         registry.add("AWS_REGION", () -> REGION);
         registry.add("AWS_ACCESS_KEY_ID", () -> "test");
         registry.add("AWS_SECRET_ACCESS_KEY", () -> "test");
@@ -146,10 +143,11 @@ class LedgerMoneyLoopIT {
     void setUp() {
         baseUrl = "http://localhost:" + port;
         jdbc.sql("truncate ledger.events, ledger.postings, ledger.journal_entries, ledger.balances, "
-                + "ledger.settlements, ledger.audit_log, "
-                + "payments.webhook_events, payments.outbox, payments.idempotency_keys, "
-                + "payments.audit_log, payments.payments, payments.api_keys restart identity cascade").update();        jdbc.sql(
-                "insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
+                        + "ledger.settlements, ledger.audit_log, "
+                        + "payments.webhook_events, payments.outbox, payments.idempotency_keys, "
+                        + "payments.audit_log, payments.payments, payments.api_keys restart identity cascade")
+                .update();
+        jdbc.sql("insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
                         + "values (:id, :merchant, 'ledger-it-key', :prefix, :hash, now(), null)")
                 .param("id", KEY_ID)
                 .param("merchant", MERCHANT)
@@ -180,10 +178,12 @@ class LedgerMoneyLoopIT {
         assertThat(journalEntries()).as("confirmed should post a journal entry").isEqualTo(1);
 
         // Ledger events: created IGNORED (non-posting), confirmed POSTED.
-        Map<String, String> statuses = jdbc.sql(
-                "select type, status from ledger.events where txid = :t order by type")
-                .param("t", txid).query((rs, i) -> Map.entry(rs.getString(1), rs.getString(2)))
-                .stream().collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        Map<String, String> statuses = jdbc
+                .sql("select type, status from ledger.events where txid = :t order by type")
+                .param("t", txid)
+                .query((rs, i) -> Map.entry(rs.getString(1), rs.getString(2)))
+                .stream()
+                .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
         assertThat(statuses).containsEntry("payment.confirmed", "POSTED");
 
         // One journal entry with 3 postings.
@@ -224,7 +224,8 @@ class LedgerMoneyLoopIT {
             assertThat(ingestion.processMessage(envelope(type, txid))).isTrue();
         }
         long ignored = jdbc.sql("select count(*) from ledger.events where status = 'IGNORED'")
-                .query(Long.class).single();
+                .query(Long.class)
+                .single();
         assertThat(ignored).isEqualTo(3);
         assertThat(journalEntries()).isZero();
         assertThat(postings()).isZero();
@@ -235,8 +236,9 @@ class LedgerMoneyLoopIT {
     @Test
     void corrupt_balance_fails_proof_and_rebuild_restores_ok() {
         for (int i = 0; i < 3; i++) {
-            assertThat(ingestion.processMessage(confirmedEnvelope(
-                    "ledger-proof-" + i, "E9040381234567890123456789012345", 1000 + i * 10))).isTrue();
+            assertThat(ingestion.processMessage(
+                            confirmedEnvelope("ledger-proof-" + i, "E9040381234567890123456789012345", 1000 + i * 10)))
+                    .isTrue();
         }
         // 3 confirmed → 3 journal entries × 3 postings.
         assertThat(journalEntries()).isEqualTo(3);
@@ -246,8 +248,7 @@ class LedgerMoneyLoopIT {
         // Corrupt a single balance (test-local UPDATE, mirroring a projection drift).
         var proof = reconciliation.proof();
         assertThat(proof.ok()).isTrue();
-        int rows = jdbc.sql("update ledger.balances set balance_cents = balance_cents + 7 "
-                + "where account = :a")
+        int rows = jdbc.sql("update ledger.balances set balance_cents = balance_cents + 7 " + "where account = :a")
                 .param("a", "merchant:" + MERCHANT + ":available")
                 .update();
         assertThat(rows).isEqualTo(1);
@@ -260,11 +261,12 @@ class LedgerMoneyLoopIT {
         assertProofOk(3, 9);
 
         long audit = jdbc.sql("select count(*) from ledger.audit_log where command = 'REBUILD'")
-                .query(Long.class).single();
+                .query(Long.class)
+                .single();
         assertThat(audit).isEqualTo(1);
     }
 
-/** BD-15 guard IT: redelivery after posting failure resumes and posts exactly once.
+    /** BD-15 guard IT: redelivery after posting failure resumes and posts exactly once.
      * Two legs (adjudicated Q1/Q2):
      *   Leg 1 (failure injection): trigger on journal_entries INSERT throws -> exception, row RECEIVED, 0 journal rows.
      *   Leg 2 (redelivery): drop trigger -> redeliver same message -> exactly-once resume (ack, 1 journal, 3 postings, proof ok).
@@ -303,7 +305,9 @@ class LedgerMoneyLoopIT {
 
             // Verify initial state: RECEIVED, zero journal rows
             String status = jdbc.sql("select status from ledger.events where txid = :t")
-                    .param("t", txid).query(String.class).single();
+                    .param("t", txid)
+                    .query(String.class)
+                    .single();
             assertThat(status).isEqualTo("RECEIVED");
             assertThat(journalEntries()).isZero();
             assertThat(postings()).isZero();
@@ -315,7 +319,9 @@ class LedgerMoneyLoopIT {
 
             // Verify: row stays RECEIVED, zero journal rows, payment unaffected
             String statusAfterFail = jdbc.sql("select status from ledger.events where txid = :t")
-                    .param("t", txid).query(String.class).single();
+                    .param("t", txid)
+                    .query(String.class)
+                    .single();
             assertThat(statusAfterFail).isEqualTo("RECEIVED");
             assertThat(journalEntries()).as("no journal rows on first attempt").isZero();
             assertThat(postings()).isZero();
@@ -329,7 +335,9 @@ class LedgerMoneyLoopIT {
             assertThat(ack2).as("redelivery should ack and post exactly once").isTrue();
 
             // Verify: exactly ONE journal entry + 3 postings, balances incremented once, proof ok
-            assertThat(journalEntries()).as("exactly one journal entry after resume").isEqualTo(1);
+            assertThat(journalEntries())
+                    .as("exactly one journal entry after resume")
+                    .isEqualTo(1);
             assertThat(postings()).as("exactly three postings").isEqualTo(3);
             assertThat(balance("merchant:" + MERCHANT + ":available")).isEqualTo(4900);
             assertThat(balance("fees:revenue")).isEqualTo(100);
@@ -338,7 +346,9 @@ class LedgerMoneyLoopIT {
 
             // 3. Verify event status is now POSTED
             String finalStatus = jdbc.sql("select status from ledger.events where txid = :t")
-                    .param("t", txid).query(String.class).single();
+                    .param("t", txid)
+                    .query(String.class)
+                    .single();
             assertThat(finalStatus).isEqualTo("POSTED");
         } finally {
             // Safety: ensure trigger is cleaned up even if test fails (container reuse safety)
@@ -393,21 +403,29 @@ class LedgerMoneyLoopIT {
     }
 
     private long journalEntries() {
-        return jdbc.sql("select count(*) from ledger.journal_entries").query(Long.class).single();
+        return jdbc.sql("select count(*) from ledger.journal_entries")
+                .query(Long.class)
+                .single();
     }
 
     private long postings() {
-        return jdbc.sql("select count(*) from ledger.postings").query(Long.class).single();
+        return jdbc.sql("select count(*) from ledger.postings")
+                .query(Long.class)
+                .single();
     }
 
     private long balance(String account) {
         return jdbc.sql("select balance_cents from ledger.balances where account = :a")
-                .param("a", account).query(Long.class).single();
+                .param("a", account)
+                .query(Long.class)
+                .single();
     }
 
     private String createPayment(String idemKey) throws Exception {
         psp.mode = PspStub.Mode.SUCCESS;
-        var resp = post("/v1/payments", "{\"amount\":10000,\"description\":\"Ledger loop IT\",\"expiresIn\":\"PT30M\"}",
+        var resp = post(
+                "/v1/payments",
+                "{\"amount\":10000,\"description\":\"Ledger loop IT\",\"expiresIn\":\"PT30M\"}",
                 authHeaders(idemKey));
         assertThat(resp.statusCode())
                 .withFailMessage(() -> "create failed: " + resp.statusCode() + " body=" + resp.body())
@@ -417,7 +435,9 @@ class LedgerMoneyLoopIT {
 
     private String paymentStatus(String txid) {
         return jdbc.sql("select status from payments.payments where txid=:t")
-                .param("t", txid).query(String.class).single();
+                .param("t", txid)
+                .query(String.class)
+                .single();
     }
 
     private String confirmedEnvelope(String txid, String endToEndId, int amount) {
@@ -444,13 +464,15 @@ class LedgerMoneyLoopIT {
     }
 
     private HttpResponse<String> sendWebhook(String ts, String body, String sig) throws Exception {
-        return http.send(HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl + "/webhooks/psp"))
-                .header("Content-Type", "application/json")
-                .header("X-PSP-Timestamp", ts)
-                .header("X-PSP-Signature", sig)
-                .POST(HttpRequest.BodyPublishers.ofString(body))
-                .build(), HttpResponse.BodyHandlers.ofString());
+        return http.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create(baseUrl + "/webhooks/psp"))
+                        .header("Content-Type", "application/json")
+                        .header("X-PSP-Timestamp", ts)
+                        .header("X-PSP-Signature", sig)
+                        .POST(HttpRequest.BodyPublishers.ofString(body))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
     }
 
     private HttpResponse<String> post(String path, String body, Map<String, String> headers) throws Exception {
@@ -463,10 +485,14 @@ class LedgerMoneyLoopIT {
 
     private Map<String, String> authHeaders(String idemKey) {
         return Map.of(
-                "Authorization", "Bearer " + rawKey,
-                "Content-Type", "application/json",
-                "Idempotency-Key", idemKey,
-                "X-Request-Id", "req-" + idemKey);
+                "Authorization",
+                "Bearer " + rawKey,
+                "Content-Type",
+                "application/json",
+                "Idempotency-Key",
+                idemKey,
+                "X-Request-Id",
+                "req-" + idemKey);
     }
 
     private JsonNode parse(HttpResponse<String> resp) throws IOException {
@@ -497,24 +523,25 @@ class LedgerMoneyLoopIT {
         sqs = SqsClient.builder()
                 .endpointOverride(localstack.getEndpointOverride(LocalStackContainer.Service.SQS))
                 .region(Region.of(REGION))
-                .credentialsProvider(StaticCredentialsProvider.create(
-                        AwsBasicCredentials.create("test", "test")))
+                .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create("test", "test")))
                 .build();
         sns = SnsClient.builder()
                 .endpointOverride(localstack.getEndpointOverride(LocalStackContainer.Service.SNS))
                 .region(Region.of(REGION))
-                .credentialsProvider(StaticCredentialsProvider.create(
-                        AwsBasicCredentials.create("test", "test")))
+                .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create("test", "test")))
                 .build();
         String dlqArn = createFifoQueue(sqs, LEDGER_DLQ, null, null);
         String redrive = "{\"deadLetterTargetArn\":\"" + dlqArn + "\",\"maxReceiveCount\":\"5\"}";
         ledgerUrl = createFifoQueue(sqs, LEDGER_QUEUE, redrive, dlqArn);
         String ledgerArn = arnOf(ledgerUrl);
         topicArn = sns.createTopic(r -> r.name(TOPIC_NAME)
-                .attributes(Map.of("FifoTopic", "true", "ContentBasedDeduplication", "false"))).topicArn();
+                        .attributes(Map.of("FifoTopic", "true", "ContentBasedDeduplication", "false")))
+                .topicArn();
         // RawMessageDelivery: the ledger consumer passes msg.body() straight to EventIngestionUseCase
         // (§5.3), so the SNS→SQS edge must deliver the raw envelope, not the SNS wrapper.
-        sns.subscribe(r -> r.topicArn(topicArn).protocol("sqs").endpoint(ledgerArn)
+        sns.subscribe(r -> r.topicArn(topicArn)
+                .protocol("sqs")
+                .endpoint(ledgerArn)
                 .attributes(Map.of("RawMessageDelivery", "true")));
     }
 
@@ -528,9 +555,9 @@ class LedgerMoneyLoopIT {
     }
 
     private static String arnOf(String url) {
-        return sqs.getQueueAttributes(r -> r.queueUrl(url)
-                .attributeNames(QueueAttributeName.QUEUE_ARN))
-                .attributes().get(QueueAttributeName.QUEUE_ARN);
+        return sqs.getQueueAttributes(r -> r.queueUrl(url).attributeNames(QueueAttributeName.QUEUE_ARN))
+                .attributes()
+                .get(QueueAttributeName.QUEUE_ARN);
     }
 
     @TestConfiguration
@@ -543,8 +570,7 @@ class LedgerMoneyLoopIT {
                     .locations(
                             "classpath:db/migration/payments",
                             "classpath:db/migration/ledger",
-                            "classpath:db/migration/notifications"
-                    )
+                            "classpath:db/migration/notifications")
                     .baselineOnMigrate(true)
                     .load();
             flyway.migrate();
@@ -589,7 +615,10 @@ class LedgerMoneyLoopIT {
     }
 
     static final class PspStub {
-        enum Mode { SUCCESS, FAIL }
+        enum Mode {
+            SUCCESS,
+            FAIL
+        }
 
         volatile Mode mode = Mode.SUCCESS;
 
@@ -610,7 +639,7 @@ class LedgerMoneyLoopIT {
                 String requestBody = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
                 String txid = extractTxid(requestBody);
                 respBody = ("{\"txid\":\"" + txid + "\",\"expiresAt\":\"" + PAID_AT
-                        + "\",\"endToEndId\":\"E2E-1\",\"brcode\":\"000201-terribly-long-brcode\"}")
+                                + "\",\"endToEndId\":\"E2E-1\",\"brcode\":\"000201-terribly-long-brcode\"}")
                         .getBytes(StandardCharsets.UTF_8);
             } else {
                 status = 404;

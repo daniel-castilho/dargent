@@ -46,8 +46,14 @@ public final class Payment {
 
     private final List<PaymentEvent> domainEvents = new ArrayList<>();
 
-    private Payment(UUID id, Txid txid, UUID merchantId, Money amount, String description, Instant expiresAt,
-                    Instant createdAt) {
+    private Payment(
+            UUID id,
+            Txid txid,
+            UUID merchantId,
+            Money amount,
+            String description,
+            Instant expiresAt,
+            Instant createdAt) {
         this.id = id;
         this.txid = txid;
         this.merchantId = merchantId;
@@ -58,8 +64,8 @@ public final class Payment {
     }
 
     /** Birth of a charge: {@code PENDING}, version 0, raises {@link PaymentCreated}. */
-    public static Payment create(Txid txid, UUID merchantId, Money amount, String description,
-                                 Instant expiresAt, Instant now) {
+    public static Payment create(
+            Txid txid, UUID merchantId, Money amount, String description, Instant expiresAt, Instant now) {
         if (txid == null || merchantId == null || amount == null || expiresAt == null || now == null) {
             throw new IllegalArgumentException("all creation parameters are required");
         }
@@ -84,10 +90,24 @@ public final class Payment {
      * Rebuilds an aggregate from the persistence seam (no events raised, no
      * timeline validation, version preserved). Adapter use only — see class javadoc.
      */
-    public static Payment restore(UUID id, Txid txid, UUID merchantId, Money amount, String description,
-                                  Instant expiresAt, Instant createdAt, PaymentStatus status, int version,
-                                  EndToEndId endToEndId, Money fee, Money net, boolean lateConfirmation,
-                                  Instant confirmedAt, long refundedCents, Instant nextReconcileAt, int reconcileAttempts) {
+    public static Payment restore(
+            UUID id,
+            Txid txid,
+            UUID merchantId,
+            Money amount,
+            String description,
+            Instant expiresAt,
+            Instant createdAt,
+            PaymentStatus status,
+            int version,
+            EndToEndId endToEndId,
+            Money fee,
+            Money net,
+            boolean lateConfirmation,
+            Instant confirmedAt,
+            long refundedCents,
+            Instant nextReconcileAt,
+            int reconcileAttempts) {
         var payment = new Payment(id, txid, merchantId, amount, description, expiresAt, createdAt);
         payment.status = status;
         payment.version = version;
@@ -107,12 +127,40 @@ public final class Payment {
      * Backward-compatible overload for tests and legacy code — defaults reconciliation
      * fields to {@code null} and {@code 0}.
      */
-    public static Payment restore(UUID id, Txid txid, UUID merchantId, Money amount, String description,
-                                  Instant expiresAt, Instant createdAt, PaymentStatus status, int version,
-                                  EndToEndId endToEndId, Money fee, Money net, boolean lateConfirmation,
-                                  Instant confirmedAt, long refundedCents) {
-        return restore(id, txid, merchantId, amount, description, expiresAt, createdAt, status, version,
-                endToEndId, fee, net, lateConfirmation, confirmedAt, refundedCents, null, 0);
+    public static Payment restore(
+            UUID id,
+            Txid txid,
+            UUID merchantId,
+            Money amount,
+            String description,
+            Instant expiresAt,
+            Instant createdAt,
+            PaymentStatus status,
+            int version,
+            EndToEndId endToEndId,
+            Money fee,
+            Money net,
+            boolean lateConfirmation,
+            Instant confirmedAt,
+            long refundedCents) {
+        return restore(
+                id,
+                txid,
+                merchantId,
+                amount,
+                description,
+                expiresAt,
+                createdAt,
+                status,
+                version,
+                endToEndId,
+                fee,
+                net,
+                lateConfirmation,
+                confirmedAt,
+                refundedCents,
+                null,
+                0);
     }
 
     /**
@@ -142,12 +190,14 @@ public final class Payment {
                 || p.status == PaymentStatus.REFUNDED;
         if (confirmedFamily) {
             if (p.fee == null || p.net == null || p.confirmedAt == null) {
-                throw new IllegalArgumentException(
-                        p.status.name() + " snapshot must carry fee, net and confirmedAt");
+                throw new IllegalArgumentException(p.status.name() + " snapshot must carry fee, net and confirmedAt");
             }
-        } else if (p.fee != null || p.net != null || p.confirmedAt != null
-                || (p.status != PaymentStatus.PENDING && p.status != PaymentStatus.EXPIRED
-                && p.status != PaymentStatus.FAILED)) {
+        } else if (p.fee != null
+                || p.net != null
+                || p.confirmedAt != null
+                || (p.status != PaymentStatus.PENDING
+                        && p.status != PaymentStatus.EXPIRED
+                        && p.status != PaymentStatus.FAILED)) {
             throw new IllegalArgumentException("unknown restored status: " + p.status);
         }
     }
@@ -169,8 +219,7 @@ public final class Payment {
         this.confirmedAt = when;
         boolean late = status == PaymentStatus.EXPIRED; // resurrection (D6)
         this.lateConfirmation = late;
-        transition(PaymentStatus.CONFIRMED,
-                new PaymentConfirmed(txid, endToEndId, amount, fee, net, late, when));
+        transition(PaymentStatus.CONFIRMED, new PaymentConfirmed(txid, endToEndId, amount, fee, net, late, when));
         return this;
     }
 
@@ -202,9 +251,8 @@ public final class Payment {
     public Payment refund(Money refundAmount, Money feeReversal, Instant when) {
         long remainingCents = remaining().cents();
         if (status != PaymentStatus.CONFIRMED && status != PaymentStatus.PARTIALLY_REFUNDED) {
-            PaymentStatus prospective = refundAmount.cents() == remainingCents
-                    ? PaymentStatus.REFUNDED
-                    : PaymentStatus.PARTIALLY_REFUNDED;
+            PaymentStatus prospective =
+                    refundAmount.cents() == remainingCents ? PaymentStatus.REFUNDED : PaymentStatus.PARTIALLY_REFUNDED;
             throw new InvalidTransitionException(txid, status, prospective);
         }
         if (refundAmount == null || feeReversal == null || when == null) {
@@ -218,9 +266,8 @@ public final class Payment {
         }
         Money netReversal = refundAmount.minus(feeReversal);
         this.refunded = refunded.plus(refundAmount);
-        PaymentStatus to = refundAmount.cents() == remainingCents
-                ? PaymentStatus.REFUNDED
-                : PaymentStatus.PARTIALLY_REFUNDED;
+        PaymentStatus to =
+                refundAmount.cents() == remainingCents ? PaymentStatus.REFUNDED : PaymentStatus.PARTIALLY_REFUNDED;
         transition(to, new RefundCreated(txid, refundAmount, feeReversal, netReversal, when));
         return this;
     }

@@ -17,9 +17,11 @@ class NotificationsArchitectureTest {
     @Test
     void notifications_never_reaches_into_sibling_modules() {
         noClasses()
-                .that().resideInAPackage("io.dargent.notifications..")
-                .should().dependOnClassesThat().resideInAnyPackage(
-                        "io.dargent.payments..", "io.dargent.ledger..")
+                .that()
+                .resideInAPackage("io.dargent.notifications..")
+                .should()
+                .dependOnClassesThat()
+                .resideInAnyPackage("io.dargent.payments..", "io.dargent.ledger..")
                 .allowEmptyShould(true)
                 .check(PRODUCTION);
     }

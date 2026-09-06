@@ -51,8 +51,8 @@ public record OutboxId(UUID value) {
         // version (4 bits) = 7 at bits 48-51 (high nibble of time_low_and_version).
         // variant (2 bits) = 10 at bits 64-65 (high bits of clock_seq_and_variant).
 
-        long timeHigh = (ts >>> 16) & 0xFFFFFFFFL;                    // ms >> 16
-        int timeMid = (int) ((ts >>> 0) & 0xFFFF);                   // ms & 0xFFFF
+        long timeHigh = (ts >>> 16) & 0xFFFFFFFFL; // ms >> 16
+        int timeMid = (int) ((ts >>> 0) & 0xFFFF); // ms & 0xFFFF
         int timeLowAndVersion = (int) (((ts << 16) & 0x0FFF) | 0x7000); // version 7 in high nibble
 
         // clock_seq_and_variant: variant 10 (bits 6-7 = 10), rest random (14 bits)

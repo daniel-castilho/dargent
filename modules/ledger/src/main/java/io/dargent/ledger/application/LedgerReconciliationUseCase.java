@@ -2,7 +2,6 @@ package io.dargent.ledger.application;
 
 import io.dargent.ledger.domain.model.Account;
 import io.dargent.ledger.domain.port.out.LedgerStore;
-
 import java.util.UUID;
 
 /**

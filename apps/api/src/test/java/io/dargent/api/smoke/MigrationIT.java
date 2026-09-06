@@ -8,6 +8,7 @@ import io.dargent.api.security.ApiKeyAuthenticationFilter;
 import io.dargent.payments.domain.port.out.PaymentQueryPort;
 import java.util.List;
 import javax.sql.DataSource;
+import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -19,7 +20,6 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
-import org.flywaydb.core.Flyway;
 
 /**
  * M0 acceptance proof: Flyway runs per-module locations against a real PostgreSQL 16 and creates
@@ -28,10 +28,9 @@ import org.flywaydb.core.Flyway;
  * (lessons.md #6).
  */
 @SpringBootTest(
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    classes = {DargentApiApplication.class, MigrationIT.FlywayTestConfig.class},
-    properties = "dargent.psp.webhook-secret=dev-only-secret"
-)
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        classes = {DargentApiApplication.class, MigrationIT.FlywayTestConfig.class},
+        properties = "dargent.psp.webhook-secret=dev-only-secret")
 @Testcontainers
 class MigrationIT {
 
@@ -112,7 +111,8 @@ class MigrationIT {
                 """).query(String.class).list();
         assertThat(reconcileColumns).containsExactly("next_reconcile_at", "reconcile_attempts");
 
-        Integer reconcileAttemptsDefault = jdbc.sql("""
+        Integer reconcileAttemptsDefault =
+                jdbc.sql("""
                 select column_default
                 from information_schema.columns
                 where table_schema = 'payments' and table_name = 'payments'
@@ -147,7 +147,9 @@ class MigrationIT {
                 from pg_indexes
                 where schemaname = 'payments' and indexname = 'idx_payments_reconcile_due'
                 """).query(String.class).list();
-        assertThat(reconcileIndexDef.get(0)).contains("((status)::text = ANY ((ARRAY['PENDING'::character varying, 'EXPIRED'::character varying])::text[]))");
+        assertThat(reconcileIndexDef.get(0))
+                .contains(
+                        "((status)::text = ANY ((ARRAY['PENDING'::character varying, 'EXPIRED'::character varying])::text[]))");
     }
 
     @Test
@@ -159,9 +161,16 @@ class MigrationIT {
                 where table_schema = 'payments' and table_name = 'refunds'
                 order by ordinal_position
                 """).query(String.class).list();
-        assertThat(refundsColumns).containsExactly(
-                "id", "payment_id", "txid", "amount_cents", "fee_reversal_cents",
-                "net_cents", "request_id", "created_at");
+        assertThat(refundsColumns)
+                .containsExactly(
+                        "id",
+                        "payment_id",
+                        "txid",
+                        "amount_cents",
+                        "fee_reversal_cents",
+                        "net_cents",
+                        "request_id",
+                        "created_at");
 
         // CHECK constraints (4: amount>0, fee_rev>=0, net>=0, net=amount-fee)
         List<String> refundChecks = jdbc.sql("""
@@ -195,8 +204,7 @@ class MigrationIT {
 
     @Test
     void flyway_creates_all_module_schemas() {
-        List<String> schemas = jdbc
-                .sql("select schema_name from information_schema.schemata")
+        List<String> schemas = jdbc.sql("select schema_name from information_schema.schemata")
                 .query(String.class)
                 .list();
 
@@ -209,21 +217,38 @@ class MigrationIT {
         // + idempotency_keys/outbox/audit_log in E3 (V104-V106);
         // ledger (E7): journal, events, postings, balances, settlements
         // notifications: schema-only until its milestone
-        List<String> paymentTables = jdbc
-                .sql("select table_name from information_schema.tables where table_schema = 'payments'")
+        List<String> paymentTables = jdbc.sql(
+                        "select table_name from information_schema.tables where table_schema = 'payments'")
                 .query(String.class)
                 .list();
-        List<String> ledgerTables = jdbc
-                .sql("select table_name from information_schema.tables where table_schema = 'ledger'")
+        List<String> ledgerTables = jdbc.sql(
+                        "select table_name from information_schema.tables where table_schema = 'ledger'")
                 .query(String.class)
                 .list();
-        List<String> notificationTables = jdbc
-                .sql("select table_name from information_schema.tables where table_schema = 'notifications'")
+        List<String> notificationTables = jdbc.sql(
+                        "select table_name from information_schema.tables where table_schema = 'notifications'")
                 .query(String.class)
                 .list();
 
-        assertThat(paymentTables).containsExactlyInAnyOrder("payments", "api_keys", "idempotency_keys", "outbox", "audit_log", "webhook_events", "refunds", "flyway_schema_history");
-        assertThat(ledgerTables).containsExactlyInAnyOrder("events", "journal_entries", "postings", "balances", "settlements", "audit_log", "flyway_schema_history");
+        assertThat(paymentTables)
+                .containsExactlyInAnyOrder(
+                        "payments",
+                        "api_keys",
+                        "idempotency_keys",
+                        "outbox",
+                        "audit_log",
+                        "webhook_events",
+                        "refunds",
+                        "flyway_schema_history");
+        assertThat(ledgerTables)
+                .containsExactlyInAnyOrder(
+                        "events",
+                        "journal_entries",
+                        "postings",
+                        "balances",
+                        "settlements",
+                        "audit_log",
+                        "flyway_schema_history");
         // notifications (E10): notification table + flyway_schema_history
         assertThat(notificationTables).containsExactlyInAnyOrder("notification", "flyway_schema_history");
     }

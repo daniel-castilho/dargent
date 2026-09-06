@@ -37,8 +37,8 @@ public final class DlqDepthPoller {
      */
     private final ConcurrentHashMap<String, AtomicLong> gaugeHolders = new ConcurrentHashMap<>();
 
-    public DlqDepthPoller(SqsClient sqs, List<String> consumerQueueUrls,
-            ObjectMapper objectMapper, MeterRegistry registry) {
+    public DlqDepthPoller(
+            SqsClient sqs, List<String> consumerQueueUrls, ObjectMapper objectMapper, MeterRegistry registry) {
         this.sqs = sqs;
         this.consumerQueueUrls = consumerQueueUrls;
         this.objectMapper = objectMapper;
@@ -53,10 +53,10 @@ public final class DlqDepthPoller {
                     continue; // no redrive policy -> nothing to gauge for this queue
                 }
                 String dlqName = queueNameFromUrl(dlqUrl);
-                var attrs = sqs.getQueueAttributes(r -> r.queueUrl(dlqUrl)
-                        .attributeNames(QueueAttributeName.APPROXIMATE_NUMBER_OF_MESSAGES)).attributes();
-                long depth = Long.parseLong(attrs.getOrDefault(
-                        QueueAttributeName.APPROXIMATE_NUMBER_OF_MESSAGES, "0"));
+                var attrs = sqs.getQueueAttributes(r ->
+                                r.queueUrl(dlqUrl).attributeNames(QueueAttributeName.APPROXIMATE_NUMBER_OF_MESSAGES))
+                        .attributes();
+                long depth = Long.parseLong(attrs.getOrDefault(QueueAttributeName.APPROXIMATE_NUMBER_OF_MESSAGES, "0"));
                 AtomicLong holder = gaugeHolders.computeIfAbsent(consumerQueueUrl, k -> {
                     AtomicLong fresh = new AtomicLong(depth);
                     registry.gauge(METRIC_NAME, Tags.of("queue", dlqName), fresh, AtomicLong::get);
@@ -64,15 +64,15 @@ public final class DlqDepthPoller {
                 });
                 holder.set(depth);
             } catch (RuntimeException e) {
-                log.warn("DLQ poll failed queue={} error={}",
-                        queueNameFromUrl(consumerQueueUrl), e.getMessage());
+                log.warn("DLQ poll failed queue={} error={}", queueNameFromUrl(consumerQueueUrl), e.getMessage());
             }
         }
     }
 
     private String resolveDlqUrl(String consumerQueueUrl) {
-        var attrs = sqs.getQueueAttributes(r -> r.queueUrl(consumerQueueUrl)
-                .attributeNames(QueueAttributeName.REDRIVE_POLICY)).attributes();
+        var attrs = sqs.getQueueAttributes(
+                        r -> r.queueUrl(consumerQueueUrl).attributeNames(QueueAttributeName.REDRIVE_POLICY))
+                .attributes();
         String policy = attrs.get(QueueAttributeName.REDRIVE_POLICY);
         if (policy == null) {
             return null;
@@ -81,8 +81,10 @@ public final class DlqDepthPoller {
         try {
             arn = objectMapper.readTree(policy).path("deadLetterTargetArn").asText(null);
         } catch (Exception e) {
-            log.warn("DLQ redrive policy parse failed queue={} error={}",
-                    queueNameFromUrl(consumerQueueUrl), e.getMessage());
+            log.warn(
+                    "DLQ redrive policy parse failed queue={} error={}",
+                    queueNameFromUrl(consumerQueueUrl),
+                    e.getMessage());
             return null;
         }
         if (arn == null || arn.isBlank()) {

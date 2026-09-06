@@ -16,8 +16,8 @@ public final class Posting {
     private final long amountCents;
     private final Instant createdAt;
 
-    public Posting(UUID id, UUID entryId, String account, EntryDirection direction,
-            long amountCents, Instant createdAt) {
+    public Posting(
+            UUID id, UUID entryId, String account, EntryDirection direction, long amountCents, Instant createdAt) {
         this.id = id;
         this.entryId = entryId;
         this.account = account;
@@ -26,12 +26,29 @@ public final class Posting {
         this.createdAt = createdAt;
     }
 
-    public UUID id() { return id; }
-    public UUID entryId() { return entryId; }
-    public String account() { return account; }
-    public EntryDirection direction() { return direction; }
-    public long amountCents() { return amountCents; }
-    public Instant createdAt() { return createdAt; }
+    public UUID id() {
+        return id;
+    }
+
+    public UUID entryId() {
+        return entryId;
+    }
+
+    public String account() {
+        return account;
+    }
+
+    public EntryDirection direction() {
+        return direction;
+    }
+
+    public long amountCents() {
+        return amountCents;
+    }
+
+    public Instant createdAt() {
+        return createdAt;
+    }
 
     public long signedAmountCents() {
         return direction == EntryDirection.CREDIT ? amountCents : -amountCents;

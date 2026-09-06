@@ -1,7 +1,6 @@
 package io.dargent.api.provisioning;
 
 import io.dargent.api.security.ApiKeyHasher;
-import io.dargent.api.security.ApiKeyRepository;
 import jakarta.annotation.PostConstruct;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -41,8 +40,7 @@ public class DevApiKeyProvisioner {
         String prefix = ApiKeyHasher.prefix(devKey);
         String hash = ApiKeyHasher.hash(devKey);
 
-int updated = jdbc.sql(
-                """
+        int updated = jdbc.sql("""
                 insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at)
                 values (:id, :merchant, 'dev-key', :prefix, :hash, now(), null)
                 on conflict (key_hash) do update set revoked_at = null

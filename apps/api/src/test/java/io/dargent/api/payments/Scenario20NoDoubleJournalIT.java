@@ -5,15 +5,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.dargent.api.DargentApiApplication;
 import io.dargent.api.security.ApiKeyHasher;
 import io.dargent.ledger.application.EventIngestionUseCase;
-import io.dargent.shared.events.EventEnvelope;
 import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,7 +28,6 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
-import javax.sql.DataSource;
 
 /**
  * E9 §6.4 Scenario 20 no-double-journaling proof (deterministic harness):
@@ -51,19 +49,15 @@ import javax.sql.DataSource;
  * Zero async, zero sleeps. Clock injected.
  */
 @SpringBootTest(
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    classes = {DargentApiApplication.class, Scenario20NoDoubleJournalIT.Scenario20TestConfig.class},
-    properties = {
-        "dargent.relay.enabled=true",
-        "dargent.psp.webhook-secret=dev-only-secret"
-    })
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        classes = {DargentApiApplication.class, Scenario20NoDoubleJournalIT.Scenario20TestConfig.class},
+        properties = {"dargent.relay.enabled=true", "dargent.psp.webhook-secret=dev-only-secret"})
 @Testcontainers
 class Scenario20NoDoubleJournalIT {
 
     private static final UUID MERCHANT = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID ADMIN_KEY_ID = UUID.fromString("33333333-3333-3333-3333-333333333333");
-    private static final Clock FIXED_CLOCK =
-            Clock.fixed(Instant.parse("2027-01-03T12:00:00Z"), ZoneOffset.UTC);
+    private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2027-01-03T12:00:00Z"), ZoneOffset.UTC);
 
     private static final String ADMIN_RAW_KEY = ApiKeyHasher.generateRawKey();
 
@@ -72,9 +66,9 @@ class Scenario20NoDoubleJournalIT {
     static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:16-alpine");
 
     @Container
-    static final LocalStackContainer localstack =
-            new LocalStackContainer(DockerImageName.parse("localstack/localstack:3.8.1"))
-                    .withServices(LocalStackContainer.Service.SNS, LocalStackContainer.Service.SQS);
+    static final LocalStackContainer localstack = new LocalStackContainer(
+                    DockerImageName.parse("localstack/localstack:3.8.1"))
+            .withServices(LocalStackContainer.Service.SNS, LocalStackContainer.Service.SQS);
 
     @Autowired
     JdbcClient jdbc;
@@ -94,7 +88,8 @@ class Scenario20NoDoubleJournalIT {
     @org.springframework.test.context.DynamicPropertySource
     static void env(org.springframework.test.context.DynamicPropertyRegistry registry) {
         registry.add("AWS_ENDPOINT_URL", () -> localstack
-                .getEndpointOverride(LocalStackContainer.Service.SNS).toString());
+                .getEndpointOverride(LocalStackContainer.Service.SNS)
+                .toString());
         registry.add("AWS_REGION", () -> "us-east-1");
         registry.add("AWS_ACCESS_KEY_ID", () -> "test");
         registry.add("AWS_SECRET_ACCESS_KEY", () -> "test");
@@ -111,8 +106,9 @@ class Scenario20NoDoubleJournalIT {
     @BeforeEach
     void setUp() {
         jdbc.sql("truncate payments.outbox, payments.audit_log, payments.api_keys, "
-                + "ledger.events, ledger.journal_entries, ledger.postings, ledger.balances, ledger.audit_log "
-                + "restart identity cascade").update();
+                        + "ledger.events, ledger.journal_entries, ledger.postings, ledger.balances, ledger.audit_log "
+                        + "restart identity cascade")
+                .update();
         insertKey(ADMIN_KEY_ID, ADMIN_RAW_KEY, null);
     }
 
@@ -136,7 +132,8 @@ class Scenario20NoDoubleJournalIT {
         System.out.println("DEBUG: Guard before republish = " + guardBeforeRepublish);
 
         // 2) Create republished envelope with deterministic UUID v3 from originalEventId:r1
-        String republishedEventId = UUID.nameUUIDFromBytes((originalEventId + ":r1").getBytes(StandardCharsets.UTF_8)).toString();
+        String republishedEventId = UUID.nameUUIDFromBytes((originalEventId + ":r1").getBytes(StandardCharsets.UTF_8))
+                .toString();
         String republishedEnvelope = envelope("payment.confirmed", republishedEventId, txid, 10_000, 500);
 
         // 3) Ingest republished event → guard should prevent double journaling
@@ -151,9 +148,11 @@ class Scenario20NoDoubleJournalIT {
         long journalCountAfterRepublish = countJournalEntries(txid);
         long balanceAfter = getAvailableBalance();
 
-        assertThat(journalCountAfterRepublish).as("Journal count must not increase for republished event")
+        assertThat(journalCountAfterRepublish)
+                .as("Journal count must not increase for republished event")
                 .isEqualTo(1);
-        assertThat(balanceAfter).as("Balances must not change for republished event")
+        assertThat(balanceAfter)
+                .as("Balances must not change for republished event")
                 .isEqualTo(balanceBefore);
 
         // 4) Re-run same republished envelope → dedupe by eventId → journal/balances unchanged
@@ -163,17 +162,23 @@ class Scenario20NoDoubleJournalIT {
         long journalCountAfterRerun = countJournalEntries(txid);
         long balanceAfterRerun = getAvailableBalance();
 
-        assertThat(journalCountAfterRerun).as("Journal count must not increase on re-run")
+        assertThat(journalCountAfterRerun)
+                .as("Journal count must not increase on re-run")
                 .isEqualTo(1);
-        assertThat(balanceAfterRerun).as("Balances must not change on re-run")
-                .isEqualTo(balanceBefore);
+        assertThat(balanceAfterRerun).as("Balances must not change on re-run").isEqualTo(balanceBefore);
 
         // Verify event status is POSTED with ratified note
         UUID republishedEventIdUUID = UUID.fromString(republishedEventId);
         String eventStatus = jdbc.sql("select status from ledger.events where event_id = ?")
-                .param(republishedEventIdUUID).query(String.class).optional().orElse("MISSING");
+                .param(republishedEventIdUUID)
+                .query(String.class)
+                .optional()
+                .orElse("MISSING");
         String eventNote = jdbc.sql("select note from ledger.events where event_id = ?")
-                .param(republishedEventIdUUID).query(String.class).optional().orElse("MISSING");
+                .param(republishedEventIdUUID)
+                .query(String.class)
+                .optional()
+                .orElse("MISSING");
         assertThat(eventStatus).isEqualTo("POSTED");
         assertThat(eventNote).contains("already journaled");
     }
@@ -207,18 +212,21 @@ class Scenario20NoDoubleJournalIT {
 
     private long countJournalEntries(String txid) {
         return jdbc.sql("select count(*) from ledger.journal_entries where txid = :txid")
-                .param("txid", txid).query(Long.class).single();
+                .param("txid", txid)
+                .query(Long.class)
+                .single();
     }
 
     private long getAvailableBalance() {
         return jdbc.sql("select balance_cents from ledger.balances where account = :acc")
                 .param("acc", "merchant:" + MERCHANT + ":available")
-                .query(Long.class).optional().orElse(0L);
+                .query(Long.class)
+                .optional()
+                .orElse(0L);
     }
 
     private void insertKey(UUID id, String rawKey, String revokedAt) {
-        jdbc.sql(
-                "insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
+        jdbc.sql("insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
                         + "values (:id, :merchant, 'it-key', :prefix, :hash, now(), :revoked)")
                 .param("id", id)
                 .param("merchant", MERCHANT)

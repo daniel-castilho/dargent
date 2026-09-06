@@ -33,8 +33,14 @@ public final class EventEnvelopeFactory {
      * @param payload    domain payload (nested object)
      * @param occurredAt event time
      */
-    public String envelope(String type, int version, String aggregateId, UUID merchantId,
-            String requestId, Map<String, Object> payload, Instant occurredAt) {
+    public String envelope(
+            String type,
+            int version,
+            String aggregateId,
+            UUID merchantId,
+            String requestId,
+            Map<String, Object> payload,
+            Instant occurredAt) {
         Map<String, Object> envelope = new LinkedHashMap<>();
         envelope.put("eventId", UUID.randomUUID().toString());
         envelope.put("type", type);

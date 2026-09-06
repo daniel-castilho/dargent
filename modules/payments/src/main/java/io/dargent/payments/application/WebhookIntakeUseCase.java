@@ -55,7 +55,8 @@ public final class WebhookIntakeUseCase {
     private final ObjectMapper objectMapper;
     private final PaymentsMetrics metrics;
 
-    public WebhookIntakeUseCase(WebhookEventStore webhookEventStore,
+    public WebhookIntakeUseCase(
+            WebhookEventStore webhookEventStore,
             PaymentRepository paymentRepository,
             OutboxWriter outboxWriter,
             AuditWriter auditWriter,
@@ -91,8 +92,7 @@ public final class WebhookIntakeUseCase {
                 input.signatureValid(),
                 "RECEIVED",
                 clock.instant(),
-                null
-        );
+                null);
 
         Optional<WebhookEventRecord> existing = webhookEventStore.insertIfAbsent(eventRecord);
         if (existing.isPresent()) {
@@ -103,12 +103,14 @@ public final class WebhookIntakeUseCase {
             if ("RECEIVED".equals(prior.status())) {
                 // Reprocess from payload_raw (playbook 10) — the original request id is not
                 // recoverable on a re-delivery, so the confirm envelope carries null here.
-                return txTemplate.execute(status -> processFromPayload(prior.payloadRaw(), prior.providerEventId(), null));
+                return txTemplate.execute(
+                        status -> processFromPayload(prior.payloadRaw(), prior.providerEventId(), null));
             }
             return Outcome.ignored("prior status: " + prior.status());
         }
 
-        return txTemplate.execute(status -> processFromPayload(input.payloadRaw(), input.providerEventId(), input.requestId()));
+        return txTemplate.execute(
+                status -> processFromPayload(input.payloadRaw(), input.providerEventId(), input.requestId()));
     }
 
     private Outcome processFromPayload(String payloadRaw, String providerEventId, String requestId) {
@@ -159,7 +161,8 @@ public final class WebhookIntakeUseCase {
         }
 
         Instant paidAt = payload.paidAt();
-        FeeBreakdown feeBreakdown = FeeBreakdown.of(payment.amount().cents(), new io.dargent.payments.domain.model.BpsRate((int) FEE_BPS));
+        FeeBreakdown feeBreakdown =
+                FeeBreakdown.of(payment.amount().cents(), new io.dargent.payments.domain.model.BpsRate((int) FEE_BPS));
 
         int expectedVersion = payment.version();
         PaymentStatus priorStatus = payment.status();
@@ -188,13 +191,23 @@ public final class WebhookIntakeUseCase {
         outboxPayload.put("fee", payment.fee().cents());
         outboxPayload.put("net", payment.net().cents());
         outboxPayload.put("late", false);
-        String envelope = envelopeFactory.envelope("payment.confirmed", 1, payment.txid().value(),
-                payment.merchantId(), requestId, outboxPayload, clock.instant());
+        String envelope = envelopeFactory.envelope(
+                "payment.confirmed",
+                1,
+                payment.txid().value(),
+                payment.merchantId(),
+                requestId,
+                outboxPayload,
+                clock.instant());
         outboxWriter.append(payment.txid().value(), "payment.confirmed", 1, envelope, requestId);
 
         // 7. Audit log — webhook has no API key; use sentinel system actor (BD-14)
-        auditWriter.record("confirm_from_webhook", WEBHOOK_AUDIT_ACTOR, payment.merchantId(),
-                payment.txid().value(), null);
+        auditWriter.record(
+                "confirm_from_webhook",
+                WEBHOOK_AUDIT_ACTOR,
+                payment.merchantId(),
+                payment.txid().value(),
+                null);
 
         // 8. Mark PROCESSED
         webhookEventStore.markProcessed(providerEventId);
@@ -245,25 +258,28 @@ public final class WebhookIntakeUseCase {
             String txid,
             String payloadRaw,
             boolean signatureValid,
-            String requestId
-    ) {}
+            String requestId) {}
 
     public record ParsedPayload(
-            String type,
-            String txid,
-            String endToEndId,
-            long amount,
-            String paidAtText,
-            Instant paidAt
-    ) {}
+            String type, String txid, String endToEndId, long amount, String paidAtText, Instant paidAt) {}
 
     public sealed interface Outcome permits Outcome.Processed, Outcome.Duplicate, Outcome.Ignored {
-        static Outcome processed() { return new Processed(); }
-        static Outcome duplicate() { return new Duplicate(); }
-        static Outcome ignored(String reason) { return new Ignored(reason); }
+        static Outcome processed() {
+            return new Processed();
+        }
+
+        static Outcome duplicate() {
+            return new Duplicate();
+        }
+
+        static Outcome ignored(String reason) {
+            return new Ignored(reason);
+        }
 
         record Processed() implements Outcome {}
+
         record Duplicate() implements Outcome {}
+
         record Ignored(String reason) implements Outcome {}
     }
 }

@@ -44,10 +44,8 @@ class FeeBreakdownTest {
 
     @Test
     void rejects_non_positive_amounts() {
-        assertThatThrownBy(() -> FeeBreakdown.of(0, new BpsRate(100)))
-                .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> FeeBreakdown.of(-5, new BpsRate(100)))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> FeeBreakdown.of(0, new BpsRate(100))).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> FeeBreakdown.of(-5, new BpsRate(100))).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

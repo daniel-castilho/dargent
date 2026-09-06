@@ -8,5 +8,4 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * the environment; Compose dev defaults stay in place until the M1 {@code ConfigValidator}).
  */
 @ConfigurationProperties("dargent.psp")
-public record WebhookSecret(String webhookSecret) {
-}
+public record WebhookSecret(String webhookSecret) {}

@@ -10,8 +10,7 @@ import java.security.SecureRandom;
  */
 public class SecureRandomTxidGenerator implements TxidGenerator {
 
-    private static final char[] ALPHABET =
-            "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".toCharArray();
+    private static final char[] ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".toCharArray();
 
     private final SecureRandom random = new SecureRandom();
 

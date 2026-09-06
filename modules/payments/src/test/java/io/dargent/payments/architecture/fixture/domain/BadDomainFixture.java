@@ -8,5 +8,4 @@ import org.springframework.stereotype.Component;
  * production code; lives in test sources only.
  */
 @Component
-class BadDomainFixture {
-}
+class BadDomainFixture {}

@@ -1,11 +1,11 @@
 package io.dargent.ledger.application;
 
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
 import io.dargent.shared.events.EventEnvelope;
 import java.time.DateTimeException;
 import java.time.Instant;
 import java.util.UUID;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Strict Jackson 3 reader for the wire-format envelope (spec §5.3).
@@ -45,8 +45,7 @@ public final class EventEnvelopeReader {
                     UUID.fromString(required(node, "merchantId").asText()),
                     node.path("requestId").asText(null),
                     parseInstant(required(node, "occurredAt").asText()),
-                    required(node, "payload").toString()
-            );
+                    required(node, "payload").toString());
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException("Invalid envelope: " + e.getMessage(), e);
         }
@@ -92,27 +91,15 @@ public final class EventEnvelopeReader {
         boolean late = p.path("late").asBoolean();
 
         if (fee + net != amount) {
-            throw new IllegalArgumentException("Invariant violation: fee + net != amount (" + fee + " + " + net + " != " + amount + ")");
+            throw new IllegalArgumentException(
+                    "Invariant violation: fee + net != amount (" + fee + " + " + net + " != " + amount + ")");
         }
 
-        return new PaymentPayload(
-                envelope.aggregateId(),
-                envelope.merchantId().toString(),
-                amount,
-                fee,
-                net,
-                late
-        );
+        return new PaymentPayload(envelope.aggregateId(), envelope.merchantId().toString(), amount, fee, net, late);
     }
 
     public record PaymentPayload(
-            String txid,
-            String merchantId,
-            long amountCents,
-            long feeCents,
-            long netCents,
-            boolean late
-    ) {}
+            String txid, String merchantId, long amountCents, long feeCents, long netCents, boolean late) {}
 
     /**
      * Extracts the refund payload from a refund.created event.
@@ -139,25 +126,13 @@ public final class EventEnvelopeReader {
         String refundId = p.path("refundId").asText();
 
         if (netRefund != amount - feeRefund) {
-            throw new IllegalArgumentException("Invariant violation: netRefund != amount - feeRefund (" + netRefund + " != " + amount + " - " + feeRefund + ")");
+            throw new IllegalArgumentException("Invariant violation: netRefund != amount - feeRefund (" + netRefund
+                    + " != " + amount + " - " + feeRefund + ")");
         }
 
-        return new RefundPayload(
-                txid,
-                envelope.merchantId().toString(),
-                amount,
-                feeRefund,
-                netRefund,
-                refundId
-        );
+        return new RefundPayload(txid, envelope.merchantId().toString(), amount, feeRefund, netRefund, refundId);
     }
 
     public record RefundPayload(
-            String txid,
-            String merchantId,
-            long amountCents,
-            long feeReversalCents,
-            long netCents,
-            String refundId
-    ) {}
+            String txid, String merchantId, long amountCents, long feeReversalCents, long netCents, String refundId) {}
 }

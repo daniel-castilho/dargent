@@ -21,15 +21,14 @@ import tools.jackson.databind.json.JsonMapper;
 class GlobalExceptionHandlerTest {
 
     private final ObjectMapper mapper = JsonMapper.builder().build();
-    private final GlobalExceptionHandler handler =
-            new GlobalExceptionHandler(new ErrorResponseWriter(mapper));
+    private final GlobalExceptionHandler handler = new GlobalExceptionHandler(new ErrorResponseWriter(mapper));
 
     @Test
     void invalid_transition_maps_to_409_invalid_transition() throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/v1/payments");
         MockHttpServletResponse response = new MockHttpServletResponse();
-        var ex = new InvalidTransitionException(new Txid("8KD4Z9X2Q7W1M5T3R6Y0A1B2C"),
-                PaymentStatus.PENDING, PaymentStatus.REFUNDED);
+        var ex = new InvalidTransitionException(
+                new Txid("8KD4Z9X2Q7W1M5T3R6Y0A1B2C"), PaymentStatus.PENDING, PaymentStatus.REFUNDED);
 
         handler.invalidTransition(request, response, ex);
 
@@ -42,8 +41,7 @@ class GlobalExceptionHandlerTest {
     void unknown_route_maps_to_canonical_404_not_500() throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/v1/nope");
         MockHttpServletResponse response = new MockHttpServletResponse();
-        var ex = new NoResourceFoundException(
-                org.springframework.http.HttpMethod.GET, "/v1/nope", null);
+        var ex = new NoResourceFoundException(org.springframework.http.HttpMethod.GET, "/v1/nope", null);
 
         handler.notFound(request, response, ex);
 

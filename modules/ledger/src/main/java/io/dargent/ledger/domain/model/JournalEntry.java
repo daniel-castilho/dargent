@@ -19,8 +19,14 @@ public final class JournalEntry {
     private final Instant createdAt;
     private final List<Posting> postings;
 
-    public JournalEntry(UUID id, UUID eventId, String txid, UUID merchantId,
-            String description, Instant createdAt, List<Posting> postings) {
+    public JournalEntry(
+            UUID id,
+            UUID eventId,
+            String txid,
+            UUID merchantId,
+            String description,
+            Instant createdAt,
+            List<Posting> postings) {
         this.id = id;
         this.eventId = eventId;
         this.txid = txid;
@@ -33,7 +39,8 @@ public final class JournalEntry {
 
     private static void validate(List<Posting> postings) {
         if (postings.size() < 2) {
-            throw new InvalidJournalEntryException("journal entry must have at least 2 postings, got " + postings.size());
+            throw new InvalidJournalEntryException(
+                    "journal entry must have at least 2 postings, got " + postings.size());
         }
         long sumDebit = 0L;
         long sumCredit = 0L;
@@ -49,18 +56,38 @@ public final class JournalEntry {
             }
         }
         if (sumDebit != sumCredit) {
-            throw new InvalidJournalEntryException("journal entry must balance: Σ DEBIT (" + sumDebit
-                    + ") ≠ Σ CREDIT (" + sumCredit + ")");
+            throw new InvalidJournalEntryException(
+                    "journal entry must balance: Σ DEBIT (" + sumDebit + ") ≠ Σ CREDIT (" + sumCredit + ")");
         }
     }
 
-    public UUID id() { return id; }
-    public UUID eventId() { return eventId; }
-    public String txid() { return txid; }
-    public UUID merchantId() { return merchantId; }
-    public String description() { return description; }
-    public Instant createdAt() { return createdAt; }
-    public List<Posting> postings() { return postings; }
+    public UUID id() {
+        return id;
+    }
+
+    public UUID eventId() {
+        return eventId;
+    }
+
+    public String txid() {
+        return txid;
+    }
+
+    public UUID merchantId() {
+        return merchantId;
+    }
+
+    public String description() {
+        return description;
+    }
+
+    public Instant createdAt() {
+        return createdAt;
+    }
+
+    public List<Posting> postings() {
+        return postings;
+    }
 
     public long netAmountCents() {
         return postings.stream().mapToLong(Posting::signedAmountCents).sum();

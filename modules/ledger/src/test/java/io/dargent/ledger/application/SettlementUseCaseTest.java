@@ -1,24 +1,23 @@
 package io.dargent.ledger.application;
 
-import io.dargent.ledger.domain.model.Account;
-import io.dargent.ledger.domain.model.Settlement;
-import io.dargent.ledger.domain.port.out.LedgerStore;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.springframework.transaction.support.TransactionCallback;
-import org.springframework.transaction.support.TransactionTemplate;
-
-import java.time.Clock;
-import java.time.Instant;
-import java.util.Optional;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+
+import io.dargent.ledger.domain.model.Account;
+import io.dargent.ledger.domain.model.Settlement;
+import io.dargent.ledger.domain.port.out.LedgerStore;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionTemplate;
 
 class SettlementUseCaseTest {
 
@@ -38,8 +37,8 @@ class SettlementUseCaseTest {
             TransactionCallback<Object> callback = invocation.getArgument(0);
             return callback.doInTransaction(mock(org.springframework.transaction.TransactionStatus.class));
         });
-        useCase = new SettlementUseCase(store, txTemplate,
-                Clock.fixed(Instant.parse("2026-08-31T12:00:00Z"), java.time.ZoneOffset.UTC));
+        useCase = new SettlementUseCase(
+                store, txTemplate, Clock.fixed(Instant.parse("2026-08-31T12:00:00Z"), java.time.ZoneOffset.UTC));
     }
 
     @Test
@@ -116,8 +115,9 @@ class SettlementUseCaseTest {
         }
 
         void credit(String account, long amount) {
-            balances.compute(account, (k, v) -> new Account(account,
-                    (v == null ? 0L : v.balanceCents()) + amount, Instant.now(), null));
+            balances.compute(
+                    account,
+                    (k, v) -> new Account(account, (v == null ? 0L : v.balanceCents()) + amount, Instant.now(), null));
         }
 
         long balanceOf(String account) {
@@ -125,8 +125,8 @@ class SettlementUseCaseTest {
         }
 
         @Override
-        public boolean insertEventIfAbsent(UUID eventId, String type, String txid, UUID merchantId,
-                String payload, String status, String note) {
+        public boolean insertEventIfAbsent(
+                UUID eventId, String type, String txid, UUID merchantId, String payload, String status, String note) {
             return true;
         }
 
@@ -134,7 +134,8 @@ class SettlementUseCaseTest {
         public void postJournal(io.dargent.ledger.domain.model.JournalEntry entry) {
             for (var p : entry.postings()) {
                 long delta = p.direction() == io.dargent.ledger.domain.model.EntryDirection.CREDIT
-                        ? p.amountCents() : -p.amountCents();
+                        ? p.amountCents()
+                        : -p.amountCents();
                 credit(p.account(), delta);
             }
         }
@@ -156,7 +157,9 @@ class SettlementUseCaseTest {
 
         @Override
         public long availableBalance(UUID merchantId) {
-            return findAccount("merchant:" + merchantId + ":available").map(Account::balanceCents).orElse(0L);
+            return findAccount("merchant:" + merchantId + ":available")
+                    .map(Account::balanceCents)
+                    .orElse(0L);
         }
 
         @Override
@@ -182,8 +185,7 @@ class SettlementUseCaseTest {
         }
 
         @Override
-        public void recordAudit(LedgerStore.AuditEntry audit) {
-        }
+        public void recordAudit(LedgerStore.AuditEntry audit) {}
 
         @Override
         public ProofResult verifyProof() {
@@ -201,8 +203,15 @@ class SettlementUseCaseTest {
         }
 
         @Override
-        public boolean postRefund(UUID eventId, String txid, UUID merchantId, long amountCents,
-                long feeReversalCents, String description, Instant createdAt, Clock clock) {
+        public boolean postRefund(
+                UUID eventId,
+                String txid,
+                UUID merchantId,
+                long amountCents,
+                long feeReversalCents,
+                String description,
+                Instant createdAt,
+                Clock clock) {
             return false;
         }
     }

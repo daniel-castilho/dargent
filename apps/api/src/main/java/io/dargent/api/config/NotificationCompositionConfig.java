@@ -1,7 +1,8 @@
 package io.dargent.api.config;
 
 import io.dargent.notifications.adapter.out.messaging.SqsNotificationConsumer;
-import io.dargent.notifications.application.NotificationIngestionUseCase;
+import java.net.URI;
+import java.time.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -11,14 +12,10 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
-
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.sqs.SqsClient;
-
-import java.net.URI;
-import java.time.Duration;
 
 /**
  * Notifications composition root — wires the SQS consumer and optional scheduler (E10 spec §4, §6).
@@ -39,8 +36,7 @@ public class NotificationCompositionConfig {
         return SqsClient.builder()
                 .endpointOverride(URI.create(endpointUrl))
                 .region(Region.of(region))
-                .credentialsProvider(StaticCredentialsProvider.create(
-                        AwsBasicCredentials.create(accessKey, secretKey)))
+                .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(accessKey, secretKey)))
                 .build();
     }
 
@@ -56,8 +52,7 @@ public class NotificationCompositionConfig {
                 queueUrl,
                 Math.min(batchSize, 10), // SQS max batch = 10
                 pollMs,
-                ingestion
-        );
+                ingestion);
     }
 
     @Bean

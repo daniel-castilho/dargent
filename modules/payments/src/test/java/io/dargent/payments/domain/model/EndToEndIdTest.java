@@ -25,29 +25,23 @@ class EndToEndIdTest {
 
     @Test
     void rejects_31_chars() {
-        assertThatThrownBy(() -> new EndToEndId(VALID.substring(0, 31)))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new EndToEndId(VALID.substring(0, 31))).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void rejects_33_chars() {
-        assertThatThrownBy(() -> new EndToEndId(VALID + "0"))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new EndToEndId(VALID + "0")).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void rejects_missing_uppercase_E_prefix() {
-        assertThatThrownBy(() -> new EndToEndId("A" + VALID.substring(1)))
-                .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new EndToEndId("e" + VALID.substring(1)))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new EndToEndId("A" + VALID.substring(1))).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new EndToEndId("e" + VALID.substring(1))).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void rejects_null_and_blank() {
-        assertThatThrownBy(() -> new EndToEndId(null))
-                .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new EndToEndId(""))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new EndToEndId(null)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new EndToEndId("")).isInstanceOf(IllegalArgumentException.class);
     }
 }

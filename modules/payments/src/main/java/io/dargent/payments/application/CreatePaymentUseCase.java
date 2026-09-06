@@ -61,11 +61,22 @@ public final class CreatePaymentUseCase {
     private final Duration firstReconcileBackoff;
     private final PaymentsMetrics metrics;
 
-    public CreatePaymentUseCase(PaymentRepository paymentRepo, IdempotencyStore idempotencyStore,
-            OutboxWriter outboxWriter, AuditWriter auditWriter, PspPort pspPort,
-            TxidGenerator txidGenerator, TransactionTemplate txTemplate, EventEnvelopeFactory envelopeFactory,
-            String pixKey, String receiverName, String receiverCity, String pspCallbackUrl, Clock clock,
-            Duration firstReconcileBackoff, PaymentsMetrics metrics) {
+    public CreatePaymentUseCase(
+            PaymentRepository paymentRepo,
+            IdempotencyStore idempotencyStore,
+            OutboxWriter outboxWriter,
+            AuditWriter auditWriter,
+            PspPort pspPort,
+            TxidGenerator txidGenerator,
+            TransactionTemplate txTemplate,
+            EventEnvelopeFactory envelopeFactory,
+            String pixKey,
+            String receiverName,
+            String receiverCity,
+            String pspCallbackUrl,
+            Clock clock,
+            Duration firstReconcileBackoff,
+            PaymentsMetrics metrics) {
         this.paymentRepo = paymentRepo;
         this.idempotencyStore = idempotencyStore;
         this.outboxWriter = outboxWriter;
@@ -97,8 +108,8 @@ public final class CreatePaymentUseCase {
         // 2. PSP phase, strictly after commit (BD-4). "First call" - no replay.
         ChargeResult psp;
         try {
-            psp = pspPort.createCharge(new CreateChargeInput(payment.txid(), input.amount().cents(),
-                    expiresAtRequested, pspCallbackUrl, input.description()));
+            psp = pspPort.createCharge(new CreateChargeInput(
+                    payment.txid(), input.amount().cents(), expiresAtRequested, pspCallbackUrl, input.description()));
         } catch (RuntimeException e) {
             runExhaustion(payment, input, now);
             throw new PspUnavailableException("psp_create_exhausted", e);
@@ -107,23 +118,27 @@ public final class CreatePaymentUseCase {
         // 3. Success tx — PSP truth + COMPLETED + exact 201 snapshot (BD-3, BD-6)
         runSuccess(payment, psp, input, now);
 
-        return new Output(psp.txid(), PaymentStatus.PENDING, psp.expiresAt(),
-                composeBrCode(psp.txid(), input.amount()), false);
+        return new Output(
+                psp.txid(), PaymentStatus.PENDING, psp.expiresAt(), composeBrCode(psp.txid(), input.amount()), false);
     }
 
     // ------------------------------------------------------------------ core
 
     private CoreOutcome runCore(Input input, Instant now, Instant expiresAtRequested) {
-        var existing = idempotencyStore.insertIfAbsent(input.merchantId(), input.idempotencyKey(),
-                input.endpoint(), input.requestFingerprint());
+        var existing = idempotencyStore.insertIfAbsent(
+                input.merchantId(), input.idempotencyKey(), input.endpoint(), input.requestFingerprint());
         if (existing.isPresent()) {
             return CoreOutcome.existing(existing.get()); // PK race loser: never creates a payment
         }
         Payment payment = createAndPersistPayment(input, now, expiresAtRequested);
         metrics.transition("none", "PENDING", "create");
         appendCreatedOutbox(payment, input, now);
-        auditWriter.record("create_payment", input.apiKeyId(), input.merchantId(),
-                payment.txid().value(), input.requestId());
+        auditWriter.record(
+                "create_payment",
+                input.apiKeyId(),
+                input.merchantId(),
+                payment.txid().value(),
+                input.requestId());
         return CoreOutcome.created(payment);
     }
 
@@ -131,8 +146,8 @@ public final class CreatePaymentUseCase {
     private Payment createAndPersistPayment(Input input, Instant now, Instant expiresAtRequested) {
         for (int attempt = 1; ; attempt++) {
             Txid txid = txidGenerator.generate();
-            Payment candidate = Payment.create(txid, input.merchantId(), input.amount(),
-                    input.description(), expiresAtRequested, now);
+            Payment candidate = Payment.create(
+                    txid, input.merchantId(), input.amount(), input.description(), expiresAtRequested, now);
             candidate.scheduleInitialReconciliation(firstReconcileBackoff, now);
             try {
                 paymentRepo.save(candidate);
@@ -152,8 +167,8 @@ public final class CreatePaymentUseCase {
         payload.put("amount", payment.amount().cents());
         payload.put("description", payment.description());
         payload.put("expiresAt", payment.expiresAt().toString());
-        String envelope = envelopeFactory.envelope("payment.created", 1, payment.txid().value(),
-                payment.merchantId(), input.requestId(), payload, now);
+        String envelope = envelopeFactory.envelope(
+                "payment.created", 1, payment.txid().value(), payment.merchantId(), input.requestId(), payload, now);
         outboxWriter.append(payment.txid().value(), "payment.created", 1, envelope, input.requestId());
     }
 
@@ -163,16 +178,14 @@ public final class CreatePaymentUseCase {
         boolean sameFingerprint = rec.requestFingerprint().equals(input.requestFingerprint());
         if (!sameFingerprint) {
             metrics.idempotencyEvent("conflict");
-            throw new IdempotencyKeyConflictException(
-                    "Idempotency key conflict for key " + input.idempotencyKey());
+            throw new IdempotencyKeyConflictException("Idempotency key conflict for key " + input.idempotencyKey());
         }
         if ("COMPLETED".equals(rec.state())) {
             metrics.idempotencyEvent("replayed");
             return replay(rec); // zero side effects, byte-equal snapshot (BD-6)
         }
         metrics.idempotencyEvent("in_flight");
-        throw new IdempotencyKeyInFlightException(
-                "Idempotency key in flight for key " + input.idempotencyKey());
+        throw new IdempotencyKeyInFlightException("Idempotency key in flight for key " + input.idempotencyKey());
     }
 
     private Output replay(IdempotencyRecord rec) {
@@ -197,10 +210,10 @@ public final class CreatePaymentUseCase {
                 paymentRepo.updateIfVersionMatches(latestUpdated, latest.version());
             }
             String expiresIn = Duration.between(now, psp.expiresAt()).toString();
-            Map<String, Object> snapshot = snapshotBody(psp.txid(), input.amount(), psp.expiresAt(),
-                    expiresIn, composeBrCode(psp.txid(), input.amount()));
-            idempotencyStore.markCompleted(input.merchantId(), input.idempotencyKey(), input.endpoint(),
-                    psp.txid(), 201, snapshot);
+            Map<String, Object> snapshot = snapshotBody(
+                    psp.txid(), input.amount(), psp.expiresAt(), expiresIn, composeBrCode(psp.txid(), input.amount()));
+            idempotencyStore.markCompleted(
+                    input.merchantId(), input.idempotencyKey(), input.endpoint(), psp.txid(), 201, snapshot);
         });
     }
 
@@ -222,7 +235,8 @@ public final class CreatePaymentUseCase {
     }
 
     private Payment requireReRead(Txid txid) {
-        return paymentRepo.findByTxid(txid)
+        return paymentRepo
+                .findByTxid(txid)
                 .orElseThrow(() -> new IllegalStateException("payment vanished during create: " + txid.value()));
     }
 
@@ -233,15 +247,15 @@ public final class CreatePaymentUseCase {
         payload.put("amount", payment.amount().cents());
         payload.put("reason", "psp_create_exhausted");
         payload.put("failedAt", now.toString());
-        String envelope = envelopeFactory.envelope("payment.failed", 1, payment.txid().value(),
-                payment.merchantId(), input.requestId(), payload, now);
+        String envelope = envelopeFactory.envelope(
+                "payment.failed", 1, payment.txid().value(), payment.merchantId(), input.requestId(), payload, now);
         outboxWriter.append(payment.txid().value(), "payment.failed", 1, envelope, input.requestId());
     }
 
     // ---------------------------------------------------------------- helpers
 
-    private Map<String, Object> snapshotBody(Txid txid, Money amount, Instant expiresAt,
-            String expiresIn, String brcode) {
+    private Map<String, Object> snapshotBody(
+            Txid txid, Money amount, Instant expiresAt, String expiresIn, String brcode) {
         Map<String, Object> snapshot = new LinkedHashMap<>();
         snapshot.put("txid", txid.value());
         snapshot.put("status", "PENDING");
@@ -268,21 +282,15 @@ public final class CreatePaymentUseCase {
             String requestId,
             Money amount,
             String description,
-            Duration expiresIn
-    ) {}
+            Duration expiresIn) {}
 
-    public record Output(
-            Txid txid,
-            PaymentStatus status,
-            Instant expiresAt,
-            String brcode,
-            boolean replay
-    ) {}
+    public record Output(Txid txid, PaymentStatus status, Instant expiresAt, String brcode, boolean replay) {}
 
     private record CoreOutcome(Payment payment, IdempotencyRecord existing) {
         static CoreOutcome created(Payment payment) {
             return new CoreOutcome(payment, null);
         }
+
         static CoreOutcome existing(IdempotencyRecord existing) {
             return new CoreOutcome(null, existing);
         }

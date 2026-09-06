@@ -1,6 +1,7 @@
 package io.dargent.notifications.adapter.out.messaging;
 
 import io.dargent.notifications.application.NotificationIngestionUseCase;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.sqs.SqsClient;
@@ -8,9 +9,6 @@ import software.amazon.awssdk.services.sqs.model.DeleteMessageBatchRequest;
 import software.amazon.awssdk.services.sqs.model.DeleteMessageBatchRequestEntry;
 import software.amazon.awssdk.services.sqs.model.Message;
 import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
-
-import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * SQS consumer for the notifications fan-out queue (E10 spec §4, §6).
@@ -30,11 +28,7 @@ public class SqsNotificationConsumer {
     private final NotificationIngestionUseCase ingestion;
 
     public SqsNotificationConsumer(
-            SqsClient sqs,
-            String queueUrl,
-            int batchSize,
-            long pollMs,
-            NotificationIngestionUseCase ingestion) {
+            SqsClient sqs, String queueUrl, int batchSize, long pollMs, NotificationIngestionUseCase ingestion) {
         this.sqs = sqs;
         this.queueUrl = queueUrl;
         this.batchSize = Math.min(batchSize, 10); // SQS max batch = 10
@@ -83,7 +77,9 @@ public class SqsNotificationConsumer {
                         .build());
                 processed++;
             } else {
-                log.warn("Message {} not acked (poison or processing error); will redrive after 5 receives", msg.messageId());
+                log.warn(
+                        "Message {} not acked (poison or processing error); will redrive after 5 receives",
+                        msg.messageId());
             }
         }
 

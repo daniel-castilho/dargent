@@ -27,9 +27,11 @@ class PaymentsArchitectureTest {
     @Test
     void payments_never_reaches_into_sibling_modules() {
         noClasses()
-                .that().resideInAPackage("io.dargent.payments..")
-                .should().dependOnClassesThat().resideInAnyPackage(
-                        "io.dargent.ledger..", "io.dargent.notifications..")
+                .that()
+                .resideInAPackage("io.dargent.payments..")
+                .should()
+                .dependOnClassesThat()
+                .resideInAnyPackage("io.dargent.ledger..", "io.dargent.notifications..")
                 .check(PRODUCTION);
     }
 
@@ -49,8 +51,11 @@ class PaymentsArchitectureTest {
 
     private static ArchRule domainPurityRule() {
         return noClasses()
-                .that().resideInAPackage("..domain..")
-                .should().dependOnClassesThat().resideInAnyPackage(
+                .that()
+                .resideInAPackage("..domain..")
+                .should()
+                .dependOnClassesThat()
+                .resideInAnyPackage(
                         "org.springframework..",
                         "jakarta..",
                         "com.fasterxml.jackson..",

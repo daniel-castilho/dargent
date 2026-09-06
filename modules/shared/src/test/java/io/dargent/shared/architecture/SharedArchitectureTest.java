@@ -13,14 +13,16 @@ import org.junit.jupiter.api.Test;
  */
 class SharedArchitectureTest {
 
-    private static final JavaClasses SHARED =
-            new ClassFileImporter().withImportOption(new ImportOption.DoNotIncludeTests()).importPackages("io.dargent.shared");
+    private static final JavaClasses SHARED = new ClassFileImporter()
+            .withImportOption(new ImportOption.DoNotIncludeTests())
+            .importPackages("io.dargent.shared");
 
     @Test
     void shared_never_imports_business_modules() {
         noClasses()
-                .should().dependOnClassesThat().resideInAnyPackage(
-                        "io.dargent.payments..", "io.dargent.ledger..", "io.dargent.notifications..")
+                .should()
+                .dependOnClassesThat()
+                .resideInAnyPackage("io.dargent.payments..", "io.dargent.ledger..", "io.dargent.notifications..")
                 .check(SHARED);
     }
 }

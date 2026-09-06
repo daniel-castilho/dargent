@@ -1,9 +1,8 @@
 package io.dargent.api.config;
 
-import java.nio.charset.StandardCharsets;
-import java.io.IOException;
-
 import com.sun.net.httpserver.HttpExchange;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 
 /**
  * Shared test PSP stub for boot-app ITs: serves POST /cobs with a canned PIX response so a real
@@ -11,7 +10,10 @@ import com.sun.net.httpserver.HttpExchange;
  */
 public class PspStub {
 
-    public enum Mode { SUCCESS, FAIL }
+    public enum Mode {
+        SUCCESS,
+        FAIL
+    }
 
     public volatile Mode mode = Mode.SUCCESS;
 
@@ -38,14 +40,14 @@ public class PspStub {
                     String requestBody = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
                     String txid = extractTxid(requestBody);
                     respBody = ("{\"txid\":\"" + txid
-+ "\",\"expiresAt\":\"2027-01-01T13:00:00Z\",\"endToEndId\":\"E2E-1\",\"brcode\":\"000201-terribly-long-brcode\"}")
+                                    + "\",\"expiresAt\":\"2027-01-01T13:00:00Z\",\"endToEndId\":\"E2E-1\",\"brcode\":\"000201-terribly-long-brcode\"}")
                             .getBytes(StandardCharsets.UTF_8);
                 }
             } else if ("GET".equals(method) && path.startsWith("/cobs/")) {
                 String txid = path.substring("/cobs/".length());
                 status = 200;
                 respBody = ("{\"txid\":\"" + txid
-                        + "\",\"expiresAt\":\"2026-08-29T12:02:00Z\",\"endToEndId\":\"E2E-1\",\"brcode\":\"000201-terribly-long-brcode\"}")
+                                + "\",\"expiresAt\":\"2026-08-29T12:02:00Z\",\"endToEndId\":\"E2E-1\",\"brcode\":\"000201-terribly-long-brcode\"}")
                         .getBytes(StandardCharsets.UTF_8);
             } else {
                 status = 404;

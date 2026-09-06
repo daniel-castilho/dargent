@@ -7,6 +7,8 @@ import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.github.tomakehurst.wiremock.WireMockServer;
+import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import io.dargent.payments.domain.model.Txid;
 import io.dargent.payments.domain.port.out.PspPort.CobState;
 import io.dargent.payments.domain.port.out.PspPort.CobStatus;
@@ -15,8 +17,6 @@ import java.time.Instant;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import com.github.tomakehurst.wiremock.WireMockServer;
-import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 
 /**
  * Contract IT for {@link SimulatorChargeAdapter#getCob} pinning the REAL simulator wire body

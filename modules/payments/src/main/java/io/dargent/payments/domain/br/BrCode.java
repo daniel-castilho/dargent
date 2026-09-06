@@ -11,8 +11,7 @@ public final class BrCode {
 
     private BrCode() {}
 
-    public static String of(String pixKey, String receiverName, String receiverCity,
-            long amountCents, Txid txid) {
+    public static String of(String pixKey, String receiverName, String receiverCity, long amountCents, Txid txid) {
         StringBuilder tlv = new StringBuilder();
 
         // 00: Payload Format Indicator = "01"

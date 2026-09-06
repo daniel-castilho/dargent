@@ -1,9 +1,8 @@
 package io.dargent.payments.application;
 
+import io.dargent.payments.domain.exception.RefundExceedsRemainingException;
 import io.dargent.payments.domain.model.Payment;
 import io.dargent.payments.domain.model.PaymentStatus;
-import io.dargent.payments.domain.exception.InvalidTransitionException;
-import io.dargent.payments.domain.exception.RefundExceedsRemainingException;
 import io.dargent.payments.domain.port.out.AuditWriter;
 import io.dargent.payments.domain.port.out.IdempotencyRecord;
 import io.dargent.payments.domain.port.out.IdempotencyStore;
@@ -15,7 +14,6 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -42,9 +40,15 @@ public final class RefundPaymentUseCase {
     private final Clock clock;
     private final PaymentsMetrics metrics;
 
-    public RefundPaymentUseCase(PaymentRepository paymentRepo, IdempotencyStore idempotencyStore,
-            OutboxWriter outboxWriter, AuditWriter auditWriter, MerchantBalancePort balancePort,
-            EventEnvelopeFactory envelopeFactory, TransactionTemplate txTemplate, Clock clock,
+    public RefundPaymentUseCase(
+            PaymentRepository paymentRepo,
+            IdempotencyStore idempotencyStore,
+            OutboxWriter outboxWriter,
+            AuditWriter auditWriter,
+            MerchantBalancePort balancePort,
+            EventEnvelopeFactory envelopeFactory,
+            TransactionTemplate txTemplate,
+            Clock clock,
             PaymentsMetrics metrics) {
         this.paymentRepo = paymentRepo;
         this.idempotencyStore = idempotencyStore;
@@ -74,15 +78,22 @@ public final class RefundPaymentUseCase {
         }
         RefundResult result = core.result();
 
-        return new Output(result.refundId(), result.txid(), result.amount(), result.feeReversal(),
-                result.net(), "SUCCEEDED", result.createdAt(), false);
+        return new Output(
+                result.refundId(),
+                result.txid(),
+                result.amount(),
+                result.feeReversal(),
+                result.net(),
+                "SUCCEEDED",
+                result.createdAt(),
+                false);
     }
 
     // ------------------------------------------------------------------ core
 
     private CoreOutcome runCore(Input input, Instant now) {
-        var existing = idempotencyStore.insertIfAbsent(input.merchantId(), input.idempotencyKey(),
-                input.endpoint(), input.requestFingerprint());
+        var existing = idempotencyStore.insertIfAbsent(
+                input.merchantId(), input.idempotencyKey(), input.endpoint(), input.requestFingerprint());
         if (existing.isPresent()) {
             return CoreOutcome.existing(existing.get());
         }
@@ -95,8 +106,7 @@ public final class RefundPaymentUseCase {
         Payment payment = paymentOpt.get();
 
         // Status gate: CONFIRMED or PARTIALLY_REFUNDED only
-        if (payment.status() != PaymentStatus.CONFIRMED
-                && payment.status() != PaymentStatus.PARTIALLY_REFUNDED) {
+        if (payment.status() != PaymentStatus.CONFIRMED && payment.status() != PaymentStatus.PARTIALLY_REFUNDED) {
             metrics.refundRejected("not_refundable");
             throw new InvalidStateException(input.txid(), payment.status().name());
         }
@@ -110,8 +120,8 @@ public final class RefundPaymentUseCase {
         }
 
         // Fee reversal (D8): floor(fee × refund / amount)
-        var feeBreakdown = new io.dargent.payments.domain.model.FeeBreakdown(
-                payment.amount(), payment.fee(), payment.net());
+        var feeBreakdown =
+                new io.dargent.payments.domain.model.FeeBreakdown(payment.amount(), payment.fee(), payment.net());
         long feeReversalCents = io.dargent.payments.domain.model.FeeBreakdown.feeReversal(
                 refundAmount.cents(), payment.fee().cents(), payment.amount().cents());
         long netCents = refundAmount.cents() - feeReversalCents;
@@ -120,8 +130,8 @@ public final class RefundPaymentUseCase {
         try {
             long available = balancePort.available(input.merchantId());
             if (available < refundAmount.cents() - feeReversalCents) {
-                throw new InsufficientMerchantBalanceException(payment.txid().value(),
-                        available, refundAmount.cents() - feeReversalCents);
+                throw new InsufficientMerchantBalanceException(
+                        payment.txid().value(), available, refundAmount.cents() - feeReversalCents);
             }
         } catch (InsufficientMerchantBalanceException e) {
             throw e;
@@ -136,17 +146,19 @@ public final class RefundPaymentUseCase {
         // Perform the refund in the domain (bumps version via transition)
         Instant refundWhen = clock.instant();
         PaymentStatus priorStatus = payment.status();
-        payment.refund(
-                Money.of(refundAmount.cents(), "BRL"),
-                Money.of(feeReversalCents, "BRL"),
-                clock.instant());
+        payment.refund(Money.of(refundAmount.cents(), "BRL"), Money.of(feeReversalCents, "BRL"), clock.instant());
 
         // Insert refund record
         String refundId = UUID.randomUUID().toString();
         long feeReversalCents2 = feeReversalCents(payment, refundAmount);
         long netCents2 = refundAmount.cents() - feeReversalCents2;
-        paymentRepo.insertRefund(payment.id(), payment.txid().value(),
-                input.amount().cents(), feeReversalCents2, netCents2, input.requestId());
+        paymentRepo.insertRefund(
+                payment.id(),
+                payment.txid().value(),
+                input.amount().cents(),
+                feeReversalCents2,
+                netCents2,
+                input.requestId());
 
         // Conditional UPDATE on payment (version guard: version before refund)
         if (!paymentRepo.updateIfVersionMatches(payment, payment.version() - 1)) {
@@ -158,13 +170,20 @@ public final class RefundPaymentUseCase {
         appendRefundOutbox(payment, refundAmount, feeReversalCents2, clock.instant());
 
         // Audit
-        auditWriter.record("create_refund", input.apiKeyId(), input.merchantId(),
-                payment.txid().value(), input.requestId());
+        auditWriter.record(
+                "create_refund",
+                input.apiKeyId(),
+                input.merchantId(),
+                payment.txid().value(),
+                input.requestId());
 
         return CoreOutcome.created(new RefundResult(
-                UUID.randomUUID().toString(), payment.txid().value(),
-                refundAmount.cents(), feeReversalCents(payment, input.amount()),
-                netCents2, clock.instant()));
+                UUID.randomUUID().toString(),
+                payment.txid().value(),
+                refundAmount.cents(),
+                feeReversalCents(payment, input.amount()),
+                netCents2,
+                clock.instant()));
     }
 
     private long feeReversalCents(Payment payment, Money refundAmount) {
@@ -179,8 +198,8 @@ public final class RefundPaymentUseCase {
         payload.put("netRefund", refundAmount.cents() - feeReversalCents(payment, refundAmount));
         payload.put("refundId", UUID.randomUUID().toString());
         payload.put("txid", payment.txid().value());
-        String envelope = envelopeFactory.envelope("refund.created", 1, payment.txid().value(),
-                payment.merchantId(), "refund-request-id", payload, now);
+        String envelope = envelopeFactory.envelope(
+                "refund.created", 1, payment.txid().value(), payment.merchantId(), "refund-request-id", payload, now);
         outboxWriter.append(payment.txid().value(), "refund.created", 1, envelope, "refund-request-id");
     }
 
@@ -189,14 +208,12 @@ public final class RefundPaymentUseCase {
     private Output handleExisting(IdempotencyRecord rec, Input input) {
         boolean sameFingerprint = rec.requestFingerprint().equals(input.requestFingerprint());
         if (!sameFingerprint) {
-            throw new IdempotencyKeyConflictException(
-                    "Idempotency key conflict for key " + input.idempotencyKey());
+            throw new IdempotencyKeyConflictException("Idempotency key conflict for key " + input.idempotencyKey());
         }
         if ("COMPLETED".equals(rec.state())) {
             return replay(rec);
         }
-        throw new IdempotencyKeyInFlightException(
-                "Idempotency key in flight for key " + input.idempotencyKey());
+        throw new IdempotencyKeyInFlightException("Idempotency key in flight for key " + input.idempotencyKey());
     }
 
     private Output replay(IdempotencyRecord rec) {
@@ -222,8 +239,7 @@ public final class RefundPaymentUseCase {
             String endpoint,
             String requestFingerprint,
             String requestId,
-            io.dargent.shared.money.Money amount
-    ) {}
+            io.dargent.shared.money.Money amount) {}
 
     public record Output(
             String id,
@@ -233,22 +249,16 @@ public final class RefundPaymentUseCase {
             long net,
             String status,
             Instant createdAt,
-            boolean replay
-    ) {}
+            boolean replay) {}
 
     private record RefundResult(
-            String refundId,
-            String txid,
-            long amount,
-            long feeReversal,
-            long net,
-            Instant createdAt
-    ) {}
+            String refundId, String txid, long amount, long feeReversal, long net, Instant createdAt) {}
 
     private record CoreOutcome(RefundResult result, IdempotencyRecord existing) {
         static CoreOutcome created(RefundResult result) {
             return new CoreOutcome(result, null);
         }
+
         static CoreOutcome existing(IdempotencyRecord existing) {
             return new CoreOutcome(null, existing);
         }
@@ -270,7 +280,8 @@ public final class RefundPaymentUseCase {
 
     public static final class InsufficientMerchantBalanceException extends RuntimeException {
         public InsufficientMerchantBalanceException(String txid, long available, long required) {
-            super("Insufficient merchant balance for refund " + txid + ": available=" + available + " required=" + required);
+            super("Insufficient merchant balance for refund " + txid + ": available=" + available + " required="
+                    + required);
         }
     }
 

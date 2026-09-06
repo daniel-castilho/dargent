@@ -6,9 +6,6 @@ import io.dargent.ledger.domain.model.JournalEntry;
 import io.dargent.ledger.domain.model.Posting;
 import io.dargent.ledger.domain.model.Settlement;
 import io.dargent.ledger.domain.port.out.LedgerStore;
-import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.transaction.support.TransactionTemplate;
-
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Instant;
@@ -16,6 +13,8 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * JDBC implementation of LedgerStore (spec §4, §5).
@@ -40,8 +39,8 @@ public final class JdbcLedgerStore implements LedgerStore {
     }
 
     @Override
-    public boolean insertEventIfAbsent(UUID eventId, String type, String txid, UUID merchantId,
-            String payload, String status, String note) {
+    public boolean insertEventIfAbsent(
+            UUID eventId, String type, String txid, UUID merchantId, String payload, String status, String note) {
         int rows = jdbc.sql("""
                 INSERT INTO ledger.events (event_id, type, txid, merchant_id, payload, status, note)
                 VALUES (?, ?, ?, ?, ?::jsonb, ?, ?)
@@ -66,9 +65,7 @@ public final class JdbcLedgerStore implements LedgerStore {
                 UPDATE ledger.events
                 SET status = 'POSTED', note = 'Posted successfully'
                 WHERE event_id = ? AND status = 'RECEIVED'
-                """)
-                .param(eventId)
-                .update();
+                """).param(eventId).update();
     }
 
     @Override
@@ -79,8 +76,13 @@ public final class JdbcLedgerStore implements LedgerStore {
                     INSERT INTO ledger.journal_entries (id, event_id, txid, merchant_id, description, created_at)
                     VALUES (?, ?, ?, ?, ?, ?)
                     """)
-                    .params(entry.id(), entry.eventId(), entry.txid(), entry.merchantId(),
-                            entry.description(), Timestamp.from(entry.createdAt()))
+                    .params(
+                            entry.id(),
+                            entry.eventId(),
+                            entry.txid(),
+                            entry.merchantId(),
+                            entry.description(),
+                            Timestamp.from(entry.createdAt()))
                     .update();
 
             // 2) Postings
@@ -89,7 +91,12 @@ public final class JdbcLedgerStore implements LedgerStore {
                         INSERT INTO ledger.postings (id, entry_id, account, direction, amount_cents, created_at)
                         VALUES (?, ?, ?, ?::text, ?, ?)
                         """)
-                        .params(p.id(), p.entryId(), p.account(), p.direction().name(), p.amountCents(),
+                        .params(
+                                p.id(),
+                                p.entryId(),
+                                p.account(),
+                                p.direction().name(),
+                                p.amountCents(),
                                 Timestamp.from(p.createdAt()))
                         .update();
             }
@@ -97,7 +104,8 @@ public final class JdbcLedgerStore implements LedgerStore {
             // 3) Balance upserts
             for (Posting p : entry.postings()) {
                 long delta = p.direction() == io.dargent.ledger.domain.model.EntryDirection.CREDIT
-                        ? p.amountCents() : -p.amountCents();
+                        ? p.amountCents()
+                        : -p.amountCents();
                 jdbc.sql("""
                         INSERT INTO ledger.balances (account, balance_cents, updated_at, last_event_id)
                         VALUES (?, ?, ?, ?)
@@ -139,8 +147,7 @@ public final class JdbcLedgerStore implements LedgerStore {
                         rs.getString("account"),
                         rs.getLong("balance_cents"),
                         rs.getObject("updated_at", OffsetDateTime.class).toInstant(),
-                        (UUID) rs.getObject("last_event_id")
-                ))
+                        (UUID) rs.getObject("last_event_id")))
                 .optional();
     }
 
@@ -164,8 +171,7 @@ public final class JdbcLedgerStore implements LedgerStore {
                         rs.getString("account"),
                         rs.getLong("balance_cents"),
                         rs.getObject("updated_at", OffsetDateTime.class).toInstant(),
-                        (UUID) rs.getObject("last_event_id")
-                ))
+                        (UUID) rs.getObject("last_event_id")))
                 .optional();
     }
 
@@ -183,8 +189,7 @@ public final class JdbcLedgerStore implements LedgerStore {
                         rs.getString("idempotency_key"),
                         rs.getLong("amount_cents"),
                         rs.getObject("entry_id", UUID.class),
-                        rs.getObject("settled_at", OffsetDateTime.class).toInstant()
-                ))
+                        rs.getObject("settled_at", OffsetDateTime.class).toInstant()))
                 .optional();
     }
 
@@ -201,8 +206,7 @@ public final class JdbcLedgerStore implements LedgerStore {
                            NULL::uuid AS last_event_id
                     FROM ledger.postings p
                     GROUP BY p.account
-                    """)
-                    .update();
+                    """).update();
             return null;
         });
     }
@@ -214,8 +218,13 @@ public final class JdbcLedgerStore implements LedgerStore {
                 VALUES (?, ?, ?, ?, ?, ?)
                 ON CONFLICT (idempotency_key) DO NOTHING
                 """)
-                .params(settlement.id(), settlement.merchantId(), settlement.idempotencyKey(),
-                        settlement.amountCents(), settlement.entryId(), Timestamp.from(settlement.settledAt()))
+                .params(
+                        settlement.id(),
+                        settlement.merchantId(),
+                        settlement.idempotencyKey(),
+                        settlement.amountCents(),
+                        settlement.entryId(),
+                        Timestamp.from(settlement.settledAt()))
                 .update();
         if (rows > 0) {
             return Optional.of(settlement);
@@ -233,8 +242,7 @@ public final class JdbcLedgerStore implements LedgerStore {
                         rs.getString("idempotency_key"),
                         rs.getLong("amount_cents"),
                         rs.getObject("entry_id", UUID.class),
-                        rs.getObject("settled_at", OffsetDateTime.class).toInstant()
-                ))
+                        rs.getObject("settled_at", OffsetDateTime.class).toInstant()))
                 .optional();
     }
 
@@ -251,30 +259,36 @@ public final class JdbcLedgerStore implements LedgerStore {
     @Override
     public ProofResult verifyProof() {
         long accountsChecked = jdbc.sql("SELECT COUNT(*) FROM ledger.balances")
-                .query(Long.class).single();
+                .query(Long.class)
+                .single();
         long entriesChecked = jdbc.sql("SELECT COUNT(*) FROM ledger.journal_entries")
-                .query(Long.class).single();
+                .query(Long.class)
+                .single();
         long postingsChecked = jdbc.sql("SELECT COUNT(*) FROM ledger.postings")
-                .query(Long.class).single();
+                .query(Long.class)
+                .single();
 
         // (a) global Σ DEBIT = Σ CREDIT
         long totalDebit = jdbc.sql("""
                 SELECT COALESCE(SUM(amount_cents), 0)
                 FROM ledger.postings
                 WHERE direction = 'DEBIT'
-                """)
-                .query(Long.class).single();
+                """).query(Long.class).single();
 
         long totalCredit = jdbc.sql("""
                 SELECT COALESCE(SUM(amount_cents), 0)
                 FROM ledger.postings
                 WHERE direction = 'CREDIT'
-                """)
-                .query(Long.class).single();
+                """).query(Long.class).single();
 
         if (totalDebit != totalCredit) {
-            return new ProofResult(false, "Global imbalance: debit=" + totalDebit + " != credit=" + totalCredit,
-                    "balance", accountsChecked, entriesChecked, postingsChecked);
+            return new ProofResult(
+                    false,
+                    "Global imbalance: debit=" + totalDebit + " != credit=" + totalCredit,
+                    "balance",
+                    accountsChecked,
+                    entriesChecked,
+                    postingsChecked);
         }
 
         // (b) per account: balance_cents == Σ credits - Σ debits
@@ -293,28 +307,44 @@ public final class JdbcLedgerStore implements LedgerStore {
                 .list();
 
         if (!divergences.isEmpty()) {
-            return new ProofResult(false, "Per-account divergence: " + divergences.get(0),
-                    "projection", accountsChecked, entriesChecked, postingsChecked);
+            return new ProofResult(
+                    false,
+                    "Per-account divergence: " + divergences.get(0),
+                    "projection",
+                    accountsChecked,
+                    entriesChecked,
+                    postingsChecked);
         }
 
         // (c) every journal entry has ≥ 2 postings
         long badEntries = jdbc.sql("""
                 SELECT COUNT(*) FROM ledger.journal_entries je
                 WHERE (SELECT COUNT(*) FROM ledger.postings p WHERE p.entry_id = je.id) < 2
-                """)
-                .query(Long.class).single();
+                """).query(Long.class).single();
 
         if (badEntries > 0) {
-            return new ProofResult(false, badEntries + " journal entries with < 2 postings",
-                    "projection", accountsChecked, entriesChecked, postingsChecked);
+            return new ProofResult(
+                    false,
+                    badEntries + " journal entries with < 2 postings",
+                    "projection",
+                    accountsChecked,
+                    entriesChecked,
+                    postingsChecked);
         }
 
         return ProofResult.ok(accountsChecked, entriesChecked, postingsChecked);
     }
 
     @Override
-    public boolean postRefund(UUID eventId, String txid, UUID merchantId, long amountCents, long feeReversalCents,
-            String description, Instant createdAt, Clock clock) {
+    public boolean postRefund(
+            UUID eventId,
+            String txid,
+            UUID merchantId,
+            long amountCents,
+            long feeReversalCents,
+            String description,
+            Instant createdAt,
+            Clock clock) {
         return txTemplate.execute(txStatus -> {
             // Conditional drain on available balance: net = amount - feeReversal
             long netDrain = amountCents - feeReversalCents;
@@ -323,8 +353,12 @@ public final class JdbcLedgerStore implements LedgerStore {
                     SET balance_cents = balance_cents - ?, updated_at = ?, last_event_id = ?
                     WHERE account = ? AND balance_cents >= ?
                     """)
-                    .params(netDrain, Timestamp.from(clock.instant()), eventId,
-                            "merchant:" + merchantId + ":available", netDrain)
+                    .params(
+                            netDrain,
+                            Timestamp.from(clock.instant()),
+                            eventId,
+                            "merchant:" + merchantId + ":available",
+                            netDrain)
                     .update();
 
             if (drained == 0) {
@@ -333,12 +367,14 @@ public final class JdbcLedgerStore implements LedgerStore {
                         UPDATE ledger.events
                         SET status = 'IGNORED', note = 'insufficient_merchant_balance'
                         WHERE event_id = ?
-                        """)
-                        .param(eventId)
-                        .update();
+                        """).param(eventId).update();
                 // Audit the skipped refund (system actor, real merchant; actor_key is NOT NULL)
-                recordAudit(new AuditEntry(UUID.randomUUID(), "refund_skipped_balance",
-                        SYSTEM_AUDIT_ACTOR, merchantId, "txid=" + txid + ",event=" + eventId));
+                recordAudit(new AuditEntry(
+                        UUID.randomUUID(),
+                        "refund_skipped_balance",
+                        SYSTEM_AUDIT_ACTOR,
+                        merchantId,
+                        "txid=" + txid + ",event=" + eventId));
                 return false;
             }
 
@@ -369,25 +405,36 @@ public final class JdbcLedgerStore implements LedgerStore {
             // Build postings: [3] Dr available / Cr processing, [4] Dr fees:revenue / Cr available
             UUID entryId = UUID.randomUUID();
             var postings = List.of(
-                    new Posting(UUID.randomUUID(), entryId, "merchant:" + merchantId + ":available",
-                            EntryDirection.DEBIT, amountCents, clock.instant()),
-                    new Posting(UUID.randomUUID(), entryId, "payments:processing",
-                            EntryDirection.CREDIT, amountCents, clock.instant()),
-                    new Posting(UUID.randomUUID(), entryId, "fees:revenue",
-                            EntryDirection.DEBIT, feeReversalCents, clock.instant()),
-                    new Posting(UUID.randomUUID(), entryId, "merchant:" + merchantId + ":available",
-                            EntryDirection.CREDIT, feeReversalCents, clock.instant())
-            );
+                    new Posting(
+                            UUID.randomUUID(),
+                            entryId,
+                            "merchant:" + merchantId + ":available",
+                            EntryDirection.DEBIT,
+                            amountCents,
+                            clock.instant()),
+                    new Posting(
+                            UUID.randomUUID(),
+                            entryId,
+                            "payments:processing",
+                            EntryDirection.CREDIT,
+                            amountCents,
+                            clock.instant()),
+                    new Posting(
+                            UUID.randomUUID(),
+                            entryId,
+                            "fees:revenue",
+                            EntryDirection.DEBIT,
+                            feeReversalCents,
+                            clock.instant()),
+                    new Posting(
+                            UUID.randomUUID(),
+                            entryId,
+                            "merchant:" + merchantId + ":available",
+                            EntryDirection.CREDIT,
+                            feeReversalCents,
+                            clock.instant()));
 
-            var entry = new JournalEntry(
-                    entryId,
-                    eventId,
-                    txid,
-                    merchantId,
-                    description,
-                    createdAt,
-                    postings
-            );
+            var entry = new JournalEntry(entryId, eventId, txid, merchantId, description, createdAt, postings);
 
             // Write journal + postings WITHOUT balance updates (already done above)
             postJournalWithoutBalances(entry);
@@ -406,8 +453,13 @@ public final class JdbcLedgerStore implements LedgerStore {
                     INSERT INTO ledger.journal_entries (id, event_id, txid, merchant_id, description, created_at)
                     VALUES (?, ?, ?, ?, ?, ?)
                     """)
-                    .params(entry.id(), entry.eventId(), entry.txid(), entry.merchantId(),
-                            entry.description(), Timestamp.from(entry.createdAt()))
+                    .params(
+                            entry.id(),
+                            entry.eventId(),
+                            entry.txid(),
+                            entry.merchantId(),
+                            entry.description(),
+                            Timestamp.from(entry.createdAt()))
                     .update();
 
             // 2) Postings only (no balance upserts)
@@ -416,7 +468,12 @@ public final class JdbcLedgerStore implements LedgerStore {
                         INSERT INTO ledger.postings (id, entry_id, account, direction, amount_cents, created_at)
                         VALUES (?, ?, ?, ?::text, ?, ?)
                         """)
-                        .params(p.id(), p.entryId(), p.account(), p.direction().name(), p.amountCents(),
+                        .params(
+                                p.id(),
+                                p.entryId(),
+                                p.account(),
+                                p.direction().name(),
+                                p.amountCents(),
                                 Timestamp.from(p.createdAt()))
                         .update();
             }

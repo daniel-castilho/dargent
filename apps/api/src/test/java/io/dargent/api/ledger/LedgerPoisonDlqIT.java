@@ -44,13 +44,13 @@ import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
  * (the E6 S6 lesson).
  */
 @SpringBootTest(
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    classes = {DargentApiApplication.class, LedgerPoisonDlqIT.PoisonTestConfig.class},
-    properties = {
-        "dargent.relay.enabled=false",
-        "dargent.ledger.consumer.enabled=false",
-        "dargent.psp.webhook-secret=dev-only-secret"
-    })
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        classes = {DargentApiApplication.class, LedgerPoisonDlqIT.PoisonTestConfig.class},
+        properties = {
+            "dargent.relay.enabled=false",
+            "dargent.ledger.consumer.enabled=false",
+            "dargent.psp.webhook-secret=dev-only-secret"
+        })
 @Testcontainers
 class LedgerPoisonDlqIT {
 
@@ -58,8 +58,7 @@ class LedgerPoisonDlqIT {
     private static final String LEDGER_QUEUE = "dargent-payments-ledger-dlqit.fifo";
     private static final String LEDGER_DLQ = "dargent-payments-ledger-dlq-dlqit.fifo";
     private static final UUID MERCHANT = UUID.fromString("11111111-1111-1111-1111-111111111111");
-    private static final Clock FIXED_CLOCK =
-            Clock.fixed(Instant.parse("2027-01-01T12:00:00Z"), ZoneOffset.UTC);
+    private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2027-01-01T12:00:00Z"), ZoneOffset.UTC);
     private static final String POISON_BODY = "{\"hello\":\"world\"}";
 
     @Container
@@ -67,9 +66,9 @@ class LedgerPoisonDlqIT {
     static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:16-alpine");
 
     @Container
-    static final LocalStackContainer localstack =
-            new LocalStackContainer(DockerImageName.parse("localstack/localstack:3.8.1"))
-                    .withServices(LocalStackContainer.Service.SNS, LocalStackContainer.Service.SQS);
+    static final LocalStackContainer localstack = new LocalStackContainer(
+                    DockerImageName.parse("localstack/localstack:3.8.1"))
+            .withServices(LocalStackContainer.Service.SNS, LocalStackContainer.Service.SQS);
 
     private static SqsClient sqs;
     private static String ledgerUrl;
@@ -88,7 +87,8 @@ class LedgerPoisonDlqIT {
     static void awsEnvironment(org.springframework.test.context.DynamicPropertyRegistry registry) {
         ensureTopology();
         registry.add("AWS_ENDPOINT_URL", () -> localstack
-                .getEndpointOverride(LocalStackContainer.Service.SQS).toString());
+                .getEndpointOverride(LocalStackContainer.Service.SQS)
+                .toString());
         registry.add("AWS_REGION", () -> REGION);
         registry.add("AWS_ACCESS_KEY_ID", () -> "test");
         registry.add("AWS_SECRET_ACCESS_KEY", () -> "test");
@@ -125,10 +125,11 @@ class LedgerPoisonDlqIT {
         for (int i = 0; i < 60; i++) {
             bumpPoisonReceiveCount();
             List<Message> dlq = sqs.receiveMessage(ReceiveMessageRequest.builder()
-                    .queueUrl(dlqUrl)
-                    .maxNumberOfMessages(10)
-                    .waitTimeSeconds(2)
-                    .build()).messages();
+                            .queueUrl(dlqUrl)
+                            .maxNumberOfMessages(10)
+                            .waitTimeSeconds(2)
+                            .build())
+                    .messages();
             if (!dlq.isEmpty()) {
                 return dlq.get(0).body();
             }
@@ -164,11 +165,15 @@ class LedgerPoisonDlqIT {
     }
 
     private long journalEntries() {
-        return jdbc.sql("select count(*) from ledger.journal_entries").query(Long.class).single();
+        return jdbc.sql("select count(*) from ledger.journal_entries")
+                .query(Long.class)
+                .single();
     }
 
     private long postings() {
-        return jdbc.sql("select count(*) from ledger.postings").query(Long.class).single();
+        return jdbc.sql("select count(*) from ledger.postings")
+                .query(Long.class)
+                .single();
     }
 
     private void assertProofOk() {
@@ -185,18 +190,17 @@ class LedgerPoisonDlqIT {
         sqs = SqsClient.builder()
                 .endpointOverride(localstack.getEndpointOverride(LocalStackContainer.Service.SQS))
                 .region(Region.of(REGION))
-                .credentialsProvider(StaticCredentialsProvider.create(
-                        AwsBasicCredentials.create("test", "test")))
+                .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create("test", "test")))
                 .build();
         dlqUrl = createFifoQueue(sqs, LEDGER_DLQ, null);
-        String dlqArn = sqs.getQueueAttributes(r -> r.queueUrl(dlqUrl)
-                .attributeNames(QueueAttributeName.QUEUE_ARN))
-                .attributes().get(QueueAttributeName.QUEUE_ARN);
+        String dlqArn = sqs.getQueueAttributes(r -> r.queueUrl(dlqUrl).attributeNames(QueueAttributeName.QUEUE_ARN))
+                .attributes()
+                .get(QueueAttributeName.QUEUE_ARN);
         String redrive = "{\"deadLetterTargetArn\":\"" + dlqArn + "\",\"maxReceiveCount\":\"2\"}";
         ledgerUrl = createFifoQueue(sqs, LEDGER_QUEUE, redrive);
         // Short visibility so the poison becomes visible again quickly for its redrive journey.
-        sqs.setQueueAttributes(r -> r.queueUrl(ledgerUrl)
-                .attributes(Map.of(QueueAttributeName.VISIBILITY_TIMEOUT, "1")));
+        sqs.setQueueAttributes(
+                r -> r.queueUrl(ledgerUrl).attributes(Map.of(QueueAttributeName.VISIBILITY_TIMEOUT, "1")));
     }
 
     private static String createFifoQueue(SqsClient client, String name, String redrive) {
@@ -218,8 +222,7 @@ class LedgerPoisonDlqIT {
                     .locations(
                             "classpath:db/migration/payments",
                             "classpath:db/migration/ledger",
-                            "classpath:db/migration/notifications"
-                    )
+                            "classpath:db/migration/notifications")
                     .baselineOnMigrate(true)
                     .load();
             flyway.migrate();
@@ -239,8 +242,7 @@ class LedgerPoisonDlqIT {
         }
 
         @Bean
-        SqsEventConsumer poisonConsumer(EventIngestionUseCase ingestion,
-                SqsClient poisonTestSqsClient) {
+        SqsEventConsumer poisonConsumer(EventIngestionUseCase ingestion, SqsClient poisonTestSqsClient) {
             return new SqsEventConsumer(poisonTestSqsClient, ledgerUrl, 10, 600000, ingestion);
         }
     }
