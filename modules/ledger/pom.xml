@@ -19,6 +19,12 @@
       <groupId>io.dargent</groupId>
       <artifactId>dargent-shared</artifactId>
     </dependency>
+    <!-- Micrometer for the E12 N8 proof-failure counter (use-case level, frozen name from
+         observability.md §3). Version managed by the Boot parent BOM. -->
+    <dependency>
+      <groupId>io.micrometer</groupId>
+      <artifactId>micrometer-core</artifactId>
+    </dependency>
     <dependency>
       <groupId>org.springframework</groupId>
       <artifactId>spring-jdbc</artifactId>

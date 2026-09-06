@@ -144,7 +144,8 @@ public class WebhookController {
             case WebhookIntakeUseCase.Outcome.Processed ignored -> writeSuccess(response, "processed");
             case WebhookIntakeUseCase.Outcome.Duplicate ignored -> writeSuccess(response, "duplicate");
             case WebhookIntakeUseCase.Outcome.Ignored i -> {
-                log.warn("Webhook ignored: provider_event_id={}, reason={}", providerEventId, i.reason());
+                // N7: an ignored webhook is a normal business outcome (not a failure path) → INFO.
+                log.info("Webhook ignored: provider_event_id={}, reason={}", providerEventId, i.reason());
                 writeSuccess(response, "ignored");
             }
         }

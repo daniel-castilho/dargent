@@ -57,6 +57,22 @@ services:
       DARGENT_RECONCILER_ENABLED: ${DARGENT_RECONCILER_ENABLED:-false}
       DARGENT_RECONCILER_SCAN_MS: ${DARGENT_RECONCILER_SCAN_MS:-60000}
       DARGENT_RECONCILER_BACKOFF_MS: ${DARGENT_RECONCILER_BACKOFF_MS:-60000,300000,900000,3600000}
+      # Events spine (E6/E7): off by default (payments-path smoke does not need them); the
+      # proof-daily job turns the full spine on so money reaches the ledger and the proof has
+      # a journal to verify.
+      DARGENT_RELAY_ENABLED: ${DARGENT_RELAY_ENABLED:-false}
+      DARGENT_RELAY_POLL_MS: ${DARGENT_RELAY_POLL_MS:-1000}
+      DARGENT_RELAY_WORKERS: ${DARGENT_RELAY_WORKERS:-2}
+      DARGENT_RELAY_BATCH: ${DARGENT_RELAY_BATCH:-32}
+      DARGENT_RELAY_MAX_ATTEMPTS: ${DARGENT_RELAY_MAX_ATTEMPTS:-3}
+      DARGENT_OUTBOX_RETENTION_DAYS: ${DARGENT_OUTBOX_RETENTION_DAYS:-7}
+      DARGENT_EVENTS_TOPIC_ARN: ${DARGENT_EVENTS_TOPIC_ARN:-arn:aws:sns:us-east-1:000000000000:dargent-payments-events.fifo}
+      DARGENT_EVENTS_PUBLISH_TIMEOUT_MS: ${DARGENT_EVENTS_PUBLISH_TIMEOUT_MS:-2000}
+      DARGENT_LEDGER_CONSUMER_ENABLED: ${DARGENT_LEDGER_CONSUMER_ENABLED:-false}
+      DARGENT_LEDGER_QUEUE_URL: ${DARGENT_LEDGER_QUEUE_URL:-http://localstack:4566/000000000000/dargent-payments-ledger.fifo}
+      DARGENT_LEDGER_POLL_MS: ${DARGENT_LEDGER_POLL_MS:-1000}
+      DARGENT_NOTIFS_QUEUE_URL: ${DARGENT_NOTIFS_QUEUE_URL:-http://localstack:4566/000000000000/dargent-payments-notify.fifo}
+      DARGENT_EXPIRATION_ENABLED: ${DARGENT_EXPIRATION_ENABLED:-false}
     ports:
       - "8081:8080"
     depends_on:
@@ -128,6 +144,20 @@ services:
     depends_on:
       - api-blue
       - api-green
+    restart: unless-stopped
+
+  # E12 S6 (optional convenience, not a contract): single Prometheus scraping both colors'
+  # management ports. Opt-in via `docker compose --profile metrics up -d`.
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    profiles: ["metrics"]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=15d
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9095:9090"
     restart: unless-stopped
 
 volumes:

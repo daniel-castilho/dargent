@@ -83,11 +83,18 @@ if [ -z "${EXISTING_SUB}" ]; then
         --topic-arn "${TOPIC_ARN}" \
         --protocol sqs \
         --notification-endpoint "${QUEUE_ARN}" \
+        --attributes RawMessageDelivery=true \
         --region "${AWS_REGION}" \
         --endpoint-url "${AWS_ENDPOINT}" >/dev/null
     echo "Subscription created."
 else
-    echo "Subscription already exists (${EXISTING_SUB})."
+    awslocal sns set-subscription-attributes \
+        --subscription-arn "${EXISTING_SUB}" \
+        --attribute-name RawMessageDelivery \
+        --attribute-value true \
+        --region "${AWS_REGION}" \
+        --endpoint-url "${AWS_ENDPOINT}" >/dev/null
+    echo "Subscription already exists (${EXISTING_SUB}); RawMessageDelivery enforced."
 fi
 
 # --- Ledger queue + DLQ (E7) ---
@@ -143,11 +150,18 @@ if [ -z "${EXISTING_LEDGER_SUB}" ]; then
         --topic-arn "${TOPIC_ARN}" \
         --protocol sqs \
         --notification-endpoint "${LEDGER_QUEUE_ARN}" \
+        --attributes RawMessageDelivery=true \
         --region "${AWS_REGION}" \
         --endpoint-url "${AWS_ENDPOINT}" >/dev/null
     echo "Ledger subscription created."
 else
-    echo "Ledger subscription already exists (${EXISTING_LEDGER_SUB})."
+    awslocal sns set-subscription-attributes \
+        --subscription-arn "${EXISTING_LEDGER_SUB}" \
+        --attribute-name RawMessageDelivery \
+        --attribute-value true \
+        --region "${AWS_REGION}" \
+        --endpoint-url "${AWS_ENDPOINT}" >/dev/null
+    echo "Ledger subscription already exists (${EXISTING_LEDGER_SUB}); RawMessageDelivery enforced."
 fi
 
 echo "LocalStack initialization complete."

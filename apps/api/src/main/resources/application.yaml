@@ -38,6 +38,16 @@ management:
   endpoint:
     health:
       show-details: never
+  # N12 (E12 S4): SLO buckets from slos.md thresholds — the whole rider. p50/p95/p99 readable from
+  # the bucket histogram; publish-percentile-histogram keeps bucket boundaries exact for downstream
+  # tooling. MetricsScrapeIT asserts the 0.25s bucket line exists.
+  metrics:
+    distribution:
+      slo:
+        http:
+          server:
+            requests: 100ms,250ms,1s
+      publish-percentile-histogram: true
 
 ---
 

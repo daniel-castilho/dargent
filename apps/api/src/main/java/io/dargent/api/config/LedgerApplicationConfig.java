@@ -3,9 +3,11 @@ package io.dargent.api.config;
 import io.dargent.ledger.adapter.out.db.JdbcLedgerStore;
 import io.dargent.ledger.application.EventEnvelopeReader;
 import io.dargent.ledger.application.EventIngestionUseCase;
+import io.dargent.ledger.application.LedgerMetrics;
 import io.dargent.ledger.application.LedgerReconciliationUseCase;
 import io.dargent.ledger.application.SettlementUseCase;
 import io.dargent.ledger.domain.port.out.LedgerStore;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -42,7 +44,12 @@ public class LedgerApplicationConfig {
     }
 
     @Bean
-    LedgerReconciliationUseCase ledgerReconciliationUseCase(LedgerStore store) {
-        return new LedgerReconciliationUseCase(store);
+    LedgerMetrics ledgerMetrics(MeterRegistry meterRegistry) {
+        return new LedgerMetrics(meterRegistry);
+    }
+
+    @Bean
+    LedgerReconciliationUseCase ledgerReconciliationUseCase(LedgerStore store, LedgerMetrics metrics) {
+        return new LedgerReconciliationUseCase(store, metrics);
     }
 }

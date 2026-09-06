@@ -274,7 +274,7 @@ public final class JdbcLedgerStore implements LedgerStore {
 
         if (totalDebit != totalCredit) {
             return new ProofResult(false, "Global imbalance: debit=" + totalDebit + " != credit=" + totalCredit,
-                    accountsChecked, entriesChecked, postingsChecked);
+                    "balance", accountsChecked, entriesChecked, postingsChecked);
         }
 
         // (b) per account: balance_cents == Σ credits - Σ debits
@@ -294,7 +294,7 @@ public final class JdbcLedgerStore implements LedgerStore {
 
         if (!divergences.isEmpty()) {
             return new ProofResult(false, "Per-account divergence: " + divergences.get(0),
-                    accountsChecked, entriesChecked, postingsChecked);
+                    "projection", accountsChecked, entriesChecked, postingsChecked);
         }
 
         // (c) every journal entry has ≥ 2 postings
@@ -306,7 +306,7 @@ public final class JdbcLedgerStore implements LedgerStore {
 
         if (badEntries > 0) {
             return new ProofResult(false, badEntries + " journal entries with < 2 postings",
-                    accountsChecked, entriesChecked, postingsChecked);
+                    "projection", accountsChecked, entriesChecked, postingsChecked);
         }
 
         return ProofResult.ok(accountsChecked, entriesChecked, postingsChecked);

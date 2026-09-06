@@ -107,12 +107,15 @@ public interface LedgerStore {
     ProofResult verifyProof();
 
     /**
-     * Proof result: ok when balanced; counts for the API diagnostic (§5.4).
+     * Proof result: ok when balanced; counts for the API diagnostic (§5.4). {@code scope} is the
+     * failure class for the {@code dargent_ledger_proof_fail_total} counter (N8): {@code balance}
+     * when Σ DEBIT ≠ Σ CREDIT, {@code projection} when the balances projection diverges from the
+     * journal lines (or a journal entry has fewer than 2 postings); null when ok.
      */
-    record ProofResult(boolean ok, String firstDivergence,
+    record ProofResult(boolean ok, String firstDivergence, String scope,
             long accountsChecked, long entriesChecked, long postingsChecked) {
         public static ProofResult ok(long accounts, long entries, long postings) {
-            return new ProofResult(true, null, accounts, entries, postings);
+            return new ProofResult(true, null, null, accounts, entries, postings);
         }
     }
 

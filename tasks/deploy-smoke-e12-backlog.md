@@ -3,8 +3,9 @@
 Epic goal: from an annotated tag to a running new color with a 10%/30s canary, instant rollback, and a
 CI job that boots the whole compose stack and proves the money path — every commit, not on release day.
 
-> **Status — Block 1 SHIPPED (S0–S3).** Evidence in `docs/release-runbook.md` "Corrections from the S2
-> replicate (E12 S2), 2026-09-06 (binding)" + `deploy-smoke-e12-spec.md` §7. S4/S5/S6 remain **Block 2**.
+> **Status — Block 1 SHIPPED (S0–S3, PR #1, merged `9400a9a`).** Evidence in `docs/release-runbook.md`
+> "Corrections from the S2 replicate (E12 S2), 2026-09-06 (binding)" + `deploy-smoke-e12-spec.md` §7.
+> **Block 2 SHIPPED (S4–S6)** — evidence `deploy-smoke-e12-spec.md` §8. E12 complete.
 
 ```
 E12 Deploy & Runtime Smoke (M4)
@@ -12,9 +13,9 @@ E12 Deploy & Runtime Smoke (M4)
 ├── S1  Blue-green drill on compose (script-exercised, evidence recorded)            [Block 1 ✅]
 ├── S2  Runtime-smoke CI job: compose up + smoke.sh + reconciliation chaos leg        [Block 1 ✅]
 ├── S3  Shutdown-under-load gate (graceful, assert zero dropped in-flights)           [Block 1 ✅]
-├── S4  Riders N8 (daily proof + counter) + N12 (SLO buckets + assertions)            [Block 2]
-├── S5  Doc riders N7/N9 + release-runbook truth + E12 ✅ flip + citation              [Block 2]
-└── (S6) Optional: profile-gated compose Prometheus scraping api:9090                 [Block 2, tiny]
+├── S4  Riders N8 (daily proof + counter) + N12 (SLO buckets + assertions)            [Block 2 ✅]
+├── S5  Doc riders N7/N9 + release-runbook truth + E12 ✅ flip + citation              [Block 2 ✅]
+└── (S6) Optional: profile-gated compose Prometheus scraping api:9090                 [Block 2 ✅]
 ```
 
 ### S0 — Deploy artifacts (Block 1)

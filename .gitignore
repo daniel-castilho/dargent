@@ -34,3 +34,6 @@ deploy/runtime/deploy-overlay.yaml
 uploads/
 internal-notes/
 **/*:Zone.Identifier
+
+# python bytecode (local tooling artifacts)
+__pycache__/

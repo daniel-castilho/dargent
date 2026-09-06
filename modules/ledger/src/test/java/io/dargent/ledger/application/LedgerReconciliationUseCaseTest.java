@@ -19,7 +19,7 @@ class LedgerReconciliationUseCaseTest {
 
     @BeforeEach
     void setUp() {
-        store = new FakeLedgerStore(new ProofResult(true, null, 3, 10, 30));
+        store = new FakeLedgerStore(new ProofResult(true, null, null, 3, 10, 30));
         useCase = new LedgerReconciliationUseCase(store);
     }
 
@@ -34,7 +34,7 @@ class LedgerReconciliationUseCaseTest {
 
     @Test
     void proof_surfaces_divergence_when_not_ok() {
-        store = new FakeLedgerStore(new ProofResult(false, "Per-account divergence: x", 3, 10, 30));
+        store = new FakeLedgerStore(new ProofResult(false, "Per-account divergence: x", "projection", 3, 10, 30));
         useCase = new LedgerReconciliationUseCase(store);
         ProofResult result = useCase.proof();
         assertThat(result.ok()).isFalse();
@@ -43,7 +43,7 @@ class LedgerReconciliationUseCaseTest {
 
     @Test
     void rebuild_recomputes_balances_and_rechecks_proof() {
-        store.setProofAfterRebuild(new ProofResult(true, null, 3, 10, 30));
+        store.setProofAfterRebuild(new ProofResult(true, null, null, 3, 10, 30));
         ProofResult result = useCase.rebuild(java.util.UUID.randomUUID());
         assertThat(store.rebuildCount).isEqualTo(1);
         assertThat(result.ok()).isTrue();
@@ -60,6 +60,49 @@ class LedgerReconciliationUseCaseTest {
     void balance_throws_for_unknown_account() {
         assertThatThrownBy(() -> useCase.balance("merchant:nope:available"))
                 .isInstanceOf(LedgerAccountNotFoundException.class);
+    }
+
+    // ------------------------------------------------------------------ N8 proof-failure counter
+
+    @Test
+    void proof_failure_increments_dargent_ledger_proof_fail_total_by_scope() {
+        io.micrometer.core.instrument.simple.SimpleMeterRegistry registry =
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+        LedgerMetrics metrics = new LedgerMetrics(registry);
+        useCase = new LedgerReconciliationUseCase(store, metrics);
+
+        store = new FakeLedgerStore(new ProofResult(false, "Global imbalance", "balance", 3, 10, 30));
+        useCase = new LedgerReconciliationUseCase(store, metrics);
+        useCase.proof();
+
+        store = new FakeLedgerStore(new ProofResult(false, "Per-account divergence: x", "projection", 3, 10, 30));
+        useCase = new LedgerReconciliationUseCase(store, metrics);
+        useCase.proof();
+
+        assertThat(registry.counter(LedgerMetrics.PROOF_FAIL, "scope", "balance").count())
+                .isEqualTo(1.0);
+        assertThat(registry.counter(LedgerMetrics.PROOF_FAIL, "scope", "projection").count())
+                .isEqualTo(1.0);
+    }
+
+    @Test
+    void proof_ok_never_increments_the_proof_failure_counter() {
+        io.micrometer.core.instrument.simple.SimpleMeterRegistry registry =
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+        useCase = new LedgerReconciliationUseCase(store, new LedgerMetrics(registry));
+        useCase.proof();
+        useCase.proof();
+        assertThat(registry.counter(LedgerMetrics.PROOF_FAIL, "scope", "balance").count()).isZero();
+        assertThat(registry.counter(LedgerMetrics.PROOF_FAIL, "scope", "projection").count()).isZero();
+    }
+
+    @Test
+    void ledger_metrics_pre_registers_both_scopes_at_zero() {
+        io.micrometer.core.instrument.simple.SimpleMeterRegistry registry =
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+        new LedgerMetrics(registry);
+        assertThat(registry.counter(LedgerMetrics.PROOF_FAIL, "scope", "balance").count()).isZero();
+        assertThat(registry.counter(LedgerMetrics.PROOF_FAIL, "scope", "projection").count()).isZero();
     }
 
     static class FakeLedgerStore implements LedgerStore {

@@ -33,32 +33,41 @@ git push origin vX.Y.Z
 Topology: NGINX :8080 → `api-blue` :8081 / `api-green` :8082 (one fleet active, other idle).
 
 ```bash
-scripts/deploy.sh v1.2.3        # target fleet = currently idle color
+scripts/deploy.sh v1.2.3 --key $DARGENT_API_KEY   # target fleet = currently idle color
 ```
 
-What the script does (operator contract, in order):
+What the script does (operator contract, in order — this IS the script's behavior, not aspiration):
 
-1. Pull the exact tag; record image digest in `deploy/runtime/last-deploy.txt`.
-2. **Readiness gate**: start the idle fleet (compose), poll `/actuator/health/readiness` (bounded loop, logs on timeout — abort leaves the old fleet untouched). Readiness covers Postgres + LocalStack.
-3. **Canary**: flip NGINX runtime conf copy to 10% new / 90% old, `nginx -t` + reload, observe 30 s:
-   error rate, p95, `dargent_outbox_lag_seconds`, DLQ depth. Any red signal ⇒ **automatic abort to 100% old**.
-4. **Cutover**: 100% new; old fleet gets `server.shutdown=graceful` drain (in-flight requests finish).
-5. Stop the old fleet; record the release in the deploy log; post-verify (§4).
+1. Verify the tag exists; resolve the migration-gate range = LAST-DEPLOY (`deploy/runtime/last-deploy.txt`)
+   cross-checked against the live `flyway_schema_history` (`since ⊆ db ⊆ tag`, fail-closed — TD-33).
+2. **Readiness gate**: start the idle color, poll the MANAGEMENT port `:9090/actuator/health`
+   (never `:8080` — Q25) within the compose healthcheck budget; timeout aborts leaving the old color
+   at 100%.
+3. **Canary**: render NGINX runtime-conf weights stepwise (10% → 30s dwell → 30% → 30s → 100%); after
+   each bump run `scripts/smoke.sh` (create → idempotent replay → pay → CONFIRMED) against the LIVE
+   stack through NGINX. Any failed probe (or readiness flap) ⇒ **automatic abort to 100% old**, new
+   color drained and stopped, non-zero exit naming the failed step.
+4. **Cutover**: 100% new; record `previous/current/tag/at` in `deploy/runtime/last-deploy.txt` (this
+   record is what rollback and the next migration-gate range read).
+5. Stop (drain) the old color; post-verify (§4).
 
 Gotchas baked in (each cost a real team an afternoon — see lessons.md #9, #10):
 `down` instead of `weight=0`; `resolver 127.0.0.11 valid=10s` + `zone`/`resolve` on upstreams so recreated
 containers are picked up; passive checks `max_fails=3 fail_timeout=10s`; `proxy_next_upstream error timeout`.
+The runtime conf is bind-mounted as a DIRECTORY (single-file binds pin the inode — E12 S2 binding
+correction; see the "Corrections" section below).
 
 ## 4. Post-deploy verification
 
 ```bash
-curl -fs http://localhost:8080/actuator/health/readiness        # via NGINX
-curl -sX POST localhost:8080/v1/payments -H "Authorization: Bearer $DARGENT_API_KEY" \
-  -H "Idempotency-Key: smoke-$(date +%s)" -d '{"amount":100,"description":"deploy smoke"}'
-# pay the QR at the simulator, poll status → CONFIRMED; ledger journal exists; outbox drains
+scripts/deploy.sh --check <next-tag>   # plan + migration-gate verdict, touches nothing
+curl -fs http://localhost:8080/actuator/health          # via NGINX (management data, health-only)
+SMOKE_KEY=psp_test_…  scripts/smoke.sh http://localhost:8080 $SMOKE_KEY   # money path through NGINX
 ```
 
 Metrics glance: transitions ticking, outbox lag < 5 s, DLQ depth 0, no spike in signature failures.
+The standing full-spine check (ledger journal + ΣDR=ΣCR + projection==lines) is the **proof-daily**
+CI job (03:00 UTC + `workflow_dispatch`) — its exit status is the S7 source of truth.
 
 ## 5. Rollback
 

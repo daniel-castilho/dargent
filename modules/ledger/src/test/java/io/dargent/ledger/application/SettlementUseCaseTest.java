@@ -187,7 +187,7 @@ class SettlementUseCaseTest {
 
         @Override
         public ProofResult verifyProof() {
-            return new ProofResult(true, null, 0, 0, 0);
+            return new ProofResult(true, null, null, 0, 0, 0);
         }
 
         @Override

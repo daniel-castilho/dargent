@@ -108,21 +108,14 @@
       <artifactId>testcontainers-localstack</artifactId>
       <scope>test</scope>
     </dependency>
-    <!-- AWS SDK v2 (SNS/SQS) for E6 IT5 (end-to-end delivery) and IT6 (topology asserts) —
-         spec §4 authorizes sns + sqs; test scope only, matching modules/payments relay ITs. -->
+    <!-- AWS SDK v2 (SNS/SQS) — SNS publish (relay EventPublisher) and SQS ledger consumer are
+         PRODUCTION beans wired in this app's composition configs (E6 §4: sns + sqs authorized);
+         compile scope so the runtime image carries them. LocalStack ITs reuse the same clients. -->
     <dependency>
       <groupId>software.amazon.awssdk</groupId>
       <artifactId>sns</artifactId>
       <version>2.25.17</version>
-      <scope>test</scope>
     </dependency>
-    <dependency>
-      <groupId>software.amazon.awssdk</groupId>
-      <artifactId>sqs</artifactId>
-      <version>2.25.17</version>
-      <scope>test</scope>
-    </dependency>
-    <!-- AWS SDK v2 (SQS) for ledger consumer (production code) — spec §4, §5.1 -->
     <dependency>
       <groupId>software.amazon.awssdk</groupId>
       <artifactId>sqs</artifactId>
