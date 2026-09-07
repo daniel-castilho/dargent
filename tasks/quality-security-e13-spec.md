@@ -64,5 +64,5 @@ Exactly one new env. CI/tool secrets (NVD key etc.) ride repository secrets, not
 | S1 | JaCoCo floors + OWASP | coverage poms + check-coverage.sh; measured 0.864/0.867/1.000/0.888/0.785; bite-proof floor 0.99 red; OWASP CVSS≥7; tomcat 11.0.24 red (9 CVEs) → 11.0.25 green | 34079606961 green | ✅ |
 | S2 | Trivy 2-pass + SBOM | SARIF pass 1 + HIGH/CRITICAL pass 2 (both images) + sbom artifacts; bit libcrypto3 3.5.7-r0 CVE-2026-14456 → apk upgrade 3.5.8-r0 (Dockerfile c8891fc) | 34079606961 green | ✅ |
 | S3 | CodeQL + Dep Review | codeql.yml push/PR main; dependency-review fail high; dep-graph enabled 2026-09-07 | 34079606961 green | ✅ |
-| S4 | R1/R2/R3 | lint job + readiness IT + admin ladder IT | pair | ◻ |
-| S5 | threat model + E13 ✅ + **M4 ✅** + citation | docs diff | pair | ◻ |
+| S4 | R1/R2/R3 | lint job + readiness IT + admin ladder IT | PR #4 run #181 `34094292279` (evidence-lint green 85 ids; `ReadinessHealthGoodIT`/`ReadinessHealthBadIT` UP/DOWN legs; `LedgerAdminHiddenIT` 404-hidden + `LedgerAdminRotationIT` 3/3 ladder; footprint ITs green) | ✅ |
+| S5 | threat model + E13 ✅ + **M4 ✅** + citation | docs diff (`docs/security/threat-model.md`, `docs/ci-vulnerability-gates.md`, AGENTS §8 DEBT-7/DEBT-8, design §11.1, README truth pass, playbook scenario 28) | pair | ✅ |

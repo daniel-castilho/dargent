@@ -5,6 +5,40 @@ versioning: semantic, cut from annotated git tags (see [release-runbook](docs/re
 
 ## [Unreleased]
 
+### Added — E13 Quality & Security Gates, Block 2 (S4–S5) (2026-09-07)
+
+- **S4/R1 — Evidence-lint** (`scripts/evidence-lint.sh` + CI job on PR + nightly): every
+  backtick-quoted `33\d+` run id cited in `docs/epics.md` and the spec acceptance matrices must
+  resolve via `gh api` and carry its run number within ±1 line (P6 evidence discipline; job
+  output is `file:line: violation`). Grandfathering requires an owner-granted file header,
+  never self-served. Historical matrix rows completed with their TRUE run numbers (fetched
+  from the API; e5 #125–#132, e8 #146/#147, e10 #118/#119/#123) — 85 ids verified resolving.
+- **S4/R2 — Readiness health group**: SQS `get-queue-attributes` (ledger + notifications
+  queues) and SNS `get-topic-attributes` (events topic) health indicators through EXISTING
+  clients only — the relay's `SnsEventPublisher` now consumes one shared `SnsClient` bean (no
+  probe-only second client). Indicators register iff the spine is on (mirror of each client's
+  conditional). `management.endpoint.health.group.readiness.include: '*'` makes
+  `/actuator/health/readiness` the true deploy gate (blue-green inherits; liveness untouched,
+  process-only). ITs: good targets → readiness UP; deliberately-bad ledger queue (property
+  override) → readiness DOWN + liveness UP.
+- **S4/R3 — Ledger-admin segregation** (`DARGENT_LEDGER_ADMIN_KEY`, default EMPTY =
+  404-hidden — the default is the contract): `/v1/ledger/rebuild`, `/v1/ledger/proof`,
+  `/v1/ledger/settlements` follow the E9 Q11 ladder: unset → 404-hidden; invalid/revoked → 401
+  (filter); valid-but-not-admin → 403 fail-closed; designated admin → 200 audited
+  `ledger_admin_*` with the presented key's real identity (never a sentinel). Closes the real
+  hole: previously ANY merchant key could settle/rebuild/proof. Audit commands renamed
+  (`REBUILD`→`ledger_admin_rebuild`, `SETTLE`→`ledger_admin_settlement`, new
+  `ledger_admin_proof`). ITs mirror `OutboxAdminRotationIT` + default-hidden leg; footprint
+  tests updated; `ci-proof-daily` exports the job key as admin; compose passes the env through.
+- **S5 — Threat model** (`docs/security/threat-model.md`): STRIDE × 6 surfaces, every cell
+  cites an existing control (IT/config/script), not intentions. Gaps → **DEBT-8** (no webhook
+  rate limit; accepted for v1, NGINX edge when public) + **DEBT-7** registered (owner
+  adjudication 2026-09-06: postJournal duplication — register & defer, post-v1.0.0).
+- **S5 — `docs/ci-vulnerability-gates.md`** (referenced by design.md §11.1 but never existed):
+  threshold/on-failure/suppression/cache policy in one table; design §11.1 truth pass (OWASP is
+  a CVSS≥7 gate, not report-only; evidence-lint in the pipeline list); testing-playbook
+  scenario 28 carries the `ProductionLockdownIT` pointer.
+
 ### Added — E13 Quality & Security Gates, Block 1 (S0–S3) (2026-09-07)
 
 - **Maven wrapper**: `./mvnw` 3.8.7 (exact match with the system Maven; CI migrated to it in the

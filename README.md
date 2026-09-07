@@ -23,8 +23,8 @@ as its milestone closes — see *Current state* and the per-milestone acceptance
 | No confirmed payment is lost — even without a webhook | Signed webhook intake + **live reconciler (E5)** polling the PSP for due/expired payments, with give-up past the resurrection window |
 | Every cent is traceable and balanced | Append-only **double-entry ledger** + daily balance proof + property tests |
 | Invalid states are impossible | State machine guarded by the entity **and** imposed by conditional `UPDATE`s (the database arbitrates races) |
-| No downtime deploys on bare metal | NGINX **blue-green with canary (M4)**, instant rollback, shutdown-under-load gate in CI **(M4)** |
-| Quality is auditable | Acceptance matrix per milestone, security gates in CI **(M4)**, executable documentation as tests |
+| No downtime deploys on bare metal | NGINX **blue-green with canary** (E12), instant rollback, shutdown-under-load gate in CI |
+| Quality is auditable | Acceptance matrix per milestone, security gates in CI (SpotBugs/OWASP/coverage/Trivy/CodeQL/evidence-lint, E13), executable documentation as tests |
 
 ## Architecture
 
@@ -106,7 +106,7 @@ one wins, the loser is 409 (payments lock) or IGNORED + refund_skipped_balance a
 | Auth | Stripe-style API keys (`psp_test_…`, SHA-256 at rest) + HMAC-SHA256 webhooks with anti-replay |
 | Observability | Boot 4 structured JSON logs (ECS) with request correlation, Micrometer + Prometheus on an isolated management port — [observability.md](docs/observability.md) *(live, E11)* |
 | Tests | JUnit 6, Testcontainers 2.0, WireMock, Awaitility, jqwik, ArchUnit |
-| Runtime | Docker Compose, NGINX blue-green with canary **(M4)** — no k8s |
+| Runtime | Docker Compose, NGINX blue-green with canary (E12) — no k8s |
 
 ## Getting started
 
@@ -150,26 +150,27 @@ money or race guarantee; the reconciliation scenario ("webhook suppressed → re
 
 ## CI/CD & deployment
 
-Pipeline **now (M0/M1 scope):** boundary gates (ArchUnit + script) → unit + integration (Testcontainers) →
-production build → image build with **non-root gate**. That is the entire pipeline that runs today — by design.
-
-Pipeline **at M4 (target, per [design](docs/design.md) §11.1):** SpotBugs → OWASP Dependency-Check → combined
-coverage gate → Trivy (2-pass) + SBOM → CodeQL + Dependency Review → **runtime smoke** (E2E happy path +
-reconciliation chaos + graceful shutdown under load) → k6 performance (consultative).
+Pipeline **now (M0–M4, as built through E13):** boundary gates (ArchUnit + script) → migration gate self-test →
+unit + integration (Testcontainers) → **SpotBugs (Medium+) + Spotless** → **OWASP Dependency-Check (CVSS ≥ 7 gate,
+NVD-keyed, cached)** → **per-module coverage floors on combined unit+IT data** → **evidence-lint (cited CI runs
+resolve + carry numbers)** → production build → image build with **non-root gate** + **Trivy 2-pass
+(HIGH/CRITICAL gate) + SBOM CycloneDX** → **CodeQL + Dependency Review** → **runtime smoke** (E2E happy path +
+reconciliation chaos + graceful shutdown under load). k6 performance stays consultative. Gate policy:
+[docs/ci-vulnerability-gates.md](docs/ci-vulnerability-gates.md).
 
 An annotated tag `vX.Y.Z` produces the semver image + GitHub Release with the jar and the SBOM of the exact
-shipped image. Deployment is **blue-green by immutable tag** with a 10%/30s canary and instant rollback
-(deploy scripts land at M4). Procedures: [release runbook](docs/release-runbook.md).
+shipped image (E14). Deployment is **blue-green by immutable tag** with a 10%/30s canary and instant rollback
+(`deploy.sh`, live since E12). Procedures: [release runbook](docs/release-runbook.md).
 
 ## Current state
 
-**E6 + E7 ledger (S1–S5) + E10 notifications (S0–S7) + E8 refunds (S2–S7) complete on `main`. Ledger**
-**consumes `payment.confirmed`, journals double-entry postings, maintains balance proof + rebuild, and**
-**settles the full available balance behind `DARGENT_LEDGER_CONSUMER_ENABLED` (off by default).**
+**E6 + E7 ledger (S1–S5) + E10 notifications (S0–S7) + E8 refunds (S2–S7) + E9 delivery hardening complete**
+**on `main`. Ledger consumes `payment.confirmed`, journals double-entry postings, maintains balance proof +**
+**rebuild, and settles behind `DARGENT_LEDGER_ADMIN_KEY` (admin-gated, default 404-hidden).**
 **`POST /v1/payments/{txid}/refunds` drives partial/total refunds with fee reversal and a ledger-backed**
 **merchant balance guard; concurrent refunds are DB-arbitrated (payments lock → one 201 / one 409;**
 **ledger drain → one POSTED / one IGNORED with `refund_skipped_balance`). The journal coverage auditor**
-**now also detects refund-vs-POSTED discrepancies. M2 is ✅; M3 refunds are built, M3 completes with E9.**
+**also detects refund-vs-POSTED discrepancies. M3 is ✅ (E9); M4 is ✅ (E11+E12+E13) — E14 cuts v1.0.0.**
 
 | Milestone | Scope | Status |
 |---|---|---|
@@ -178,8 +179,8 @@ shipped image. Deployment is **blue-green by immutable tag** with a 10%/30s cana
 | M2 (E4) — Webhook intake | `POST /webhooks/psp` fail-closed HMAC, anti-replay, dedupe, conditional confirm | ✅ |
 | M2 (E6) — Events backbone | Outbox relay → SNS/SQS FIFO with DLQ + retention (at-least-once, `runOnce`-driven ITs incl. E2E anchor) | ✅ |
 | M2 (E7/E10) — Events ledger/consumer | Ledger journaling + balance proof/rebuild + settlement (E7 S1–S5 ✓); notifications consumer + `GET /v1/notifications` read API (E10 S0–S7 ✓) | ✅ |
-| M3 — Suffering | Refunds (✓), expiration, resurrection, reconciler, settlement, DLQ/backoff/EXHAUSTED/requeue (E9) | ☐ |
-| M4 — Finish | Metrics, blue-green deploy, runtime smoke in CI, tag releases + SBOM, restore drill | ☐ |
+| M3 — Suffering | Refunds (✓), expiration, resurrection, reconciler, settlement, DLQ/backoff/EXHAUSTED/requeue (E9 ✓) | ✅ |
+| M4 — Finish | Metrics (E11 ✓), blue-green deploy + runtime smoke in CI (E12 ✓), full quality/security gates (E13 ✓) — **✅**; E14 (tag release + SBOM + restore drill) cuts v1.0.0 as its own epic | ✅ |
 | M5 — Stretch | Card as second Strategy, k6 as hard gate, Redis read cache, webhook reprocessing | ☐ |
 
 ## License
