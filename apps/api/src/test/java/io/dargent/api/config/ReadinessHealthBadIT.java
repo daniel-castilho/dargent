@@ -6,9 +6,12 @@ import io.dargent.api.DargentApiApplication;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * E13 S4 R2 — readiness health group over the management port, BAD target. Same spine as
@@ -39,6 +42,10 @@ import org.testcontainers.junit.jupiter.Testcontainers;
         })
 @Testcontainers
 class ReadinessHealthBadIT extends ReadinessHealthSupport {
+
+    @Container
+    @ServiceConnection
+    static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:16-alpine");
 
     private static final int MGMT_PORT = 9090;
 

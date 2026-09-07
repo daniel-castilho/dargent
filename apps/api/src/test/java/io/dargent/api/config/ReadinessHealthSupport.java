@@ -8,7 +8,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import org.testcontainers.containers.localstack.LocalStackContainer;
 import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
@@ -19,17 +18,13 @@ import software.amazon.awssdk.services.sqs.model.QueueAttributeName;
 
 /**
  * E13 S4 R2 — shared topology + HTTP helpers for the readiness health ITs. NOT a test class
- * (no {@code @Test}): Failsafe only runs the concrete {@code ReadinessHealth*IT} classes.
- * Purpose: one LocalStack (SNS+SQS) + PG16, the real "existing client" targets (queues + topic),
- * and the operand for the deliberate-bad-URL override in the DOWN context.
+ * (no {@code @Test}, no containers — those live on the concrete ITs, house style): Failsafe
+ * runs only the concrete {@code ReadinessHealth*IT} classes. One LocalStack (SNS+SQS) supplies
+ * the real "existing client" targets (queues + topic); the DOWN context overrides one URL.
  */
-@SuppressWarnings("unused")
 public abstract class ReadinessHealthSupport {
 
     static final String REGION = "us-east-1";
-
-    @Container
-    static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:16-alpine");
 
     @Container
     static final LocalStackContainer localstack = new LocalStackContainer(
@@ -37,7 +32,6 @@ public abstract class ReadinessHealthSupport {
             .withServices(LocalStackContainer.Service.SNS, LocalStackContainer.Service.SQS);
 
     private static SqsClient sqs;
-    private static SnsClient sns;
     private static String ledgerUrl;
     private static String notifsUrl;
     private static String topicArn;
@@ -52,7 +46,7 @@ public abstract class ReadinessHealthSupport {
                 .region(Region.of(REGION))
                 .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create("test", "test")))
                 .build();
-        sns = SnsClient.builder()
+        SnsClient sns = SnsClient.builder()
                 .endpointOverride(localstack.getEndpointOverride(LocalStackContainer.Service.SNS))
                 .region(Region.of(REGION))
                 .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create("test", "test")))
