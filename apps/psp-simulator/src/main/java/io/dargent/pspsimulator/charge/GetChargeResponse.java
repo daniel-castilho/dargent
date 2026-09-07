@@ -8,12 +8,7 @@ import java.time.Instant;
  * against {@code now} (EXPIRED for unpaid past-expiry, PAID permanent).
  */
 public record GetChargeResponse(
-        String txid,
-        String status,
-        long amount,
-        String expiresAt,
-        String endToEndId,
-        String paidAt) {
+        String txid, String status, long amount, String expiresAt, String endToEndId, String paidAt) {
 
     public static GetChargeResponse from(Charge charge, Instant now) {
         return new GetChargeResponse(

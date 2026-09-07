@@ -33,8 +33,8 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public void validation(HttpServletRequest request, HttpServletResponse response,
-            MethodArgumentNotValidException e) {
+    public void validation(
+            HttpServletRequest request, HttpServletResponse response, MethodArgumentNotValidException e) {
         Map<String, String> fields = new LinkedHashMap<>();
         for (FieldError error : e.getBindingResult().getFieldErrors()) {
             fields.putIfAbsent(error.getField(), error.getDefaultMessage());
@@ -43,32 +43,35 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
-    public void unreadable(HttpServletRequest request, HttpServletResponse response,
-            HttpMessageNotReadableException e) {
-        writer.write(request, response, ErrorCode.INVALID_REQUEST, "Malformed JSON body",
-                Map.of("body", "unreadable"));
+    public void unreadable(
+            HttpServletRequest request, HttpServletResponse response, HttpMessageNotReadableException e) {
+        writer.write(request, response, ErrorCode.INVALID_REQUEST, "Malformed JSON body", Map.of("body", "unreadable"));
     }
 
     @ExceptionHandler(RequestValidationException.class)
-    public void requestValidation(HttpServletRequest request, HttpServletResponse response,
-            RequestValidationException e) {
+    public void requestValidation(
+            HttpServletRequest request, HttpServletResponse response, RequestValidationException e) {
         writer.write(request, response, ErrorCode.INVALID_REQUEST, "Validation failed", e.fields());
     }
 
     @ExceptionHandler(InvalidTransitionException.class)
-    public void invalidTransition(HttpServletRequest request, HttpServletResponse response,
-            InvalidTransitionException e) {
+    public void invalidTransition(
+            HttpServletRequest request, HttpServletResponse response, InvalidTransitionException e) {
         writer.write(request, response, ErrorCode.INVALID_TRANSITION, e.getMessage());
     }
 
     @ExceptionHandler(io.dargent.ledger.application.NoBalanceToSettleException.class)
-    public void noBalanceToSettle(HttpServletRequest request, HttpServletResponse response,
+    public void noBalanceToSettle(
+            HttpServletRequest request,
+            HttpServletResponse response,
             io.dargent.ledger.application.NoBalanceToSettleException e) {
         writer.write(request, response, ErrorCode.NO_BALANCE_TO_SETTLE, e.getMessage());
     }
 
     @ExceptionHandler(io.dargent.ledger.application.LedgerAccountNotFoundException.class)
-    public void ledgerAccountNotFound(HttpServletRequest request, HttpServletResponse response,
+    public void ledgerAccountNotFound(
+            HttpServletRequest request,
+            HttpServletResponse response,
             io.dargent.ledger.application.LedgerAccountNotFoundException e) {
         writer.write(request, response, ErrorCode.LEDGER_ACCOUNT_NOT_FOUND, e.getMessage());
     }
@@ -79,57 +82,60 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(IdempotencyKeyConflictException.class)
-    public void idempotencyConflict(HttpServletRequest request, HttpServletResponse response,
-            IdempotencyKeyConflictException e) {
+    public void idempotencyConflict(
+            HttpServletRequest request, HttpServletResponse response, IdempotencyKeyConflictException e) {
         writer.write(request, response, ErrorCode.IDEMPOTENCY_KEY_CONFLICT, e.getMessage());
     }
 
     @ExceptionHandler(IdempotencyKeyInFlightException.class)
-    public void idempotencyInFlight(HttpServletRequest request, HttpServletResponse response,
-            IdempotencyKeyInFlightException e) {
+    public void idempotencyInFlight(
+            HttpServletRequest request, HttpServletResponse response, IdempotencyKeyInFlightException e) {
         response.setHeader("Retry-After", "1");
         writer.write(request, response, ErrorCode.IDEMPOTENCY_KEY_IN_FLIGHT, e.getMessage());
     }
 
     @ExceptionHandler(PspUnavailableException.class)
-    public void pspUnavailable(HttpServletRequest request, HttpServletResponse response,
-            PspUnavailableException e) {
+    public void pspUnavailable(HttpServletRequest request, HttpServletResponse response, PspUnavailableException e) {
         writer.write(request, response, ErrorCode.PSP_UNAVAILABLE, "Payment provider unavailable", e);
     }
 
     @ExceptionHandler(RefundPaymentUseCase.PaymentNotFoundException.class)
-    public void paymentNotFound(HttpServletRequest request, HttpServletResponse response,
-            RefundPaymentUseCase.PaymentNotFoundException e) {
+    public void paymentNotFound(
+            HttpServletRequest request, HttpServletResponse response, RefundPaymentUseCase.PaymentNotFoundException e) {
         writer.write(request, response, ErrorCode.NOT_FOUND, e.getMessage());
     }
 
     @ExceptionHandler(RefundPaymentUseCase.InvalidStateException.class)
-    public void invalidState(HttpServletRequest request, HttpServletResponse response,
-            RefundPaymentUseCase.InvalidStateException e) {
+    public void invalidState(
+            HttpServletRequest request, HttpServletResponse response, RefundPaymentUseCase.InvalidStateException e) {
         writer.write(request, response, ErrorCode.INVALID_STATE, e.getMessage());
     }
 
     @ExceptionHandler(RefundExceedsRemainingException.class)
-    public void refundExceedsRemaining(HttpServletRequest request, HttpServletResponse response,
-            RefundExceedsRemainingException e) {
+    public void refundExceedsRemaining(
+            HttpServletRequest request, HttpServletResponse response, RefundExceedsRemainingException e) {
         writer.write(request, response, ErrorCode.REFUND_EXCEEDS_REMAINING, e.getMessage());
     }
 
     @ExceptionHandler(RefundPaymentUseCase.InsufficientMerchantBalanceException.class)
-    public void insufficientMerchantBalance(HttpServletRequest request, HttpServletResponse response,
+    public void insufficientMerchantBalance(
+            HttpServletRequest request,
+            HttpServletResponse response,
             RefundPaymentUseCase.InsufficientMerchantBalanceException e) {
         writer.write(request, response, ErrorCode.INSUFFICIENT_MERCHANT_BALANCE, e.getMessage());
     }
 
     @ExceptionHandler(RefundPaymentUseCase.BalanceUnavailableException.class)
-    public void balanceUnavailable(HttpServletRequest request, HttpServletResponse response,
+    public void balanceUnavailable(
+            HttpServletRequest request,
+            HttpServletResponse response,
             RefundPaymentUseCase.BalanceUnavailableException e) {
         writer.write(request, response, ErrorCode.BALANCE_UNAVAILABLE, e.getMessage());
     }
 
     @ExceptionHandler(RefundPaymentUseCase.OptimisticLockException.class)
-    public void optimisticLock(HttpServletRequest request, HttpServletResponse response,
-            RefundPaymentUseCase.OptimisticLockException e) {
+    public void optimisticLock(
+            HttpServletRequest request, HttpServletResponse response, RefundPaymentUseCase.OptimisticLockException e) {
         writer.write(request, response, ErrorCode.INVALID_STATE, e.getMessage());
     }
 

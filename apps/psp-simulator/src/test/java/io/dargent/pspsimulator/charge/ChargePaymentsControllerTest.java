@@ -1,9 +1,15 @@
 package io.dargent.pspsimulator.charge;
 
-import java.time.Instant;
-import java.util.regex.Pattern;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.matchesPattern;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import io.dargent.pspsimulator.webhook.RecordingWebhookDispatcher;
+import java.time.Instant;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,13 +21,6 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.hamcrest.Matchers.matchesPattern;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
  * Slice tests for the payer bank ({@link ChargePaymentsController}, E2 spec §5.3). The
@@ -70,8 +69,9 @@ class ChargePaymentsControllerTest {
     private String createCharge(String txid) throws Exception {
         mockMvc.perform(post("/cobs")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"txid\":\"%s\",\"amount\":10000,\"expiresAt\":\"%s\",\"callbackUrl\":\"%s\",\"description\":\"Order #123\"}"
-                                .formatted(txid, FUTURE, CALLBACK)))
+                        .content(
+                                "{\"txid\":\"%s\",\"amount\":10000,\"expiresAt\":\"%s\",\"callbackUrl\":\"%s\",\"description\":\"Order #123\"}"
+                                        .formatted(txid, FUTURE, CALLBACK)))
                 .andExpect(status().isCreated());
         return txid;
     }
@@ -90,9 +90,12 @@ class ChargePaymentsControllerTest {
         assertThat(recordingDispatcher.deliveryCount()).isEqualTo(1);
         assertThat(recordingDispatcher.delivered().get(0).txid()).isEqualTo(txid);
         assertThat(mockMvc.perform(get("/cobs/{txid}", txid))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("PAID"))
-                .andReturn().getResponse().getContentAsString()).contains(recordedEndToEndId(txid));
+                        .andExpect(status().isOk())
+                        .andExpect(jsonPath("$.status").value("PAID"))
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString())
+                .contains(recordedEndToEndId(txid));
     }
 
     private String recordedEndToEndId(String txid) {
@@ -118,8 +121,7 @@ class ChargePaymentsControllerTest {
     @Test
     void paying_an_expired_charge_is_rejected_with_409_charge_expired() throws Exception {
         String txid = "CKD4Z9X2Q7W1M5T3R6Y0A1B2C";
-        store.putIfAbsent(new Charge(txid, 10_000,
-                Instant.parse("2020-01-01T00:00:00Z"), CALLBACK, "stale order"));
+        store.putIfAbsent(new Charge(txid, 10_000, Instant.parse("2020-01-01T00:00:00Z"), CALLBACK, "stale order"));
 
         mockMvc.perform(post("/cobs/{txid}/payments", txid))
                 .andExpect(status().isConflict())
@@ -141,8 +143,7 @@ class ChargePaymentsControllerTest {
     void a_paid_charge_is_visible_as_paid_via_get() throws Exception {
         String txid = createCharge("DKD4Z9X2Q7W1M5T3R6Y0A1B2C");
 
-        mockMvc.perform(post("/cobs/{txid}/payments", txid))
-                .andExpect(status().isOk());
+        mockMvc.perform(post("/cobs/{txid}/payments", txid)).andExpect(status().isOk());
 
         mockMvc.perform(get("/cobs/{txid}", txid))
                 .andExpect(status().isOk())

@@ -1,9 +1,8 @@
 package io.dargent.pspsimulator.charge;
 
-import java.time.Clock;
-
 import io.dargent.pspsimulator.error.PspApiException;
 import io.dargent.pspsimulator.webhook.WebhookDispatcher;
+import java.time.Clock;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -23,8 +22,12 @@ public class ChargePaymentsController {
     private final Clock clock;
     private final WebhookDispatcher dispatcher;
 
-    public ChargePaymentsController(ChargeStore store, EndToEndIdGenerator endToEndIdGenerator,
-            EventIdGenerator eventIdGenerator, Clock clock, WebhookDispatcher dispatcher) {
+    public ChargePaymentsController(
+            ChargeStore store,
+            EndToEndIdGenerator endToEndIdGenerator,
+            EventIdGenerator eventIdGenerator,
+            Clock clock,
+            WebhookDispatcher dispatcher) {
         this.store = store;
         this.endToEndIdGenerator = endToEndIdGenerator;
         this.eventIdGenerator = eventIdGenerator;

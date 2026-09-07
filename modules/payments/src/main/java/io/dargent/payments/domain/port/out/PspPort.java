@@ -13,31 +13,14 @@ public interface PspPort {
     CobStatus getCob(Txid txid);
 
     /** Input for creating a PIX charge. */
-    record CreateChargeInput(
-            Txid txid,
-            long amountCents,
-            Instant expiresAt,
-            String callbackUrl,
-            String description
-    ) {}
+    record CreateChargeInput(Txid txid, long amountCents, Instant expiresAt, String callbackUrl, String description) {}
 
     /** Result of a successful charge creation. */
-    record ChargeResult(
-            Txid txid,
-            Instant expiresAt,
-            String endToEndId,
-            String brcodePayload
-    ) {}
+    record ChargeResult(Txid txid, Instant expiresAt, String endToEndId, String brcodePayload) {}
 
     /** PSP charge status response (E2 truth endpoint GET /cobs/{txid}). */
     record CobStatus(
-            Txid txid,
-            CobState state,
-            long amountCents,
-            Instant expiresAt,
-            String endToEndId,
-            Instant paidAt
-    ) {}
+            Txid txid, CobState state, long amountCents, Instant expiresAt, String endToEndId, Instant paidAt) {}
 
     /** PSP charge states. */
     enum CobState {

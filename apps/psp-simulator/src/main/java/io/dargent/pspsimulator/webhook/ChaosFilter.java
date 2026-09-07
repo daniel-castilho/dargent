@@ -1,21 +1,19 @@
 package io.dargent.pspsimulator.webhook;
 
-import java.io.IOException;
-import java.util.Random;
-
 import io.dargent.pspsimulator.config.ChaosProperties;
 import io.dargent.pspsimulator.error.ErrorResponse;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.util.Random;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 import tools.jackson.databind.ObjectMapper;
-
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 
 /**
  * Request-side chaos knobs (spec §6): {@code psp-error-rate} (503 {@code psp_unavailable}) and
@@ -40,8 +38,8 @@ public class ChaosFilter extends OncePerRequestFilter {
     }
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
-            FilterChain chain) throws ServletException, IOException {
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
+            throws ServletException, IOException {
         int latencyMs = chaos.getPspLatencyMs();
         if (latencyMs > 0) {
             try {
@@ -54,8 +52,9 @@ public class ChaosFilter extends OncePerRequestFilter {
             log.debug("chaos error-rate squashes {} as 503 psp_unavailable", request.getRequestURI());
             response.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-            response.getWriter().write(mapper.writeValueAsString(
-                    new ErrorResponse("psp_unavailable", "PSP simulator unavailable (chaos error-rate)")));
+            response.getWriter()
+                    .write(mapper.writeValueAsString(
+                            new ErrorResponse("psp_unavailable", "PSP simulator unavailable (chaos error-rate)")));
             return;
         }
         chain.doFilter(request, response);

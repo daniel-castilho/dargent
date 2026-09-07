@@ -61,12 +61,9 @@ import tools.jackson.databind.json.JsonMapper;
  * SDK's own FIFO long-poll ({@code waitTimeSeconds}) — an SQS wait, never a sleep.
  */
 @SpringBootTest(
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    classes = {DargentApiApplication.class, OutboxDeliveryE2EIT.DeliveryTestConfig.class},
-    properties = {
-        "dargent.relay.enabled=true",
-        "dargent.psp.webhook-secret=dev-only-secret"
-    })
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        classes = {DargentApiApplication.class, OutboxDeliveryE2EIT.DeliveryTestConfig.class},
+        properties = {"dargent.relay.enabled=true", "dargent.psp.webhook-secret=dev-only-secret"})
 @Testcontainers
 class OutboxDeliveryE2EIT {
 
@@ -79,8 +76,7 @@ class OutboxDeliveryE2EIT {
     // Far-future fixed clock: writer rows land with DB DEFAULT now() (real time), and the relay
     // claims with next_attempt_at <= clock.instant() — a future clock keeps every seeded row
     // immediately due without touching rows (harness rule: no row fiddling to fake eligibility).
-    private static final Clock FIXED_CLOCK =
-            Clock.fixed(Instant.parse("2027-01-01T12:00:00Z"), ZoneOffset.UTC);
+    private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2027-01-01T12:00:00Z"), ZoneOffset.UTC);
     private static final long FIXED_NOW_SECS = FIXED_CLOCK.instant().getEpochSecond();
     private static final String PAID_AT = FIXED_CLOCK.instant().plusSeconds(120).toString();
     private static final String SECRET = "dev-only-secret";
@@ -92,9 +88,9 @@ class OutboxDeliveryE2EIT {
     static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:16-alpine");
 
     @Container
-    static final LocalStackContainer localstack =
-            new LocalStackContainer(DockerImageName.parse("localstack/localstack:3.8.1"))
-                    .withServices(LocalStackContainer.Service.SNS, LocalStackContainer.Service.SQS);
+    static final LocalStackContainer localstack = new LocalStackContainer(
+                    DockerImageName.parse("localstack/localstack:3.8.1"))
+            .withServices(LocalStackContainer.Service.SNS, LocalStackContainer.Service.SQS);
 
     private static SnsClient sns;
     private static SqsClient sqs;
@@ -132,7 +128,8 @@ class OutboxDeliveryE2EIT {
     static void awsEnvironment(org.springframework.test.context.DynamicPropertyRegistry registry) {
         ensureTopology();
         registry.add("AWS_ENDPOINT_URL", () -> localstack
-                .getEndpointOverride(LocalStackContainer.Service.SNS).toString());
+                .getEndpointOverride(LocalStackContainer.Service.SNS)
+                .toString());
         registry.add("AWS_REGION", () -> REGION);
         registry.add("AWS_ACCESS_KEY_ID", () -> "test");
         registry.add("AWS_SECRET_ACCESS_KEY", () -> "test");
@@ -148,9 +145,9 @@ class OutboxDeliveryE2EIT {
     void setUp() throws Exception {
         baseUrl = "http://localhost:" + port;
         jdbc.sql("truncate payments.webhook_events, payments.outbox, payments.idempotency_keys, "
-                + "payments.audit_log, payments.payments, payments.api_keys restart identity cascade").update();
-        jdbc.sql(
-                "insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
+                        + "payments.audit_log, payments.payments, payments.api_keys restart identity cascade")
+                .update();
+        jdbc.sql("insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
                         + "values (:id, :merchant, 'it-key', :prefix, :hash, now(), null)")
                 .param("id", KEY_ID)
                 .param("merchant", MERCHANT)
@@ -177,8 +174,10 @@ class OutboxDeliveryE2EIT {
         assertThat(parse(resp).at("/status").asText()).isEqualTo("processed");
         assertThat(paymentStatus(txid)).isEqualTo("CONFIRMED");
         long outboxRows = jdbc.sql(
-                "select count(*) from payments.outbox where aggregate_id=:t and type='payment.confirmed'")
-                .param("t", txid).query(Long.class).single();
+                        "select count(*) from payments.outbox where aggregate_id=:t and type='payment.confirmed'")
+                .param("t", txid)
+                .query(Long.class)
+                .single();
         assertThat(outboxRows).isEqualTo(1);
 
         // M2 anchor: drive the relay deterministically (scheduler defanged to 10 min poll).
@@ -186,11 +185,10 @@ class OutboxDeliveryE2EIT {
         int delivered = relay.runOnce(relayPolicy.batchSize());
         assertThat(delivered).isEqualTo(2);
 
-        Object[] row = jdbc.sql(
-                "select status, attempt_count, published_at from payments.outbox "
+        Object[] row = jdbc.sql("select status, attempt_count, published_at from payments.outbox "
                         + "where aggregate_id=:t and type='payment.confirmed'")
                 .param("t", txid)
-                .query((rs, i) -> new Object[]{rs.getString(1), rs.getInt(2), rs.getTimestamp(3)})
+                .query((rs, i) -> new Object[] {rs.getString(1), rs.getInt(2), rs.getTimestamp(3)})
                 .single();
         assertThat(row[0]).isEqualTo("SENT");
         assertThat(row[1]).isEqualTo(1);
@@ -218,7 +216,9 @@ class OutboxDeliveryE2EIT {
 
     private String createPayment(String idemKey) throws Exception {
         psp.mode = PspStub.Mode.SUCCESS;
-        var resp = post("/v1/payments", "{\"amount\":10000,\"description\":\"Delivery IT\",\"expiresIn\":\"PT30M\"}",
+        var resp = post(
+                "/v1/payments",
+                "{\"amount\":10000,\"description\":\"Delivery IT\",\"expiresIn\":\"PT30M\"}",
                 authHeaders(idemKey));
         assertThat(resp.statusCode())
                 .withFailMessage(() -> "create failed: " + resp.statusCode() + " body=" + resp.body())
@@ -228,7 +228,9 @@ class OutboxDeliveryE2EIT {
 
     private String paymentStatus(String txid) {
         return jdbc.sql("select status from payments.payments where txid=:t")
-                .param("t", txid).query(String.class).single();
+                .param("t", txid)
+                .query(String.class)
+                .single();
     }
 
     private record Received(JsonNode envelope, String groupId, String dedupeId) {}
@@ -264,7 +266,8 @@ class OutboxDeliveryE2EIT {
                     throw new RuntimeException(e);
                 }
                 Map<MessageSystemAttributeName, String> attrs = m.attributes();
-                return new Received(envelope,
+                return new Received(
+                        envelope,
                         attrs.get(MessageSystemAttributeName.MESSAGE_GROUP_ID),
                         attrs.get(MessageSystemAttributeName.MESSAGE_DEDUPLICATION_ID));
             }
@@ -285,13 +288,15 @@ class OutboxDeliveryE2EIT {
     }
 
     private HttpResponse<String> postWebhook(String ts, String body, String sig) throws Exception {
-        return http.send(HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl + "/webhooks/psp"))
-                .header("Content-Type", "application/json")
-                .header("X-PSP-Timestamp", ts)
-                .header("X-PSP-Signature", sig)
-                .POST(HttpRequest.BodyPublishers.ofString(body))
-                .build(), HttpResponse.BodyHandlers.ofString());
+        return http.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create(baseUrl + "/webhooks/psp"))
+                        .header("Content-Type", "application/json")
+                        .header("X-PSP-Timestamp", ts)
+                        .header("X-PSP-Signature", sig)
+                        .POST(HttpRequest.BodyPublishers.ofString(body))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
     }
 
     private HttpResponse<String> post(String path, String body, Map<String, String> headers) throws Exception {
@@ -304,10 +309,14 @@ class OutboxDeliveryE2EIT {
 
     private Map<String, String> authHeaders(String idemKey) {
         return Map.of(
-                "Authorization", "Bearer " + rawKey,
-                "Content-Type", "application/json",
-                "Idempotency-Key", idemKey,
-                "X-Request-Id", "req-" + idemKey);
+                "Authorization",
+                "Bearer " + rawKey,
+                "Content-Type",
+                "application/json",
+                "Idempotency-Key",
+                idemKey,
+                "X-Request-Id",
+                "req-" + idemKey);
     }
 
     private JsonNode parse(String body) throws IOException {
@@ -344,21 +353,20 @@ class OutboxDeliveryE2EIT {
         sqs = SqsClient.builder()
                 .endpointOverride(localstack.getEndpointOverride(LocalStackContainer.Service.SQS))
                 .region(Region.of(REGION))
-                .credentialsProvider(StaticCredentialsProvider.create(
-                        AwsBasicCredentials.create("test", "test")))
+                .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create("test", "test")))
                 .build();
         sns = SnsClient.builder()
                 .endpointOverride(localstack.getEndpointOverride(LocalStackContainer.Service.SNS))
                 .region(Region.of(REGION))
-                .credentialsProvider(StaticCredentialsProvider.create(
-                        AwsBasicCredentials.create("test", "test")))
+                .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create("test", "test")))
                 .build();
         dlqArn = createFifoQueue(sqs, DLQ_NAME, null);
         String redrive = "{\"deadLetterTargetArn\":\"" + dlqArn + "\",\"maxReceiveCount\":\"5\"}";
         notifyUrl = createFifoQueue(sqs, QUEUE_NAME, redrive);
         notifyArn = queueArn(sqs, notifyUrl);
         topicArn = sns.createTopic(r -> r.name(TOPIC_NAME)
-                .attributes(Map.of("FifoTopic", "true", "ContentBasedDeduplication", "false"))).topicArn();
+                        .attributes(Map.of("FifoTopic", "true", "ContentBasedDeduplication", "false")))
+                .topicArn();
         sns.subscribe(r -> r.topicArn(topicArn).protocol("sqs").endpoint(notifyArn));
     }
 
@@ -372,9 +380,9 @@ class OutboxDeliveryE2EIT {
     }
 
     private static String queueArn(SqsClient client, String url) {
-        return client.getQueueAttributes(r -> r.queueUrl(url)
-                .attributeNames(QueueAttributeName.QUEUE_ARN))
-                .attributes().get(QueueAttributeName.QUEUE_ARN);
+        return client.getQueueAttributes(r -> r.queueUrl(url).attributeNames(QueueAttributeName.QUEUE_ARN))
+                .attributes()
+                .get(QueueAttributeName.QUEUE_ARN);
     }
 
     @TestConfiguration
@@ -387,8 +395,7 @@ class OutboxDeliveryE2EIT {
                     .locations(
                             "classpath:db/migration/payments",
                             "classpath:db/migration/ledger",
-                            "classpath:db/migration/notifications"
-                    )
+                            "classpath:db/migration/notifications")
                     .baselineOnMigrate(true)
                     .load();
             flyway.migrate();
@@ -423,7 +430,10 @@ class OutboxDeliveryE2EIT {
     }
 
     static final class PspStub {
-        enum Mode { SUCCESS, FAIL }
+        enum Mode {
+            SUCCESS,
+            FAIL
+        }
 
         volatile Mode mode = Mode.SUCCESS;
 
@@ -445,7 +455,7 @@ class OutboxDeliveryE2EIT {
                 String requestBody = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
                 String txid = extractTxid(requestBody);
                 respBody = ("{\"txid\":\"" + txid + "\",\"expiresAt\":\"" + PAID_AT
-                        + "\",\"endToEndId\":\"E2E-1\",\"brcode\":\"000201-terribly-long-brcode\"}")
+                                + "\",\"endToEndId\":\"E2E-1\",\"brcode\":\"000201-terribly-long-brcode\"}")
                         .getBytes(StandardCharsets.UTF_8);
             } else {
                 status = 404;

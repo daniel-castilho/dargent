@@ -28,19 +28,25 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        http
-                .csrf(csrf -> csrf.disable())
+        http.csrf(csrf -> csrf.disable())
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/webhooks/psp").permitAll()
+                .authorizeHttpRequests(auth -> auth.requestMatchers("/webhooks/psp")
+                        .permitAll()
                         // Ledger routes explicit (E7 §5.6; AGENTS §4.1) — API key required
-                        .requestMatchers("/v1/ledger/accounts/*/balance").authenticated()
-                        .requestMatchers("/v1/ledger/proof").authenticated()
-                        .requestMatchers("/v1/ledger/rebuild").authenticated()
-                        .requestMatchers("/v1/ledger/settlements").authenticated()
-                        .requestMatchers("/v1/notifications").authenticated()
-                        .requestMatchers("/v1/**").authenticated()
-                        .anyRequest().denyAll())
+                        .requestMatchers("/v1/ledger/accounts/*/balance")
+                        .authenticated()
+                        .requestMatchers("/v1/ledger/proof")
+                        .authenticated()
+                        .requestMatchers("/v1/ledger/rebuild")
+                        .authenticated()
+                        .requestMatchers("/v1/ledger/settlements")
+                        .authenticated()
+                        .requestMatchers("/v1/notifications")
+                        .authenticated()
+                        .requestMatchers("/v1/**")
+                        .authenticated()
+                        .anyRequest()
+                        .denyAll())
                 .addFilterBefore(apiKeyFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }

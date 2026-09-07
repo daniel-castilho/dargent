@@ -3,14 +3,11 @@ package io.dargent.payments.application;
 import io.dargent.payments.domain.model.FeeBreakdown;
 import io.dargent.payments.domain.model.Payment;
 import io.dargent.payments.domain.model.PaymentStatus;
-import io.dargent.payments.domain.model.Txid;
 import io.dargent.payments.domain.port.out.AuditWriter;
 import io.dargent.payments.domain.port.out.OutboxWriter;
 import io.dargent.payments.domain.port.out.PaymentRepository;
 import io.dargent.payments.domain.port.out.PspPort;
-import io.dargent.payments.domain.port.out.PspPort.CobState;
 import io.dargent.payments.domain.port.out.PspPort.CobStatus;
-import io.dargent.shared.money.Money;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -54,10 +51,16 @@ public final class ReconciliationUseCase {
     private final Duration giveUpWindow;
     private final PaymentsMetrics metrics;
 
-    public ReconciliationUseCase(PaymentRepository paymentRepository, PspPort pspPort,
-            OutboxWriter outboxWriter, AuditWriter auditWriter,
-            EventEnvelopeFactory envelopeFactory, TransactionTemplate txTemplate,
-            Clock clock, List<Duration> backoffLadder, Duration giveUpWindow,
+    public ReconciliationUseCase(
+            PaymentRepository paymentRepository,
+            PspPort pspPort,
+            OutboxWriter outboxWriter,
+            AuditWriter auditWriter,
+            EventEnvelopeFactory envelopeFactory,
+            TransactionTemplate txTemplate,
+            Clock clock,
+            List<Duration> backoffLadder,
+            Duration giveUpWindow,
             PaymentsMetrics metrics) {
         this.paymentRepository = paymentRepository;
         this.pspPort = pspPort;
@@ -127,8 +130,12 @@ public final class ReconciliationUseCase {
         if (!paymentRepository.clearReconciliationScheduleIfPastWindow(payment, windowEnd, payment.version())) {
             return false; // lost race
         }
-        auditWriter.record("reconciliation_window_expired", null, payment.merchantId(),
-                payment.txid().value(), null);
+        auditWriter.record(
+                "reconciliation_window_expired",
+                null,
+                payment.merchantId(),
+                payment.txid().value(),
+                null);
         return true;
     }
 
@@ -136,18 +143,24 @@ public final class ReconciliationUseCase {
         // Amount mismatch → do NOT confirm; audit and stay scheduled (incident territory).
         if (cob.amountCents() != payment.amount().cents()) {
             advanceLadder(payment, now);
-            auditWriter.record("reconciliation_amount_mismatch", null, payment.merchantId(),
-                    payment.txid().value(), null);
+            auditWriter.record(
+                    "reconciliation_amount_mismatch",
+                    null,
+                    payment.merchantId(),
+                    payment.txid().value(),
+                    null);
             return true;
         }
         int expectedVersion = payment.version();
         Payment working = payment;
         PaymentStatus priorStatus = payment.status();
         try {
-            FeeBreakdown feeBreakdown = FeeBreakdown.of(payment.amount().cents(),
-                    new io.dargent.payments.domain.model.BpsRate((int) FEE_BPS));
-            working.confirm(new io.dargent.payments.domain.model.EndToEndId(cob.endToEndId()),
-                    feeBreakdown, cob.paidAt() != null ? cob.paidAt() : now);
+            FeeBreakdown feeBreakdown = FeeBreakdown.of(
+                    payment.amount().cents(), new io.dargent.payments.domain.model.BpsRate((int) FEE_BPS));
+            working.confirm(
+                    new io.dargent.payments.domain.model.EndToEndId(cob.endToEndId()),
+                    feeBreakdown,
+                    cob.paidAt() != null ? cob.paidAt() : now);
         } catch (IllegalArgumentException | io.dargent.payments.domain.exception.InvalidTransitionException e) {
             // Already terminal or illegal — treat as no-op (idempotent rerun path).
             return false;
@@ -158,8 +171,12 @@ public final class ReconciliationUseCase {
         metrics.transition(priorStatus.name(), "CONFIRMED", "reconciler_confirm");
         metrics.reconcilerConfirmation(priorStatus == PaymentStatus.EXPIRED ? "resurrect" : "confirm");
         appendConfirmedOutbox(working, now);
-        auditWriter.record("confirm_from_reconciliation", null, payment.merchantId(),
-                payment.txid().value(), null);
+        auditWriter.record(
+                "confirm_from_reconciliation",
+                null,
+                payment.merchantId(),
+                payment.txid().value(),
+                null);
         return true;
     }
 
@@ -185,7 +202,8 @@ public final class ReconciliationUseCase {
         }
         metrics.transition("PENDING", "EXPIRED", "reconciler_expire");
         appendExpiredOutbox(working, now);
-        auditWriter.record("expire_payment", null, payment.merchantId(), payment.txid().value(), null);
+        auditWriter.record(
+                "expire_payment", null, payment.merchantId(), payment.txid().value(), null);
         return true;
     }
 
@@ -209,8 +227,8 @@ public final class ReconciliationUseCase {
         payload.put("fee", payment.fee().cents());
         payload.put("net", payment.net().cents());
         payload.put("late", payment.lateConfirmation());
-        String envelope = envelopeFactory.envelope("payment.confirmed", 1, payment.txid().value(),
-                payment.merchantId(), null, payload, now);
+        String envelope = envelopeFactory.envelope(
+                "payment.confirmed", 1, payment.txid().value(), payment.merchantId(), null, payload, now);
         outboxWriter.append(payment.txid().value(), "payment.confirmed", 1, envelope, null);
     }
 
@@ -219,8 +237,8 @@ public final class ReconciliationUseCase {
         payload.put("txid", payment.txid().value());
         payload.put("expiresAt", payment.expiresAt().toString());
         payload.put("amountCents", payment.amount().cents());
-        String envelope = envelopeFactory.envelope("payment.expired", 1, payment.txid().value(),
-                payment.merchantId(), null, payload, now);
+        String envelope = envelopeFactory.envelope(
+                "payment.expired", 1, payment.txid().value(), payment.merchantId(), null, payload, now);
         outboxWriter.append(payment.txid().value(), "payment.expired", 1, envelope, null);
     }
 }

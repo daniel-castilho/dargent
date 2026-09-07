@@ -5,10 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-import io.dargent.payments.application.IdempotencyKeyConflictException;
-import io.dargent.payments.application.IdempotencyKeyInFlightException;
-import io.dargent.shared.money.Money;
-import io.dargent.payments.domain.model.Txid;
+import io.dargent.payments.domain.exception.RefundExceedsRemainingException;
 import io.dargent.payments.domain.model.Payment;
 import io.dargent.payments.domain.model.PaymentStatus;
 import io.dargent.payments.domain.port.out.AuditWriter;
@@ -17,22 +14,19 @@ import io.dargent.payments.domain.port.out.IdempotencyStore;
 import io.dargent.payments.domain.port.out.MerchantBalancePort;
 import io.dargent.payments.domain.port.out.OutboxWriter;
 import io.dargent.payments.domain.port.out.PaymentRepository;
-import io.dargent.payments.domain.exception.RefundExceedsRemainingException;
 import io.dargent.shared.money.Money;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mockito;
-import org.mockito.quality.Strictness;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -49,8 +43,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class RefundPaymentUseCaseTest {
 
-    private static final Clock FIXED_CLOCK = Clock.fixed(
-            Instant.parse("2026-09-02T12:00:00Z"), ZoneOffset.UTC);
+    private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2026-09-02T12:00:00Z"), ZoneOffset.UTC);
     private static final UUID MERCHANT = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID API_KEY = UUID.fromString("22222222-2222-2222-2222-222222222222");
     private static final String TXID = "TXTEST1234567890123456789";
@@ -61,6 +54,7 @@ class RefundPaymentUseCaseTest {
 
     @SuppressWarnings("unused")
     private PaymentRepository paymentRepo;
+
     private IdempotencyStore idempotencyStore;
     private OutboxWriter outboxWriter;
     private AuditWriter auditWriter;
@@ -69,7 +63,7 @@ class RefundPaymentUseCaseTest {
     private TransactionTemplate txTemplate;
     private RefundPaymentUseCase useCase;
 
-@BeforeEach
+    @BeforeEach
     void setUp() {
         paymentRepo = mock(PaymentRepository.class);
         idempotencyStore = mock(IdempotencyStore.class);
@@ -77,7 +71,7 @@ class RefundPaymentUseCaseTest {
         auditWriter = mock(AuditWriter.class);
         balancePort = mock(MerchantBalancePort.class);
         envelopeFactory = mock(EventEnvelopeFactory.class);
-        
+
         // Use a direct transaction template that executes the callback synchronously
         txTemplate = new TransactionTemplate() {
             @Override
@@ -86,8 +80,15 @@ class RefundPaymentUseCaseTest {
             }
         };
 
-        useCase = new RefundPaymentUseCase(paymentRepo, idempotencyStore, outboxWriter, auditWriter,
-                balancePort, mock(EventEnvelopeFactory.class), txTemplate, Clock.systemUTC(),
+        useCase = new RefundPaymentUseCase(
+                paymentRepo,
+                idempotencyStore,
+                outboxWriter,
+                auditWriter,
+                balancePort,
+                mock(EventEnvelopeFactory.class),
+                txTemplate,
+                Clock.systemUTC(),
                 new PaymentsMetrics(new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
     }
 
@@ -248,10 +249,9 @@ class RefundPaymentUseCaseTest {
         var first = useCase.execute(input(Money.of(1000, "BRL")));
 
         // Simulate COMPLETED record
-        var rec = new IdempotencyRecord(MERCHANT, IDEMPOTENCY_KEY, ENDPOINT, FINGERPRINT,
-                "COMPLETED", TXID, 201, firstSnapshot(first));
-        when(idempotencyStore.insertIfAbsent(any(), any(), any(), any()))
-                .thenReturn(Optional.of(rec));
+        var rec = new IdempotencyRecord(
+                MERCHANT, IDEMPOTENCY_KEY, ENDPOINT, FINGERPRINT, "COMPLETED", TXID, 201, firstSnapshot(first));
+        when(idempotencyStore.insertIfAbsent(any(), any(), any(), any())).thenReturn(Optional.of(rec));
 
         var replayed = useCase.execute(input(Money.of(1000, "BRL")));
 
@@ -262,10 +262,9 @@ class RefundPaymentUseCaseTest {
 
     @Test
     void different_body_same_key_is_conflict() {
-        var rec = new IdempotencyRecord(MERCHANT, IDEMPOTENCY_KEY, ENDPOINT, "different-fp",
-                "COMPLETED", TXID, 201, Map.of());
-        when(idempotencyStore.insertIfAbsent(any(), any(), any(), any()))
-                .thenReturn(Optional.of(rec));
+        var rec = new IdempotencyRecord(
+                MERCHANT, IDEMPOTENCY_KEY, ENDPOINT, "different-fp", "COMPLETED", TXID, 201, Map.of());
+        when(idempotencyStore.insertIfAbsent(any(), any(), any(), any())).thenReturn(Optional.of(rec));
 
         assertThatThrownBy(() -> useCase.execute(input(Money.of(1000, "BRL"))))
                 .isInstanceOf(IdempotencyKeyConflictException.class);

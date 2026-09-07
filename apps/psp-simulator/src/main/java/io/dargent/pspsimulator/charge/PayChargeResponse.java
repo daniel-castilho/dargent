@@ -6,7 +6,10 @@ package io.dargent.pspsimulator.charge;
 public record PayChargeResponse(String txid, String status, String endToEndId, String paidAt) {
 
     public static PayChargeResponse from(Charge charge) {
-        return new PayChargeResponse(charge.txid(), charge.status().name(),
-                charge.endToEndId(), charge.paidAt().toString());
+        return new PayChargeResponse(
+                charge.txid(),
+                charge.status().name(),
+                charge.endToEndId(),
+                charge.paidAt().toString());
     }
 }

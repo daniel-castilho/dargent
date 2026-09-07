@@ -72,20 +72,19 @@ import tools.jackson.databind.json.JsonMapper;
  * and no DB password (the real in-use value, Q13 ruling).
  */
 @SpringBootTest(
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    classes = {DargentApiApplication.class, JsonLogCorrelationIT.PspTestConfig.class},
-    properties = {
-        "spring.profiles.active=prod",
-        "management.server.port=9090",
-        "DARGENT_DB_PASSWORD=prod-test-password-that-is-at-least-32-chars-long",
-        "AWS_ACCESS_KEY_ID=test-access-key",
-        "AWS_SECRET_ACCESS_KEY=test-secret-key",
-        "PSP_BASE_URL=http://psp-stub:8090",
-        "PSP_WEBHOOK_SECRET=prod-test-webhook-secret-that-is-long-enough",
-        "dargent.psp.webhook-secret=prod-test-webhook-secret-that-is-long-enough",
-        "dargent.relay.enabled=true"
-    }
-)
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        classes = {DargentApiApplication.class, JsonLogCorrelationIT.PspTestConfig.class},
+        properties = {
+            "spring.profiles.active=prod",
+            "management.server.port=9090",
+            "DARGENT_DB_PASSWORD=prod-test-password-that-is-at-least-32-chars-long",
+            "AWS_ACCESS_KEY_ID=test-access-key",
+            "AWS_SECRET_ACCESS_KEY=test-secret-key",
+            "PSP_BASE_URL=http://psp-stub:8090",
+            "PSP_WEBHOOK_SECRET=prod-test-webhook-secret-that-is-long-enough",
+            "dargent.psp.webhook-secret=prod-test-webhook-secret-that-is-long-enough",
+            "dargent.relay.enabled=true"
+        })
 @Testcontainers
 class JsonLogCorrelationIT {
 
@@ -103,9 +102,9 @@ class JsonLogCorrelationIT {
     static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:16-alpine");
 
     @Container
-    static final LocalStackContainer localstack =
-            new LocalStackContainer(DockerImageName.parse("localstack/localstack:3.8.1"))
-                    .withServices(LocalStackContainer.Service.SNS, LocalStackContainer.Service.SQS);
+    static final LocalStackContainer localstack = new LocalStackContainer(
+                    DockerImageName.parse("localstack/localstack:3.8.1"))
+            .withServices(LocalStackContainer.Service.SNS, LocalStackContainer.Service.SQS);
 
     private static SnsClient sns;
     private static SqsClient sqs;
@@ -138,7 +137,8 @@ class JsonLogCorrelationIT {
     static void awsEnvironment(DynamicPropertyRegistry registry) {
         ensureTopology();
         registry.add("AWS_ENDPOINT_URL", () -> localstack
-                .getEndpointOverride(LocalStackContainer.Service.SNS).toString());
+                .getEndpointOverride(LocalStackContainer.Service.SNS)
+                .toString());
         registry.add("AWS_REGION", () -> REGION);
         registry.add("DARGENT_EVENTS_TOPIC_ARN", () -> topicArn);
         registry.add("DARGENT_EVENTS_PUBLISH_TIMEOUT_MS", () -> "2000");
@@ -153,11 +153,11 @@ class JsonLogCorrelationIT {
         CapturingAppender.clear();
         baseUrl = "http://localhost:" + mainPort;
         jdbc.sql("truncate ledger.events, ledger.postings, ledger.journal_entries, ledger.balances, "
-                + "ledger.settlements, ledger.audit_log, "
-                + "payments.webhook_events, payments.outbox, payments.idempotency_keys, "
-                + "payments.audit_log, payments.payments, payments.api_keys restart identity cascade").update();
-        jdbc.sql(
-                "insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
+                        + "ledger.settlements, ledger.audit_log, "
+                        + "payments.webhook_events, payments.outbox, payments.idempotency_keys, "
+                        + "payments.audit_log, payments.payments, payments.api_keys restart identity cascade")
+                .update();
+        jdbc.sql("insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
                         + "values (:id, :merchant, 'it-key', :prefix, :hash, now(), null)")
                 .param("id", KEY_ID)
                 .param("merchant", MERCHANT)
@@ -174,14 +174,18 @@ class JsonLogCorrelationIT {
         String idemKey = "idem-correlation-01";
 
         // When
-        var resp = post("/v1/payments",
+        var resp = post(
+                "/v1/payments",
                 "{\"amount\":10000,\"description\":\"Order #123\",\"expiresIn\":\"PT30M\"}",
                 Map.of(
-                        "Authorization", "Bearer " + rawKey,
-                        "Content-Type", "application/json",
-                        "Idempotency-Key", idemKey,
-                        "X-Request-Id", requestId
-                ));
+                        "Authorization",
+                        "Bearer " + rawKey,
+                        "Content-Type",
+                        "application/json",
+                        "Idempotency-Key",
+                        idemKey,
+                        "X-Request-Id",
+                        requestId));
 
         // Then
         assertThat(resp.statusCode()).isEqualTo(201);
@@ -210,10 +214,9 @@ class JsonLogCorrelationIT {
         assertThat(result.path("message").asText()).contains("status=PENDING");
 
         // DB complement: outbox row carries the request_id
-        var ob = jdbc.sql(
-                "select type, request_id from payments.outbox where aggregate_id=:t")
+        var ob = jdbc.sql("select type, request_id from payments.outbox where aggregate_id=:t")
                 .param("t", txid)
-                .query((rs, i) -> new Object[]{rs.getString(1), rs.getString(2)})
+                .query((rs, i) -> new Object[] {rs.getString(1), rs.getString(2)})
                 .list();
         assertThat(ob).hasSize(1);
         assertThat(ob.get(0)[0]).isEqualTo("payment.created");
@@ -225,14 +228,18 @@ class JsonLogCorrelationIT {
     void legB_webhookConfirm_requestId_flowsToRelayAndLedgerIngestLines() throws Exception {
         // Given: a pending payment created via the API (own X-Request-Id, must not leak into the confirm)
         String createReqId = "req-legb-create";
-        var createResp = post("/v1/payments",
+        var createResp = post(
+                "/v1/payments",
                 "{\"amount\":10000,\"description\":\"Correlation leg b\"}",
                 Map.of(
-                        "Authorization", "Bearer " + rawKey,
-                        "Content-Type", "application/json",
-                        "Idempotency-Key", "idem-legb-create",
-                        "X-Request-Id", createReqId
-                ));
+                        "Authorization",
+                        "Bearer " + rawKey,
+                        "Content-Type",
+                        "application/json",
+                        "Idempotency-Key",
+                        "idem-legb-create",
+                        "X-Request-Id",
+                        createReqId));
         assertThat(createResp.statusCode()).isEqualTo(201);
         String txid = parse(createResp).at("/txid").asText();
 
@@ -282,16 +289,19 @@ class JsonLogCorrelationIT {
 
         // The create request id must NOT have leaked into the confirm trail (scoped to the confirm
         // lines — the create's own payment.created trail legitimately carries its own request id).
-        assertThat(count(lines, l -> (l.path("request_id").asText().equals(createReqId)
-                || l.path("requestId").asText().equals(createReqId))
-                && (l.path("type").asText().equals("payment.confirmed")
-                        || l.path("message").asText().contains("Webhook intake")))).isZero();
+        assertThat(count(
+                        lines,
+                        l -> (l.path("request_id").asText().equals(createReqId)
+                                        || l.path("requestId").asText().equals(createReqId))
+                                && (l.path("type").asText().equals("payment.confirmed")
+                                        || l.path("message").asText().contains("Webhook intake"))))
+                .isZero();
 
         // DB complement: outbox payment.confirmed row carries the request_id; ledger posted the journal
         var ob = jdbc.sql(
-                "select type, request_id from payments.outbox where aggregate_id=:t and type='payment.confirmed'")
+                        "select type, request_id from payments.outbox where aggregate_id=:t and type='payment.confirmed'")
                 .param("t", txid)
-                .query((rs, i) -> new Object[]{rs.getString(1), rs.getString(2)})
+                .query((rs, i) -> new Object[] {rs.getString(1), rs.getString(2)})
                 .list();
         assertThat(ob).hasSize(1);
         assertThat(ob.get(0)[1]).isEqualTo(confirmReqId);
@@ -302,20 +312,23 @@ class JsonLogCorrelationIT {
     @Test
     void legC_noSecretsInAnyEmittedLine() throws Exception {
         // When: a valid create with the raw key in Authorization
-        int createRespStatus = post("/v1/payments",
-                "{\"amount\":1000,\"description\":\"Scrub test\"}",
-                Map.of(
-                        "Authorization", "Bearer " + rawKey,
-                        "Content-Type", "application/json",
-                        "Idempotency-Key", "idem-scrub-01",
-                        "X-Request-Id", "req-scrub-01"
-                )).statusCode();
+        int createRespStatus = post(
+                        "/v1/payments",
+                        "{\"amount\":1000,\"description\":\"Scrub test\"}",
+                        Map.of(
+                                "Authorization", "Bearer " + rawKey,
+                                "Content-Type", "application/json",
+                                "Idempotency-Key", "idem-scrub-01",
+                                "X-Request-Id", "req-scrub-01"))
+                .statusCode();
         assertThat(createRespStatus).isEqualTo(201);
 
         // an invalid-signature webhook (attack intake, raw body persisted)
         String invalidPayload = "{\"txid\":\"invalid\",\"status\":\"CONFIRMED\"}";
-        post("/webhooks/psp", invalidPayload, Map.of("Content-Type", "application/json",
-                "X-Request-Id", "req-scrub-02"));
+        post(
+                "/webhooks/psp",
+                invalidPayload,
+                Map.of("Content-Type", "application/json", "X-Request-Id", "req-scrub-02"));
 
         // and a valid signed webhook with a nonexistent txid (IGNORED path)
         String unknownTxid = "9KD4Z9X2Q7W1M5T3R6Y0A1B2D";
@@ -372,14 +385,16 @@ class JsonLogCorrelationIT {
 
     private HttpResponse<String> sendWebhook(String body, String requestId) throws Exception {
         String ts = String.valueOf(clock.instant().getEpochSecond());
-        return http.send(HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl + "/webhooks/psp"))
-                .header("Content-Type", "application/json")
-                .header("X-PSP-Timestamp", ts)
-                .header("X-PSP-Signature", sign(ts, body))
-                .header("X-Request-Id", requestId)
-                .POST(HttpRequest.BodyPublishers.ofString(body))
-                .build(), HttpResponse.BodyHandlers.ofString());
+        return http.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create(baseUrl + "/webhooks/psp"))
+                        .header("Content-Type", "application/json")
+                        .header("X-PSP-Timestamp", ts)
+                        .header("X-PSP-Signature", sign(ts, body))
+                        .header("X-Request-Id", requestId)
+                        .POST(HttpRequest.BodyPublishers.ofString(body))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
     }
 
     private String sign(String ts, String body) {
@@ -398,7 +413,9 @@ class JsonLogCorrelationIT {
     }
 
     private int journalEntries() {
-        return jdbc.sql("select count(*) from ledger.journal_entries").query(int.class).single();
+        return jdbc.sql("select count(*) from ledger.journal_entries")
+                .query(int.class)
+                .single();
     }
 
     private long balance(String account) {
@@ -416,23 +433,24 @@ class JsonLogCorrelationIT {
         sqs = SqsClient.builder()
                 .endpointOverride(localstack.getEndpointOverride(LocalStackContainer.Service.SQS))
                 .region(Region.of(REGION))
-                .credentialsProvider(StaticCredentialsProvider.create(
-                        AwsBasicCredentials.create("test", "test")))
+                .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create("test", "test")))
                 .build();
         sns = SnsClient.builder()
                 .endpointOverride(localstack.getEndpointOverride(LocalStackContainer.Service.SNS))
                 .region(Region.of(REGION))
-                .credentialsProvider(StaticCredentialsProvider.create(
-                        AwsBasicCredentials.create("test", "test")))
+                .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create("test", "test")))
                 .build();
         String dlqArn = createFifoQueue(sqs, LEDGER_DLQ, null, null);
         String redrive = "{\"deadLetterTargetArn\":\"" + dlqArn + "\",\"maxReceiveCount\":\"5\"}";
         ledgerUrl = createFifoQueue(sqs, LEDGER_QUEUE, redrive, dlqArn);
         String ledgerArn = arnOf(ledgerUrl);
         topicArn = sns.createTopic(r -> r.name(TOPIC_NAME)
-                .attributes(Map.of("FifoTopic", "true", "ContentBasedDeduplication", "false"))).topicArn();
+                        .attributes(Map.of("FifoTopic", "true", "ContentBasedDeduplication", "false")))
+                .topicArn();
         // RawMessageDelivery so the consumer passes the envelope straight to EventIngestionUseCase.
-        sns.subscribe(r -> r.topicArn(topicArn).protocol("sqs").endpoint(ledgerArn)
+        sns.subscribe(r -> r.topicArn(topicArn)
+                .protocol("sqs")
+                .endpoint(ledgerArn)
                 .attributes(Map.of("RawMessageDelivery", "true")));
     }
 
@@ -446,9 +464,9 @@ class JsonLogCorrelationIT {
     }
 
     private static String arnOf(String url) {
-        return sqs.getQueueAttributes(r -> r.queueUrl(url)
-                .attributeNames(QueueAttributeName.QUEUE_ARN))
-                .attributes().get(QueueAttributeName.QUEUE_ARN);
+        return sqs.getQueueAttributes(r -> r.queueUrl(url).attributeNames(QueueAttributeName.QUEUE_ARN))
+                .attributes()
+                .get(QueueAttributeName.QUEUE_ARN);
     }
 
     // ------------------------------------------------------------------ test config
@@ -463,8 +481,7 @@ class JsonLogCorrelationIT {
                     .locations(
                             "classpath:db/migration/payments",
                             "classpath:db/migration/ledger",
-                            "classpath:db/migration/notifications"
-                    )
+                            "classpath:db/migration/notifications")
                     .baselineOnMigrate(true)
                     .load();
             flyway.migrate();
@@ -489,8 +506,8 @@ class JsonLogCorrelationIT {
         }
 
         @Bean
-        SqsEventConsumer ledgerConsumer(io.dargent.ledger.application.EventIngestionUseCase ingestion,
-                SqsClient ledgerTestSqsClient) {
+        SqsEventConsumer ledgerConsumer(
+                io.dargent.ledger.application.EventIngestionUseCase ingestion, SqsClient ledgerTestSqsClient) {
             return new SqsEventConsumer(ledgerTestSqsClient, ledgerUrl, 10, 600000, ingestion);
         }
 

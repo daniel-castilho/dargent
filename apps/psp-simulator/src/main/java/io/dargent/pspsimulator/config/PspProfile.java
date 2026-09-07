@@ -8,5 +8,4 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * (E2 spec §5.1). Bound to {@code dargent.psp.profile.*}.
  */
 @ConfigurationProperties("dargent.psp.profile")
-public record PspProfile(String pixKey, String receiverName, String receiverCity) {
-}
+public record PspProfile(String pixKey, String receiverName, String receiverCity) {}

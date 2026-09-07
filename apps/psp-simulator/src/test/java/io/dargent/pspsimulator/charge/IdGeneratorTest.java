@@ -1,17 +1,17 @@
 package io.dargent.pspsimulator.charge;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.util.HashSet;
 import java.util.Set;
 import java.util.regex.Pattern;
-
 import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 class IdGeneratorTest {
 
     private static final Pattern END_TO_END = Pattern.compile("^E[A-Za-z0-9]{31}$");
-    private static final Pattern EVENT_ID = Pattern.compile("^psp-evt-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$");
+    private static final Pattern EVENT_ID =
+            Pattern.compile("^psp-evt-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$");
 
     @Test
     void end_to_end_ids_match_E_plus_31_alphanumeric_over_100_samples() {

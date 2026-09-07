@@ -43,20 +43,15 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * {@code Thread.sleep}; injected {@link Clock}.
  */
 @SpringBootTest(
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    classes = {DargentApiApplication.class, ReconcilerGiveUpIT.ReconcilerTestConfig.class},
-    properties = {
-        "dargent.psp.webhook-secret=dev-only-secret",
-        "DARGENT_RECONCILER_ENABLED=true"
-    }
-)
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        classes = {DargentApiApplication.class, ReconcilerGiveUpIT.ReconcilerTestConfig.class},
+        properties = {"dargent.psp.webhook-secret=dev-only-secret", "DARGENT_RECONCILER_ENABLED=true"})
 @Testcontainers
 class ReconcilerGiveUpIT {
 
     private static final UUID MERCHANT = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID KEY_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
-    private static final Clock FIXED_CLOCK =
-            Clock.fixed(Instant.parse("2026-09-02T10:00:00Z"), ZoneOffset.UTC);
+    private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2026-09-02T10:00:00Z"), ZoneOffset.UTC);
 
     @Container
     @ServiceConnection
@@ -75,9 +70,9 @@ class ReconcilerGiveUpIT {
     void setUp() {
         psp.reset();
         jdbc.sql("truncate payments.webhook_events, payments.outbox, payments.idempotency_keys, "
-                + "payments.audit_log, payments.payments, payments.api_keys restart identity cascade").update();
-        jdbc.sql(
-                "insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
+                        + "payments.audit_log, payments.payments, payments.api_keys restart identity cascade")
+                .update();
+        jdbc.sql("insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
                         + "values (:id, :merchant, 'it-key', :prefix, :hash, now(), null)")
                 .param("id", KEY_ID)
                 .param("merchant", MERCHANT)
@@ -100,20 +95,31 @@ class ReconcilerGiveUpIT {
         // Still PENDING — no resurrection, no fake terminal state.
         var row = jdbc.sql("select status, next_reconcile_at from payments.payments where txid=:t")
                 .param("t", txid)
-                .query((rs, i) -> new Object[]{rs.getString(1), rs.getTimestamp(2)})
+                .query((rs, i) -> new Object[] {rs.getString(1), rs.getTimestamp(2)})
                 .single();
         assertThat(row[0]).isEqualTo("PENDING");
         assertThat(row[1]).isNull(); // schedule cleared (conditional NULL)
 
         // No confirm side effects.
         assertThat(jdbc.sql("select count(*) from payments.outbox where aggregate_id=:t and type='payment.confirmed'")
-                .param("t", txid).query(Long.class).single()).isZero();
-        assertThat(jdbc.sql("select count(*) from payments.audit_log where command_name='confirm_from_reconciliation' and aggregate_id=:t")
-                .param("t", txid).query(Long.class).single()).isZero();
+                        .param("t", txid)
+                        .query(Long.class)
+                        .single())
+                .isZero();
+        assertThat(jdbc.sql(
+                                "select count(*) from payments.audit_log where command_name='confirm_from_reconciliation' and aggregate_id=:t")
+                        .param("t", txid)
+                        .query(Long.class)
+                        .single())
+                .isZero();
 
         // Give-up audited.
-        assertThat(jdbc.sql("select count(*) from payments.audit_log where command_name='reconciliation_window_expired' and aggregate_id=:t")
-                .param("t", txid).query(Long.class).single()).isEqualTo(1);
+        assertThat(jdbc.sql(
+                                "select count(*) from payments.audit_log where command_name='reconciliation_window_expired' and aggregate_id=:t")
+                        .param("t", txid)
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(1);
     }
 
     @Test
@@ -127,15 +133,22 @@ class ReconcilerGiveUpIT {
 
         var row = jdbc.sql("select status, next_reconcile_at from payments.payments where txid=:t")
                 .param("t", txid)
-                .query((rs, i) -> new Object[]{rs.getString(1), rs.getTimestamp(2)})
+                .query((rs, i) -> new Object[] {rs.getString(1), rs.getTimestamp(2)})
                 .single();
         assertThat(row[0]).isEqualTo("EXPIRED");
         assertThat(row[1]).isNull();
 
         assertThat(jdbc.sql("select count(*) from payments.outbox where aggregate_id=:t and type='payment.confirmed'")
-                .param("t", txid).query(Long.class).single()).isZero();
-        assertThat(jdbc.sql("select count(*) from payments.audit_log where command_name='reconciliation_window_expired' and aggregate_id=:t")
-                .param("t", txid).query(Long.class).single()).isEqualTo(1);
+                        .param("t", txid)
+                        .query(Long.class)
+                        .single())
+                .isZero();
+        assertThat(jdbc.sql(
+                                "select count(*) from payments.audit_log where command_name='reconciliation_window_expired' and aggregate_id=:t")
+                        .param("t", txid)
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(1);
     }
 
     @Test
@@ -149,13 +162,17 @@ class ReconcilerGiveUpIT {
 
         var row = jdbc.sql("select status, next_reconcile_at, reconcile_attempts from payments.payments where txid=:t")
                 .param("t", txid)
-                .query((rs, i) -> new Object[]{rs.getString(1), rs.getTimestamp(2), rs.getInt(3)})
+                .query((rs, i) -> new Object[] {rs.getString(1), rs.getTimestamp(2), rs.getInt(3)})
                 .single();
         assertThat(row[0]).isEqualTo("PENDING");
         assertThat(row[1]).isNotNull(); // still scheduled (not given up)
         assertThat(row[2]).isEqualTo(1); // ladder advanced 0 → 1
-        assertThat(jdbc.sql("select count(*) from payments.audit_log where command_name='reconciliation_window_expired' and aggregate_id=:t")
-                .param("t", txid).query(Long.class).single()).isZero();
+        assertThat(jdbc.sql(
+                                "select count(*) from payments.audit_log where command_name='reconciliation_window_expired' and aggregate_id=:t")
+                        .param("t", txid)
+                        .query(Long.class)
+                        .single())
+                .isZero();
     }
 
     // ========================================================================== helpers
@@ -199,8 +216,7 @@ class ReconcilerGiveUpIT {
                     .locations(
                             "classpath:db/migration/payments",
                             "classpath:db/migration/ledger",
-                            "classpath:db/migration/notifications"
-                    )
+                            "classpath:db/migration/notifications")
                     .baselineOnMigrate(true)
                     .cleanDisabled(false)
                     .load();
@@ -238,7 +254,11 @@ class ReconcilerGiveUpIT {
 
     /** Stateful HttpHandler for the PSP stub: creates charges and serves GET /cobs/{txid} with a state. */
     static final class PspStub {
-        enum State { OPEN, PAID, EXPIRED }
+        enum State {
+            OPEN,
+            PAID,
+            EXPIRED
+        }
 
         volatile State state = State.PAID;
 
@@ -260,9 +280,9 @@ class ReconcilerGiveUpIT {
                 String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
                 String txid = extractTxid(body);
                 respBody = ("{\"txid\":\"" + txid + "\",\"status\":\"OPEN\",\"amount\":10000,"
-                        + "\"expiresAt\":\"2026-09-03T10:00:00Z\",\"callbackUrl\":\"http://callback.local/hook\","
-                        + "\"description\":null,\"pixKey\":\"dargent-dev-receber@example.com\","
-                        + "\"receiverName\":\"Dargent Dev LTDA\",\"receiverCity\":\"SAO PAULO\"}")
+                                + "\"expiresAt\":\"2026-09-03T10:00:00Z\",\"callbackUrl\":\"http://callback.local/hook\","
+                                + "\"description\":null,\"pixKey\":\"dargent-dev-receber@example.com\","
+                                + "\"receiverName\":\"Dargent Dev LTDA\",\"receiverCity\":\"SAO PAULO\"}")
                         .getBytes(StandardCharsets.UTF_8);
             } else if ("GET".equals(method) && path.startsWith("/cobs/")) {
                 String txid = path.substring("/cobs/".length());
@@ -270,7 +290,8 @@ class ReconcilerGiveUpIT {
                 String e2e = state == State.PAID ? "\"E00416968202009221504E2345678910\"" : "null";
                 String paidAt = state == State.PAID ? "\"2026-09-02T09:59:30Z\"" : "null";
                 respBody = ("{\"txid\":\"" + txid + "\",\"status\":\"" + state + "\",\"amount\":10000,"
-                        + "\"expiresAt\":\"2026-09-03T10:00:00Z\",\"endToEndId\":" + e2e + ",\"paidAt\":" + paidAt + "}")
+                                + "\"expiresAt\":\"2026-09-03T10:00:00Z\",\"endToEndId\":" + e2e + ",\"paidAt\":"
+                                + paidAt + "}")
                         .getBytes(StandardCharsets.UTF_8);
             } else {
                 status = 404;

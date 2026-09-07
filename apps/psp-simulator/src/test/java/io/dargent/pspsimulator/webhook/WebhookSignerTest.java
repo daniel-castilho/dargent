@@ -1,10 +1,9 @@
 package io.dargent.pspsimulator.webhook;
 
-import java.nio.charset.StandardCharsets;
-
-import org.junit.jupiter.api.Test;
-
 import static org.assertj.core.api.Assertions.assertThat;
+
+import java.nio.charset.StandardCharsets;
+import org.junit.jupiter.api.Test;
 
 class WebhookSignerTest {
 
@@ -21,8 +20,7 @@ class WebhookSignerTest {
         WebhookSigner signer = new WebhookSigner(SECRET);
         String signature = signer.sign(timestamp, body.getBytes(StandardCharsets.UTF_8));
 
-        assertThat(signature)
-                .isEqualTo("549eabc4c6f862fdb9322861f43091039de9c75de8107a60945d464755549113");
+        assertThat(signature).isEqualTo("549eabc4c6f862fdb9322861f43091039de9c75de8107a60945d464755549113");
     }
 
     @Test
@@ -39,6 +37,7 @@ class WebhookSignerTest {
         byte[] bodyBytes = body.getBytes(StandardCharsets.UTF_8);
 
         // canonical = UTF-8 bytes of timestamp + "." + rawBody
-        assertThat(signer.sign("10", bodyBytes)).isNotEqualTo(signer.sign("1", ("0." + body).getBytes(StandardCharsets.UTF_8)));
+        assertThat(signer.sign("10", bodyBytes))
+                .isNotEqualTo(signer.sign("1", ("0." + body).getBytes(StandardCharsets.UTF_8)));
     }
 }

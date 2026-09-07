@@ -3,8 +3,8 @@ package io.dargent.api.payments;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.dargent.api.DargentApiApplication;
-import io.dargent.api.security.ApiKeyHasher;
 import io.dargent.api.config.ExpirationScheduler;
+import io.dargent.api.security.ApiKeyHasher;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -33,20 +33,15 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * (no {@code @Scheduled}, no {@code Thread.sleep}, injected {@link Clock}).
  */
 @SpringBootTest(
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    classes = {DargentApiApplication.class, ExpirationSchedulerIT.ExpirationTestConfig.class},
-    properties = {
-        "dargent.psp.webhook-secret=dev-only-secret",
-        "DARGENT_EXPIRATION_ENABLED=true"
-    }
-)
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        classes = {DargentApiApplication.class, ExpirationSchedulerIT.ExpirationTestConfig.class},
+        properties = {"dargent.psp.webhook-secret=dev-only-secret", "DARGENT_EXPIRATION_ENABLED=true"})
 @Testcontainers
 class ExpirationSchedulerIT {
 
     private static final UUID MERCHANT = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID KEY_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
-    private static final Clock FIXED_CLOCK =
-            Clock.fixed(Instant.parse("2026-09-02T10:00:00Z"), ZoneOffset.UTC);
+    private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2026-09-02T10:00:00Z"), ZoneOffset.UTC);
 
     @Container
     @ServiceConnection
@@ -61,9 +56,9 @@ class ExpirationSchedulerIT {
     @BeforeEach
     void setUp() {
         jdbc.sql("truncate payments.webhook_events, payments.outbox, payments.idempotency_keys, "
-                + "payments.audit_log, payments.payments, payments.api_keys restart identity cascade").update();
-        jdbc.sql(
-                "insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
+                        + "payments.audit_log, payments.payments, payments.api_keys restart identity cascade")
+                .update();
+        jdbc.sql("insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
                         + "values (:id, :merchant, 'it-key', :prefix, :hash, now(), null)")
                 .param("id", KEY_ID)
                 .param("merchant", MERCHANT)
@@ -91,24 +86,37 @@ class ExpirationSchedulerIT {
 
         // Outbox row: payment.expired v1 with {txid, expiresAt, amountCents}
         assertThat(jdbc.sql("select count(*) from payments.outbox where aggregate_id=:t and type='payment.expired'")
-                .param("t", txid).query(Long.class).single()).isEqualTo(1);
-        String payload = jdbc.sql("select payload::text from payments.outbox where aggregate_id=:t and type='payment.expired'")
-                .param("t", txid).query(String.class).single();
+                        .param("t", txid)
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(1);
+        String payload = jdbc.sql(
+                        "select payload::text from payments.outbox where aggregate_id=:t and type='payment.expired'")
+                .param("t", txid)
+                .query(String.class)
+                .single();
         var pj = new tools.jackson.databind.json.JsonMapper().readTree(payload);
         assertThat(pj.at("/payload/txid").asText()).isEqualTo(txid);
         assertThat(pj.at("/payload/amountCents").asLong()).isEqualTo(10000);
         assertThat(pj.at("/payload/expiresAt").asText()).contains("2026-09-02T09:58:00");
 
         // Audit row: expire_payment with NULL actor (V110), correct merchant + txid
-        UUID auditActor = jdbc.sql(
-                "select actor_key_id from payments.audit_log where command_name='expire_payment' and aggregate_id=:t")
-                .param("t", txid).query((rs, i) -> rs.getObject("actor_key_id", UUID.class)).stream()
+        UUID auditActor = jdbc
+                .sql(
+                        "select actor_key_id from payments.audit_log where command_name='expire_payment' and aggregate_id=:t")
+                .param("t", txid)
+                .query((rs, i) -> rs.getObject("actor_key_id", UUID.class))
+                .stream()
                 .filter(java.util.Objects::nonNull)
                 .findFirst()
                 .orElse(null);
         assertThat(auditActor).isNull();
-        assertThat(jdbc.sql("select merchant_id from payments.audit_log where command_name='expire_payment' and aggregate_id=:t")
-                .param("t", txid).query(UUID.class).single()).isEqualTo(MERCHANT);
+        assertThat(jdbc.sql(
+                                "select merchant_id from payments.audit_log where command_name='expire_payment' and aggregate_id=:t")
+                        .param("t", txid)
+                        .query(UUID.class)
+                        .single())
+                .isEqualTo(MERCHANT);
     }
 
     // =================================================================== not-due untouched
@@ -121,8 +129,14 @@ class ExpirationSchedulerIT {
         int expired = scheduler.runOnce();
 
         assertThat(expired).isZero();
-        assertThat(jdbc.sql("select count(*) from payments.outbox where type='payment.expired'").query(Long.class).single()).isZero();
-        assertThat(jdbc.sql("select count(*) from payments.audit_log where command_name='expire_payment'").query(Long.class).single()).isZero();
+        assertThat(jdbc.sql("select count(*) from payments.outbox where type='payment.expired'")
+                        .query(Long.class)
+                        .single())
+                .isZero();
+        assertThat(jdbc.sql("select count(*) from payments.audit_log where command_name='expire_payment'")
+                        .query(Long.class)
+                        .single())
+                .isZero();
     }
 
     // =================================================================== race: confirm won → no-op
@@ -151,9 +165,16 @@ class ExpirationSchedulerIT {
         var pmt = payment(txid);
         assertThat(pmt[0]).isEqualTo("CONFIRMED");
         assertThat(jdbc.sql("select count(*) from payments.outbox where aggregate_id=:t and type='payment.expired'")
-                .param("t", txid).query(Long.class).single()).isZero();
-        assertThat(jdbc.sql("select count(*) from payments.audit_log where command_name='expire_payment' and aggregate_id=:t")
-                .param("t", txid).query(Long.class).single()).isZero();
+                        .param("t", txid)
+                        .query(Long.class)
+                        .single())
+                .isZero();
+        assertThat(jdbc.sql(
+                                "select count(*) from payments.audit_log where command_name='expire_payment' and aggregate_id=:t")
+                        .param("t", txid)
+                        .query(Long.class)
+                        .single())
+                .isZero();
     }
 
     // =================================================================== helpers
@@ -181,10 +202,9 @@ class ExpirationSchedulerIT {
     }
 
     private Object[] payment(String txid) {
-        return jdbc.sql(
-                "select status, version from payments.payments where txid = :txid")
+        return jdbc.sql("select status, version from payments.payments where txid = :txid")
                 .param("txid", txid)
-                .query((rs, i) -> new Object[]{rs.getString(1), rs.getInt(2)})
+                .query((rs, i) -> new Object[] {rs.getString(1), rs.getInt(2)})
                 .single();
     }
 
@@ -198,8 +218,7 @@ class ExpirationSchedulerIT {
                     .locations(
                             "classpath:db/migration/payments",
                             "classpath:db/migration/ledger",
-                            "classpath:db/migration/notifications"
-                    )
+                            "classpath:db/migration/notifications")
                     .baselineOnMigrate(true)
                     .cleanDisabled(false)
                     .load();

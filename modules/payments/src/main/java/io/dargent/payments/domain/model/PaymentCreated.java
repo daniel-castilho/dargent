@@ -9,10 +9,5 @@ import java.util.UUID;
  * is copied from the PSP — never computed locally (design.md §4.2).
  */
 public record PaymentCreated(
-        Txid txid,
-        UUID merchantId,
-        Money amount,
-        String description,
-        Instant expiresAt,
-        Instant occurredAt) implements PaymentEvent {
-}
+        Txid txid, UUID merchantId, Money amount, String description, Instant expiresAt, Instant occurredAt)
+        implements PaymentEvent {}

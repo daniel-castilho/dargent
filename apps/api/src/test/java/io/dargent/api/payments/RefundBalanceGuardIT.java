@@ -46,20 +46,19 @@ import tools.jackson.databind.json.JsonMapper;
  * path is what the ledger drain backstop (scenario 19) is designed to catch.
  */
 @SpringBootTest(
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    classes = {DargentApiApplication.class, RefundBalanceGuardIT.RefundGuardTestConfig.class},
-    properties = {
-        "dargent.relay.enabled=false",
-        "dargent.ledger.consumer.enabled=false",
-        "dargent.psp.webhook-secret=dev-only-secret"
-    })
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        classes = {DargentApiApplication.class, RefundBalanceGuardIT.RefundGuardTestConfig.class},
+        properties = {
+            "dargent.relay.enabled=false",
+            "dargent.ledger.consumer.enabled=false",
+            "dargent.psp.webhook-secret=dev-only-secret"
+        })
 @Testcontainers
 class RefundBalanceGuardIT {
 
     private static final UUID MERCHANT = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID KEY_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
-    private static final Clock FIXED_CLOCK =
-            Clock.fixed(Instant.parse("2026-09-02T12:00:00Z"), ZoneOffset.UTC);
+    private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2026-09-02T12:00:00Z"), ZoneOffset.UTC);
     private static final JsonMapper MAPPER = new JsonMapper();
 
     @Container
@@ -86,11 +85,11 @@ class RefundBalanceGuardIT {
     void setUp() {
         baseUrl = "http://localhost:" + port;
         jdbc.sql("truncate payments.webhook_events, payments.outbox, payments.idempotency_keys, "
-                + "payments.audit_log, payments.payments, payments.api_keys, payments.refunds, "
-                + "ledger.events, ledger.postings, ledger.journal_entries, ledger.balances, "
-                + "ledger.audit_log restart identity cascade").update();
-        jdbc.sql(
-                "insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
+                        + "payments.audit_log, payments.payments, payments.api_keys, payments.refunds, "
+                        + "ledger.events, ledger.postings, ledger.journal_entries, ledger.balances, "
+                        + "ledger.audit_log restart identity cascade")
+                .update();
+        jdbc.sql("insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
                         + "values (:id, :merchant, 'it-key', :prefix, :hash, now(), null)")
                 .param("id", KEY_ID)
                 .param("merchant", MERCHANT)
@@ -110,8 +109,7 @@ class RefundBalanceGuardIT {
 
         var resp = postRefund(txid, "refund-key-in-01", "req-refund-in-01", "{\"amount\":4000}");
         assertThat(resp.statusCode()).isEqualTo(409);
-        assertThat(MAPPER.readTree(resp.body()).path("code").asText())
-                .isEqualTo("insufficient_merchant_balance");
+        assertThat(MAPPER.readTree(resp.body()).path("code").asText()).isEqualTo("insufficient_merchant_balance");
 
         // Zero writes attributable to the refund: no refund row, no refund.created outbox, and the
         // ledger never saw a refund event — the funding confirm's 3 postings are the only ones.
@@ -151,11 +149,13 @@ class RefundBalanceGuardIT {
     // ------------------------------------------------------------------ helpers
 
     private void fundLedgerAvailable(long amount, long fee) {
-        assertThat(ingestion.processMessage(confirmedEnvelope(txid("FND"), amount, fee))).isTrue();
+        assertThat(ingestion.processMessage(confirmedEnvelope(txid("FND"), amount, fee)))
+                .isTrue();
     }
 
     private String txid(String prefix) {
-        return prefix + UUID.randomUUID().toString().replace("-", "").toUpperCase().substring(0, 22);
+        return prefix
+                + UUID.randomUUID().toString().replace("-", "").toUpperCase().substring(0, 22);
     }
 
     private String confirmedEnvelope(String txid, long amount, long fee) {
@@ -201,49 +201,65 @@ class RefundBalanceGuardIT {
                 .update();
     }
 
-    private HttpResponse<String> postRefund(String txid, String idemKey, String requestId, String json) throws Exception {
-        return http.send(HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl + "/v1/payments/" + txid + "/refunds"))
-                .header("Authorization", "Bearer " + rawKey)
-                .header("Content-Type", "application/json")
-                .header("Idempotency-Key", idemKey)
-                .header("X-Request-Id", requestId)
-                .POST(HttpRequest.BodyPublishers.ofString(json))
-                .build(), HttpResponse.BodyHandlers.ofString());
+    private HttpResponse<String> postRefund(String txid, String idemKey, String requestId, String json)
+            throws Exception {
+        return http.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create(baseUrl + "/v1/payments/" + txid + "/refunds"))
+                        .header("Authorization", "Bearer " + rawKey)
+                        .header("Content-Type", "application/json")
+                        .header("Idempotency-Key", idemKey)
+                        .header("X-Request-Id", requestId)
+                        .POST(HttpRequest.BodyPublishers.ofString(json))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
     }
 
     private long balance(String account) {
         return jdbc.sql("select balance_cents from ledger.balances where account = :a")
-                .param("a", account).query(Long.class).optional().orElse(0L);
+                .param("a", account)
+                .query(Long.class)
+                .optional()
+                .orElse(0L);
     }
 
     private String paymentStatus(String txid) {
         return jdbc.sql("select status from payments.payments where txid = :t")
-                .param("t", txid).query(String.class).single();
+                .param("t", txid)
+                .query(String.class)
+                .single();
     }
 
     private long refundedCents(String txid) {
         return jdbc.sql("select refunded_cents from payments.payments where txid = :t")
-                .param("t", txid).query(Long.class).single();
+                .param("t", txid)
+                .query(Long.class)
+                .single();
     }
 
     private long refundCount(String txid) {
         return jdbc.sql("select count(*) from payments.refunds where txid = :t")
-                .param("t", txid).query(Long.class).single();
+                .param("t", txid)
+                .query(Long.class)
+                .single();
     }
 
     private long outboxRefundCount() {
         return jdbc.sql("select count(*) from payments.outbox where type = 'refund.created'")
-                .query(Long.class).single();
+                .query(Long.class)
+                .single();
     }
 
     private long refundEventCount() {
         return jdbc.sql("select count(*) from ledger.events where type = 'refund.created'")
-                .query(Long.class).single();
+                .query(Long.class)
+                .single();
     }
 
     private long postingsCount() {
-        return jdbc.sql("select count(*) from ledger.postings").query(Long.class).single();
+        return jdbc.sql("select count(*) from ledger.postings")
+                .query(Long.class)
+                .single();
     }
 
     private void assertProofOk() {
@@ -263,8 +279,7 @@ class RefundBalanceGuardIT {
                     .locations(
                             "classpath:db/migration/payments",
                             "classpath:db/migration/ledger",
-                            "classpath:db/migration/notifications"
-                    )
+                            "classpath:db/migration/notifications")
                     .baselineOnMigrate(true)
                     .cleanDisabled(false)
                     .load();

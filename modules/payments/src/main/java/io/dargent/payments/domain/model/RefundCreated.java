@@ -8,10 +8,5 @@ import java.time.Instant;
  * Carries the proportional fee and net reversals for the ledger (D8) — refund
  * orchestration itself is E8.
  */
-public record RefundCreated(
-        Txid txid,
-        Money refundAmount,
-        Money feeReversal,
-        Money netReversal,
-        Instant occurredAt) implements PaymentEvent {
-}
+public record RefundCreated(Txid txid, Money refundAmount, Money feeReversal, Money netReversal, Instant occurredAt)
+        implements PaymentEvent {}

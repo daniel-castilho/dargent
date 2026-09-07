@@ -1,13 +1,12 @@
 package io.dargent.pspsimulator.charge;
 
+import io.dargent.pspsimulator.config.PspProfile;
+import io.dargent.pspsimulator.error.PspApiException;
 import java.net.URI;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.regex.Pattern;
-
-import io.dargent.pspsimulator.config.PspProfile;
-import io.dargent.pspsimulator.error.PspApiException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -40,8 +39,12 @@ public class ChargesController {
     @PostMapping
     public ResponseEntity<CreateChargeResponse> create(@RequestBody CreateChargeRequest request) {
         validate(request);
-        Charge charge = new Charge(request.txid(), request.amount(), parseExpiry(request.expiresAt()),
-                request.callbackUrl(), request.description());
+        Charge charge = new Charge(
+                request.txid(),
+                request.amount(),
+                parseExpiry(request.expiresAt()),
+                request.callbackUrl(),
+                request.description());
         Charge existing = store.putIfAbsent(charge);
         if (existing != null) {
             throw new PspApiException(409, "txid_already_exists", "A charge with txid " + request.txid() + " exists");
@@ -60,8 +63,7 @@ public class ChargesController {
 
     private void validate(CreateChargeRequest request) {
         if (request.txid() == null || !TXID.matcher(request.txid()).matches()) {
-            throw new PspApiException(400, "invalid_txid",
-                    "txid must be exactly 25 uppercase alphanumeric characters");
+            throw new PspApiException(400, "invalid_txid", "txid must be exactly 25 uppercase alphanumeric characters");
         }
         if (request.amount() <= 0) {
             throw new PspApiException(400, "invalid_amount", "amount must be a positive integer (cents)");
@@ -93,8 +95,7 @@ public class ChargesController {
         try {
             URI uri = URI.create(raw);
             String scheme = uri.getScheme();
-            return uri.isAbsolute()
-                    && ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme));
+            return uri.isAbsolute() && ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme));
         } catch (IllegalArgumentException e) {
             return false;
         }

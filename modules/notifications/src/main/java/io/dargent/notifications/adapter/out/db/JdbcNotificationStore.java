@@ -1,16 +1,15 @@
 package io.dargent.notifications.adapter.out.db;
 
 import io.dargent.notifications.domain.port.out.NotificationStore;
-import org.postgresql.util.PGobject;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.core.PreparedStatementSetter;
-
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.sql.Types;
 import java.time.Instant;
 import java.util.UUID;
+import org.postgresql.util.PGobject;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.PreparedStatementSetter;
 
 /**
  * JDBC implementation of NotificationStore (E10 spec §5).
@@ -25,8 +24,8 @@ public final class JdbcNotificationStore implements NotificationStore {
     }
 
     @Override
-    public boolean insertNotificationIfAbsent(UUID eventId, String type, String txid, UUID merchantId,
-            String payload, Instant occurredAt) {
+    public boolean insertNotificationIfAbsent(
+            UUID eventId, String type, String txid, UUID merchantId, String payload, Instant occurredAt) {
         String sql = """
                 INSERT INTO notifications.notification (id, event_id, type, txid, merchant_id, payload, occurred_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?)

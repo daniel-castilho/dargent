@@ -32,18 +32,31 @@ public class ErrorResponseWriter {
         write(request, response, errorCode, detail, null, null);
     }
 
-    public void write(HttpServletRequest request, HttpServletResponse response, ErrorCode errorCode, String detail,
+    public void write(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            ErrorCode errorCode,
+            String detail,
             Map<String, String> fields) {
         write(request, response, errorCode, detail, fields, null);
     }
 
-    public void write(HttpServletRequest request, HttpServletResponse response, ErrorCode errorCode, String detail,
+    public void write(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            ErrorCode errorCode,
+            String detail,
             Throwable cause) {
         write(request, response, errorCode, detail, null, cause);
     }
 
-    public void write(HttpServletRequest request, HttpServletResponse response, ErrorCode errorCode, String detail,
-            Map<String, String> fields, Throwable cause) {
+    public void write(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            ErrorCode errorCode,
+            String detail,
+            Map<String, String> fields,
+            Throwable cause) {
         String safeDetail = errorCode == ErrorCode.INTERNAL ? SAFE_INTERNAL_DETAIL : detail;
         if (errorCode == ErrorCode.INTERNAL) {
             if (cause != null) {
@@ -55,8 +68,8 @@ public class ErrorResponseWriter {
         writeBody(response, errorCode, safeDetail, fields);
     }
 
-    private void writeBody(HttpServletResponse response, ErrorCode errorCode, String detail,
-            Map<String, String> fields) {
+    private void writeBody(
+            HttpServletResponse response, ErrorCode errorCode, String detail, Map<String, String> fields) {
         ErrorResponse body = ErrorResponse.of(errorCode, detail, fields);
         response.setStatus(errorCode.httpStatus().value());
         response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);

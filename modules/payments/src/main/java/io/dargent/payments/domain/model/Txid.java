@@ -20,8 +20,7 @@ public record Txid(String value) {
         }
         String normalized = value.trim().toUpperCase(Locale.ROOT);
         if (!normalized.matches(PATTERN)) {
-            throw new IllegalArgumentException(
-                    "txid must be exactly 25 alphanumeric characters, got: " + normalized);
+            throw new IllegalArgumentException("txid must be exactly 25 alphanumeric characters, got: " + normalized);
         }
         value = normalized;
     }

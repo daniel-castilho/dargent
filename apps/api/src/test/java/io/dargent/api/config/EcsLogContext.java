@@ -6,7 +6,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.logging.logback.StructuredLogEncoder;
 import org.springframework.core.env.Environment;
@@ -37,8 +36,7 @@ public final class EcsLogContext {
     private static volatile boolean environmentReady;
     private static boolean started;
 
-    private EcsLogContext() {
-    }
+    private EcsLogContext() {}
 
     /**
      * Hands the Spring {@link Environment} to the Logback context so the ECS encoder can be built.
@@ -63,8 +61,8 @@ public final class EcsLogContext {
             return;
         }
         StandardEnvironment env = new StandardEnvironment();
-        env.getPropertySources().addFirst(new MapPropertySource("ecs-register",
-                Map.of("spring.application.name", appName)));
+        env.getPropertySources()
+                .addFirst(new MapPropertySource("ecs-register", Map.of("spring.application.name", appName)));
         org.slf4j.ILoggerFactory factory = LoggerFactory.getILoggerFactory();
         if (factory instanceof LoggerContext ctx) {
             ctx.putObject(Environment.class.getName(), env);

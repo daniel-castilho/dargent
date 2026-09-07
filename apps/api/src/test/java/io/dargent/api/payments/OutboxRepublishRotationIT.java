@@ -10,12 +10,12 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.sql.Timestamp;
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,7 +32,6 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
-import javax.sql.DataSource;
 
 /**
  * E9 §6.3 / Q11 rotation-window leg for republish. Under the committed one-active-key-per-prefix
@@ -45,18 +44,14 @@ import javax.sql.DataSource;
  * Also tests env-absent → 404-hidden.
  */
 @SpringBootTest(
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    classes = {DargentApiApplication.class, OutboxRepublishRotationIT.RotationTestConfig.class},
-    properties = {
-        "dargent.relay.enabled=true",
-        "dargent.psp.webhook-secret=dev-only-secret"
-    })
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        classes = {DargentApiApplication.class, OutboxRepublishRotationIT.RotationTestConfig.class},
+        properties = {"dargent.relay.enabled=true", "dargent.psp.webhook-secret=dev-only-secret"})
 @Testcontainers
 class OutboxRepublishRotationIT {
 
     private static final UUID MERCHANT = UUID.fromString("11111111-1111-1111-1111-111111111111");
-    private static final Clock FIXED_CLOCK =
-            Clock.fixed(Instant.parse("2027-01-02T12:00:00Z"), ZoneOffset.UTC);
+    private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2027-01-02T12:00:00Z"), ZoneOffset.UTC);
 
     /** The log-lived, now-revoked predecessor — still the designated admin key (stale rotation). */
     private static final String PREV_RAW_KEY = ApiKeyHasher.generateRawKey();
@@ -68,9 +63,9 @@ class OutboxRepublishRotationIT {
     static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:16-alpine");
 
     @Container
-    static final LocalStackContainer localstack =
-            new LocalStackContainer(DockerImageName.parse("localstack/localstack:3.8.1"))
-                    .withServices(LocalStackContainer.Service.SNS, LocalStackContainer.Service.SQS);
+    static final LocalStackContainer localstack = new LocalStackContainer(
+                    DockerImageName.parse("localstack/localstack:3.8.1"))
+            .withServices(LocalStackContainer.Service.SNS, LocalStackContainer.Service.SQS);
 
     @Autowired
     JdbcClient jdbc;
@@ -84,7 +79,8 @@ class OutboxRepublishRotationIT {
     @org.springframework.test.context.DynamicPropertySource
     static void env(org.springframework.test.context.DynamicPropertyRegistry registry) {
         registry.add("AWS_ENDPOINT_URL", () -> localstack
-                .getEndpointOverride(LocalStackContainer.Service.SNS).toString());
+                .getEndpointOverride(LocalStackContainer.Service.SNS)
+                .toString());
         registry.add("AWS_REGION", () -> "us-east-1");
         registry.add("AWS_ACCESS_KEY_ID", () -> "test");
         registry.add("AWS_SECRET_ACCESS_KEY", () -> "test");
@@ -101,8 +97,8 @@ class OutboxRepublishRotationIT {
     @BeforeEach
     void setUp() {
         baseUrl = "http://localhost:" + port;
-        jdbc.sql("truncate payments.outbox, payments.audit_log, payments.api_keys "
-                + "restart identity cascade").update();
+        jdbc.sql("truncate payments.outbox, payments.audit_log, payments.api_keys " + "restart identity cascade")
+                .update();
         // The rotation state: the predecessor R is revoked, the successor M is the only active key.
         insertKey("33333333-3333-3333-3333-333333333333", PREV_RAW_KEY, "2027-01-02T10:00:00Z");
         insertKey("44444444-4444-4444-4444-444444444444", SUCC_RAW_KEY, null);
@@ -175,8 +171,7 @@ class OutboxRepublishRotationIT {
     }
 
     private void insertKey(String id, String rawKey, String revokedAt) {
-        jdbc.sql(
-                "insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
+        jdbc.sql("insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
                         + "values (:id, :merchant, 'it-key', :prefix, :hash, now(), :revoked)")
                 .param("id", UUID.fromString(id))
                 .param("merchant", MERCHANT)

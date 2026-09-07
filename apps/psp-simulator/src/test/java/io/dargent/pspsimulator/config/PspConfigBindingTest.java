@@ -1,8 +1,9 @@
 package io.dargent.pspsimulator.config;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.util.List;
 import java.util.Random;
-
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -10,8 +11,6 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.env.PropertySource;
 import org.springframework.core.io.ClassPathResource;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 class PspConfigBindingTest {
 
@@ -29,13 +28,14 @@ class PspConfigBindingTest {
 
     @Configuration
     @Import(PspSimulatorConfig.class)
-    static class BindingConfig {
-    }
+    static class BindingConfig {}
 
     @Test
     void binds_m0_compatible_defaults_from_application_yaml() {
         runner.run(ctx -> {
-            assertThat(ctx).hasSingleBean(PspProfile.class).hasSingleBean(WebhookSecret.class)
+            assertThat(ctx)
+                    .hasSingleBean(PspProfile.class)
+                    .hasSingleBean(WebhookSecret.class)
                     .hasSingleBean(ChaosProperties.class);
 
             ChaosProperties chaos = ctx.getBean(ChaosProperties.class);
@@ -58,12 +58,12 @@ class PspConfigBindingTest {
     @Test
     void binds_chaos_overrides_and_clamps_bounds() {
         runner.withPropertyValues(
-                "dargent.psp.chaos.webhook-duplicate=true",
-                "dargent.psp.chaos.webhook-delay-ms=-7",
-                "dargent.psp.chaos.webhook-drop-rate=0.5",
-                "dargent.psp.chaos.psp-error-rate=0.25",
-                "dargent.psp.chaos.psp-latency-ms=99999",
-                "dargent.psp.chaos.seed=42")
+                        "dargent.psp.chaos.webhook-duplicate=true",
+                        "dargent.psp.chaos.webhook-delay-ms=-7",
+                        "dargent.psp.chaos.webhook-drop-rate=0.5",
+                        "dargent.psp.chaos.psp-error-rate=0.25",
+                        "dargent.psp.chaos.psp-latency-ms=99999",
+                        "dargent.psp.chaos.seed=42")
                 .run(ctx -> {
                     ChaosProperties chaos = ctx.getBean(ChaosProperties.class);
                     assertThat(chaos.isWebhookDuplicate()).isTrue();

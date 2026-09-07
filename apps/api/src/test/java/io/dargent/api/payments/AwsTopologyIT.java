@@ -36,9 +36,9 @@ class AwsTopologyIT {
     private static final JsonMapper MAPPER = new JsonMapper();
 
     @Container
-    static final LocalStackContainer localstack =
-            new LocalStackContainer(DockerImageName.parse("localstack/localstack:3.8.1"))
-                    .withServices(LocalStackContainer.Service.SNS, LocalStackContainer.Service.SQS);
+    static final LocalStackContainer localstack = new LocalStackContainer(
+                    DockerImageName.parse("localstack/localstack:3.8.1"))
+            .withServices(LocalStackContainer.Service.SNS, LocalStackContainer.Service.SQS);
 
     private static SnsClient sns;
     private static SqsClient sqs;
@@ -53,29 +53,28 @@ class AwsTopologyIT {
         sqs = SqsClient.builder()
                 .endpointOverride(localstack.getEndpointOverride(LocalStackContainer.Service.SQS))
                 .region(Region.of(REGION))
-                .credentialsProvider(StaticCredentialsProvider.create(
-                        AwsBasicCredentials.create("test", "test")))
+                .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create("test", "test")))
                 .build();
         sns = SnsClient.builder()
                 .endpointOverride(localstack.getEndpointOverride(LocalStackContainer.Service.SNS))
                 .region(Region.of(REGION))
-                .credentialsProvider(StaticCredentialsProvider.create(
-                        AwsBasicCredentials.create("test", "test")))
+                .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create("test", "test")))
                 .build();
 
-        dlqUrl = sqs.createQueue(r -> r.queueName(DLQ_NAME)
-                .attributes(Map.of(QueueAttributeName.FIFO_QUEUE, "true"))).queueUrl();
+        dlqUrl = sqs.createQueue(r -> r.queueName(DLQ_NAME).attributes(Map.of(QueueAttributeName.FIFO_QUEUE, "true")))
+                .queueUrl();
         dlqArn = queueArn(dlqUrl);
 
         String redrive = "{\"deadLetterTargetArn\":\"" + dlqArn + "\",\"maxReceiveCount\":\"5\"}";
         notifyUrl = sqs.createQueue(r -> r.queueName(QUEUE_NAME)
-                .attributes(Map.of(
-                        QueueAttributeName.FIFO_QUEUE, "true",
-                        QueueAttributeName.REDRIVE_POLICY, redrive))).queueUrl();
+                        .attributes(Map.of(
+                                QueueAttributeName.FIFO_QUEUE, "true", QueueAttributeName.REDRIVE_POLICY, redrive)))
+                .queueUrl();
         notifyArn = queueArn(notifyUrl);
 
         topicArn = sns.createTopic(r -> r.name(TOPIC_NAME)
-                .attributes(Map.of("FifoTopic", "true", "ContentBasedDeduplication", "false"))).topicArn();
+                        .attributes(Map.of("FifoTopic", "true", "ContentBasedDeduplication", "false")))
+                .topicArn();
         sns.subscribe(r -> r.topicArn(topicArn).protocol("sqs").endpoint(notifyArn));
     }
 
@@ -108,8 +107,9 @@ class AwsTopologyIT {
 
     private static Map<QueueAttributeName, String> getQueueAttributes(String url) {
         return sqs.getQueueAttributes(GetQueueAttributesRequest.builder()
-                .queueUrl(url)
-                .attributeNames(QueueAttributeName.ALL)
-                .build()).attributes();
+                        .queueUrl(url)
+                        .attributeNames(QueueAttributeName.ALL)
+                        .build())
+                .attributes();
     }
 }

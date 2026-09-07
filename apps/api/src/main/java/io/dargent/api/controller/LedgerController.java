@@ -45,20 +45,20 @@ class LedgerController {
     @GetMapping("/proof")
     ResponseEntity<ProofResponse> proof() {
         ProofResult r = reconciliation.proof();
-        return ResponseEntity.ok(new ProofResponse(r.ok(), r.firstDivergence(),
-                r.accountsChecked(), r.entriesChecked(), r.postingsChecked()));
+        return ResponseEntity.ok(new ProofResponse(
+                r.ok(), r.firstDivergence(), r.accountsChecked(), r.entriesChecked(), r.postingsChecked()));
     }
 
     @PostMapping("/rebuild")
     ResponseEntity<ProofResponse> rebuild(@AuthenticationPrincipal ApiKeyPrincipal principal) {
         ProofResult r = reconciliation.rebuild(principal.keyId());
-        return ResponseEntity.ok(new ProofResponse(r.ok(), r.firstDivergence(),
-                r.accountsChecked(), r.entriesChecked(), r.postingsChecked()));
+        return ResponseEntity.ok(new ProofResponse(
+                r.ok(), r.firstDivergence(), r.accountsChecked(), r.entriesChecked(), r.postingsChecked()));
     }
 
     @PostMapping("/settlements")
-    ResponseEntity<SettlementResponse> settle(HttpServletRequest request,
-            @AuthenticationPrincipal ApiKeyPrincipal principal) {
+    ResponseEntity<SettlementResponse> settle(
+            HttpServletRequest request, @AuthenticationPrincipal ApiKeyPrincipal principal) {
         String idempotencyKey = idempotencyKey(request);
         SettlementUseCase.SettlementResult result =
                 settlementUseCase.settle(principal.merchantId(), idempotencyKey, principal.keyId());
@@ -87,8 +87,8 @@ class LedgerController {
 
     record BalanceResponse(String account, long balanceCents, Instant updatedAt) {}
 
-    record ProofResponse(boolean ok, String firstDivergence,
-            long accountsChecked, long entriesChecked, long postingsChecked) {}
+    record ProofResponse(
+            boolean ok, String firstDivergence, long accountsChecked, long entriesChecked, long postingsChecked) {}
 
     record SettlementResponse(UUID id, UUID merchantId, long amountCents, Instant settledAt) {}
 }

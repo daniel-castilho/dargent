@@ -4,6 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.dargent.api.DargentApiApplication;
 import io.dargent.api.security.ApiKeyHasher;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
@@ -25,11 +29,6 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-
 /**
  * S6 — E10 spec §8.3 NotificationsApiIT.
  * Seeded rows → GET /v1/notifications shaped 200; pagination walk (cursor round-trip); 400 on bad
@@ -37,13 +36,13 @@ import java.net.http.HttpResponse;
  * merchant_id is never a query param and never appears in the response body.
  */
 @SpringBootTest(
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    classes = {DargentApiApplication.class, NotificationsApiIT.ApiTestConfig.class},
-    properties = {
-        "dargent.relay.enabled=false",
-        "dargent.notifs.consumer.enabled=false",
-        "dargent.psp.webhook-secret=dev-only-secret"
-    })
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        classes = {DargentApiApplication.class, NotificationsApiIT.ApiTestConfig.class},
+        properties = {
+            "dargent.relay.enabled=false",
+            "dargent.notifs.consumer.enabled=false",
+            "dargent.psp.webhook-secret=dev-only-secret"
+        })
 @Testcontainers
 class NotificationsApiIT {
 
@@ -72,7 +71,8 @@ class NotificationsApiIT {
     @BeforeEach
     void setUp() {
         baseUrl = "http://localhost:" + port;
-        jdbc.sql("truncate notifications.notification, payments.api_keys restart identity cascade").update();
+        jdbc.sql("truncate notifications.notification, payments.api_keys restart identity cascade")
+                .update();
         provisionKey(KEY_ID, MERCHANT, rawKey);
     }
 
@@ -161,10 +161,12 @@ class NotificationsApiIT {
 
     @Test
     void missing_api_key_returns_401() throws Exception {
-        var resp = http.send(HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl + "/v1/notifications"))
-                .GET()
-                .build(), HttpResponse.BodyHandlers.ofString());
+        var resp = http.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create(baseUrl + "/v1/notifications"))
+                        .GET()
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
         assertThat(resp.statusCode()).isEqualTo(401);
     }
 
@@ -190,7 +192,8 @@ class NotificationsApiIT {
 
         // Phase B — revoke principal key, activate second merchant's key; principal's row still present.
         jdbc.sql("update payments.api_keys set revoked_at = now() where id = :id")
-                .param("id", KEY_ID).update();
+                .param("id", KEY_ID)
+                .update();
         String otherRawKey = ApiKeyHasher.generateRawKey();
         provisionKey(OTHER_KEY_ID, OTHER_MERCHANT, otherRawKey);
 
@@ -226,9 +229,7 @@ class NotificationsApiIT {
     }
 
     private HttpResponse<String> get(String path, Map<String, String> headers) throws Exception {
-        var builder = HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl + path))
-                .GET();
+        var builder = HttpRequest.newBuilder().uri(URI.create(baseUrl + path)).GET();
         headers.forEach(builder::header);
         return http.send(builder.build(), HttpResponse.BodyHandlers.ofString());
     }
@@ -265,8 +266,7 @@ class NotificationsApiIT {
                     .locations(
                             "classpath:db/migration/payments",
                             "classpath:db/migration/ledger",
-                            "classpath:db/migration/notifications"
-                    )
+                            "classpath:db/migration/notifications")
                     .baselineOnMigrate(true)
                     .load();
             flyway.migrate();

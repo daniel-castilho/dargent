@@ -18,8 +18,7 @@ public record EventEnvelope(
         UUID merchantId,
         String requestId,
         Instant occurredAt,
-        String payload
-) {
+        String payload) {
     public EventEnvelope {
         Objects.requireNonNull(eventId, "eventId is required");
         Objects.requireNonNull(type, "type is required");

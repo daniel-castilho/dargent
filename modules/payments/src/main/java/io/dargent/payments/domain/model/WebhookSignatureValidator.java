@@ -5,7 +5,6 @@ import java.security.InvalidKeyException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
-import java.time.Instant;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
@@ -63,7 +62,8 @@ public final class WebhookSignatureValidator {
         }
 
         // Constant-time compare
-        if (!MessageDigest.isEqual(expectedSignature.getBytes(StandardCharsets.US_ASCII),
+        if (!MessageDigest.isEqual(
+                expectedSignature.getBytes(StandardCharsets.US_ASCII),
                 presentedSignature.getBytes(StandardCharsets.US_ASCII))) {
             return Verdict.INVALID;
         }
@@ -71,8 +71,7 @@ public final class WebhookSignatureValidator {
         return Verdict.VALID;
     }
 
-    static String hmacSha256Hex(String secret, String data)
-            throws NoSuchAlgorithmException, InvalidKeyException {
+    static String hmacSha256Hex(String secret, String data) throws NoSuchAlgorithmException, InvalidKeyException {
         Mac mac = Mac.getInstance(HMAC_ALGO);
         mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), HMAC_ALGO));
         byte[] hash = mac.doFinal(data.getBytes(StandardCharsets.UTF_8));

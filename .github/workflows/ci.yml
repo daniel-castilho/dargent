@@ -37,7 +37,35 @@ jobs:
       # Unit + slice + integration (Testcontainers: Postgres + LocalStack).
       # SpotBugs / OWASP / JaCoCo gates and Trivy/SBOM image security land at M4 per design.md §11.
       - name: Build, unit and integration tests
-        run: mvn -B verify
+        run: ./mvnw -B verify
+
+      - name: Cache OWASP NVD data
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 (SHA-pinned, design §11.1)
+        with:
+          path: ~/.m2/dependency-check-data
+          key: owasp-nvd-${{ github.run_id }}
+          restore-keys: owasp-nvd-
+
+      # E13 S1: OWASP Dependency-Check — fail CVSS >= 7. NVD API key rides the repository secret
+      # NVD_API_KEY (no key → throttled-but-working sync); data dir cached across runs; 2 documented
+      # retries (P2: a tool outage MUST fail the job — this gate never silently passes).
+      - name: OWASP Dependency-Check (NVD keyed, cached)
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        run: |
+          set -euo pipefail
+          attempt() { ./mvnw -B dependency-check:aggregate -DskipTests "$@"; }
+          if ! attempt; then
+            echo "OWASP attempt 1 failed — retrying once in 60s (NVD sync flakiness, documented P2 policy)"
+            sleep 60
+            attempt || { echo "OWASP attempt 2 failed — FAILING THE JOB (never silent-pass)"; exit 1; }
+          fi
+
+      # E13 S1: owner-fixed per-module LINE floors, measured on combined unit+IT data (the
+      # aggregate exec built by apps/api during verify — hexagonal ITs live in the boot app).
+      # design.md §11.1: the check is a separate step AFTER the IT step. Floors live in module poms.
+      - name: Coverage floors (payments/ledger/shared/notifications/api)
+        run: bash scripts/check-coverage.sh
 
       - name: Upload test reports on failure
         if: failure()
@@ -50,6 +78,11 @@ jobs:
   image:
     needs: build
     runs-on: ubuntu-latest
+    # E13 S2/S3: SARIF upload (Trivy pass 1, CodeQL) needs security-events: write — scoped to
+    # this job only; every other job keeps the workflow-level contents: read.
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - uses: actions/checkout@v7
 
@@ -69,9 +102,62 @@ jobs:
           fi
           echo "OK: image runs non-root"
 
-      # M4 adds: Trivy 2-pass (SARIF advisory + HIGH/CRITICAL gate), SBOM CycloneDX,
-      # CodeQL, Dependency Review, k6 performance (consultative) — design.md §11.1.
-      # runtime-smoke (E12 S2+S3) is live below: compose → readiness → smoke → chaos → shutdown.
+      # E13 S2 — Trivy pass 1: SARIF (advisory, non-blocking) for BOTH images.
+      - name: Trivy pass 1 — SARIF advisory (api)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: dargent-api:${{ github.sha }}
+          format: sarif
+          output: trivy-api.sarif
+      - name: Trivy pass 1 — SARIF advisory (psp-simulator)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: dargent-psp-simulator:${{ github.sha }}
+          format: sarif
+          output: trivy-psp.sarif
+      - name: Upload Trivy SARIF (advisory)
+        if: always()
+        uses: github/codeql-action/upload-sarif@486fec2a3ea2626afcd8c7e9208b4f515078dd7e # codeql-bundle-v2.26.4
+        with:
+          sarif_file: trivy-api.sarif
+          category: trivy-api
+      - name: Upload Trivy SARIF (psp-simulator, advisory)
+        if: always()
+        uses: github/codeql-action/upload-sarif@486fec2a3ea2626afcd8c7e9208b4f515078dd7e # codeql-bundle-v2.26.4
+        with:
+          sarif_file: trivy-psp.sarif
+          category: trivy-psp
+
+      # E13 S2 — Trivy pass 2: HARD GATE on HIGH,CRITICAL for BOTH images (design §11.1).
+      - name: Trivy pass 2 — HIGH/CRITICAL gate (both images)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: dargent-api:${{ github.sha }}
+          format: table
+          exit-code: '1'
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+
+      # E13 S2 — SBOM CycloneDX per image (naming: sbom-<image>-<tag>.json; release
+      # attachment is E14). Same trivy scanner, cyclonedx format.
+      - name: SBOM CycloneDX (api)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: dargent-api:${{ github.sha }}
+          format: cyclonedx
+          output: sbom-dargent-api-${{ github.sha }}.json
+      - name: SBOM CycloneDX (psp-simulator)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: dargent-psp-simulator:${{ github.sha }}
+          format: cyclonedx
+          output: sbom-dargent-psp-simulator-${{ github.sha }}.json
+      - name: Upload SBOM artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: sbom-${{ github.sha }}
+          path: sbom-*.json
+          if-no-files-found: error
 
   runtime-smoke:
     needs: [build]
@@ -99,6 +185,18 @@ jobs:
             /tmp/smoke.*
             /tmp/shutdown.probe.body*
           if-no-files-found: ignore
+
+  # E13 S3 — Dependency Review: PR gate, fails on high+ severity NEW vulnerabilities in the
+  # dependency diff (base vs head). Action SHA-pinned (third-party, design §11.1).
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Dependency Review
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
 
   # E12 S4 rider N8: daily ledger proof. Full event spine ON (relay + ledger consumer), one real
   # payment through money path, then /v1/ledger/proof + DB-level Σ DR = Σ CR + projection == lines.

@@ -80,15 +80,7 @@ class NotificationController {
     }
 
     record NotificationItemResponse(
-            UUID id,
-            UUID eventId,
-            String type,
-            String txid,
-            UUID merchantId,
-            Instant occurredAt,
-            Instant createdAt) {}
+            UUID id, UUID eventId, String type, String txid, UUID merchantId, Instant occurredAt, Instant createdAt) {}
 
-    record NotificationListResponse(
-            List<NotificationItemResponse> data,
-            String nextCursor) {}
+    record NotificationListResponse(List<NotificationItemResponse> data, String nextCursor) {}
 }

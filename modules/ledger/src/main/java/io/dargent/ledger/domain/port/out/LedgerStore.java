@@ -30,8 +30,8 @@ public interface LedgerStore {
      * Inserts an event if event_id is new (idempotency).
      * Returns true if inserted, false if duplicate (event_id already exists).
      */
-    boolean insertEventIfAbsent(UUID eventId, String type, String txid, UUID merchantId,
-            String payload, String status, String note);
+    boolean insertEventIfAbsent(
+            UUID eventId, String type, String txid, UUID merchantId, String payload, String status, String note);
 
     /**
      * Writes journal entry + postings + balances in a single transaction.
@@ -46,8 +46,15 @@ public interface LedgerStore {
      * note `insufficient_merchant_balance` + audit `refund_skipped_balance`.
      * Returns true if posted, false if drain failed (IGNORED).
      */
-    boolean postRefund(UUID eventId, String txid, UUID merchantId, long amountCents, long feeReversalCents,
-            String description, Instant createdAt, Clock clock);
+    boolean postRefund(
+            UUID eventId,
+            String txid,
+            UUID merchantId,
+            long amountCents,
+            long feeReversalCents,
+            String description,
+            Instant createdAt,
+            Clock clock);
 
     /**
      * Upserts balance per account (credit-positive).
@@ -112,8 +119,13 @@ public interface LedgerStore {
      * when Σ DEBIT ≠ Σ CREDIT, {@code projection} when the balances projection diverges from the
      * journal lines (or a journal entry has fewer than 2 postings); null when ok.
      */
-    record ProofResult(boolean ok, String firstDivergence, String scope,
-            long accountsChecked, long entriesChecked, long postingsChecked) {
+    record ProofResult(
+            boolean ok,
+            String firstDivergence,
+            String scope,
+            long accountsChecked,
+            long entriesChecked,
+            long postingsChecked) {
         public static ProofResult ok(long accounts, long entries, long postings) {
             return new ProofResult(true, null, null, accounts, entries, postings);
         }

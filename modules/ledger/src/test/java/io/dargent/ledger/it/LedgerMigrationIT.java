@@ -1,13 +1,12 @@
 package io.dargent.ledger.it;
 
-import org.flywaydb.core.Flyway;
-import org.junit.jupiter.api.*;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.sql.*;
-import static org.assertj.core.api.Assertions.assertThat;
+import org.flywaydb.core.Flyway;
+import org.junit.jupiter.api.*;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
  * Proves ledger migrations (V202–V207) apply cleanly on PostgreSQL 16.
@@ -87,12 +86,15 @@ class LedgerMigrationIT {
 
     private static void assertTableExists(java.sql.Connection conn, String table) throws java.sql.SQLException {
         try (var rs = conn.getMetaData().getTables(null, "ledger", table, null)) {
-            org.assertj.core.api.Assertions.assertThat(rs.next()).as("table %s exists", table).isTrue();
+            org.assertj.core.api.Assertions.assertThat(rs.next())
+                    .as("table %s exists", table)
+                    .isTrue();
         }
     }
 
-    private static void assertColumnNullable(java.sql.Connection conn, String table, String column,
-            boolean expectedNullable) throws java.sql.SQLException {
+    private static void assertColumnNullable(
+            java.sql.Connection conn, String table, String column, boolean expectedNullable)
+            throws java.sql.SQLException {
         String sql = """
                 SELECT is_nullable FROM information_schema.columns
                 WHERE table_schema = 'ledger' AND table_name = ? AND column_name = ?
@@ -101,7 +103,9 @@ class LedgerMigrationIT {
             ps.setString(1, table);
             ps.setString(2, column);
             try (var rs = ps.executeQuery()) {
-                org.assertj.core.api.Assertions.assertThat(rs.next()).as("column %s.%s exists", table, column).isTrue();
+                org.assertj.core.api.Assertions.assertThat(rs.next())
+                        .as("column %s.%s exists", table, column)
+                        .isTrue();
                 String nullable = rs.getString(1);
                 org.assertj.core.api.Assertions.assertThat("YES".equals(nullable))
                         .as("column %s.%s nullable=%s", table, column, expectedNullable)
@@ -110,7 +114,8 @@ class LedgerMigrationIT {
         }
     }
 
-    private static void assertCheckExists(java.sql.Connection conn, String table, String column) throws java.sql.SQLException {
+    private static void assertCheckExists(java.sql.Connection conn, String table, String column)
+            throws java.sql.SQLException {
         String sql = """
                 SELECT 1 FROM information_schema.check_constraints cc
                 JOIN information_schema.constraint_column_usage ccu
@@ -128,12 +133,15 @@ class LedgerMigrationIT {
                     found = true;
                     break;
                 }
-                org.assertj.core.api.Assertions.assertThat(found).as("CHECK constraint on %s.%s", table, column).isTrue();
+                org.assertj.core.api.Assertions.assertThat(found)
+                        .as("CHECK constraint on %s.%s", table, column)
+                        .isTrue();
             }
         }
     }
 
-    private static void assertUniqueExists(java.sql.Connection conn, String table, String column) throws java.sql.SQLException {
+    private static void assertUniqueExists(java.sql.Connection conn, String table, String column)
+            throws java.sql.SQLException {
         String sql = """
                 SELECT 1 FROM information_schema.table_constraints tc
                 JOIN information_schema.key_column_usage kcu
@@ -147,13 +155,16 @@ class LedgerMigrationIT {
             ps.setString(1, table);
             ps.setString(2, column);
             try (var rs = ps.executeQuery()) {
-                org.assertj.core.api.Assertions.assertThat(rs.next()).as("UNIQUE/PK on %s.%s", table, column).isTrue();
+                org.assertj.core.api.Assertions.assertThat(rs.next())
+                        .as("UNIQUE/PK on %s.%s", table, column)
+                        .isTrue();
             }
         }
     }
 
-    private static void assertForeignKeyExists(java.sql.Connection conn, String fromTable, String fromCol,
-                                               String toTable, String toCol) throws java.sql.SQLException {
+    private static void assertForeignKeyExists(
+            java.sql.Connection conn, String fromTable, String fromCol, String toTable, String toCol)
+            throws java.sql.SQLException {
         String sql = """
                 SELECT 1 FROM information_schema.referential_constraints rc
                 JOIN information_schema.key_column_usage kcu
@@ -171,7 +182,9 @@ class LedgerMigrationIT {
             ps.setString(3, toTable);
             ps.setString(4, toCol);
             try (var rs = ps.executeQuery()) {
-                org.assertj.core.api.Assertions.assertThat(rs.next()).as("FK %s.%s -> %s.%s", fromTable, fromCol, toTable, toCol).isTrue();
+                org.assertj.core.api.Assertions.assertThat(rs.next())
+                        .as("FK %s.%s -> %s.%s", fromTable, fromCol, toTable, toCol)
+                        .isTrue();
             }
         }
     }

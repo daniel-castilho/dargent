@@ -28,8 +28,7 @@ class ApiKeyHasherTest {
 
     @Test
     void prefix_throws_on_too_short_key() {
-        assertThatThrownBy(() -> ApiKeyHasher.prefix("psp_tes"))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> ApiKeyHasher.prefix("psp_tes")).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

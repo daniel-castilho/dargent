@@ -1,9 +1,7 @@
 package io.dargent.payments.application;
 
-import io.dargent.payments.domain.model.OutboxId;
 import io.dargent.payments.domain.port.out.EventPublisher;
 import io.dargent.payments.domain.port.out.OutboxEventStore;
-import io.dargent.payments.domain.port.out.OutboxEventStore.OutboxRow;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -43,7 +41,8 @@ public final class OutboxDeliveryUseCase {
     private final PaymentsMetrics metrics;
     private int cyclesSincePurge;
 
-    public OutboxDeliveryUseCase(OutboxEventStore store,
+    public OutboxDeliveryUseCase(
+            OutboxEventStore store,
             EventPublisher publisher,
             ObjectMapper mapper,
             Clock clock,
@@ -119,8 +118,13 @@ public final class OutboxDeliveryUseCase {
                     if (exhausted) {
                         metrics.outboxAttempt("exhausted");
                     }
-                    log.error("OUTBOX publish failed id={} type={} attempts={} exhausted={} error={}",
-                            row.id(), row.type(), attempts, exhausted, e.getMessage());
+                    log.error(
+                            "OUTBOX publish failed id={} type={} attempts={} exhausted={} error={}",
+                            row.id(),
+                            row.type(),
+                            attempts,
+                            exhausted,
+                            e.getMessage());
                 } else {
                     // Schedule the next ladder attempt, leave PENDING
                     Instant nextAttempt = clock.instant().plus(backoff(attempts));
@@ -130,8 +134,13 @@ public final class OutboxDeliveryUseCase {
                     }
                     // N7 level contract: backoff engaged, next attempt scheduled — self-healing → WARN.
                     // EXHAUSTED (no next attempt) stays ERROR: needs a human.
-                    log.warn("OUTBOX publish failed id={} type={} attempts={} next={} error={}",
-                            row.id(), row.type(), attempts, nextAttempt, e.getMessage());
+                    log.warn(
+                            "OUTBOX publish failed id={} type={} attempts={} next={} error={}",
+                            row.id(),
+                            row.type(),
+                            attempts,
+                            nextAttempt,
+                            e.getMessage());
                 }
                 continue;
             }
@@ -195,18 +204,17 @@ public final class OutboxDeliveryUseCase {
      * Delivery policy parameters (derived from §5.7 BoE, not tuned).
      */
     public record Policy(
-            int batchSize,          // DARGENT_RELAY_BATCH (default 32)
-            int workers,            // DARGENT_RELAY_WORKERS (default 2)
-            long pollMs,            // DARGENT_RELAY_POLL_MS (default 1000)
-            int maxAttempts,        // DARGENT_RELAY_MAX_ATTEMPTS (E9 §4.1, default 3): ladder runs then EXHAUSTED
-            Duration baseBackoff,   // 30 s (1st retry)
-            Duration maxBackoff,    // 5 min (cap)
-            int retentionDays       // DARGENT_OUTBOX_RETENTION_DAYS (default 7)
-    ) {
+            int batchSize, // DARGENT_RELAY_BATCH (default 32)
+            int workers, // DARGENT_RELAY_WORKERS (default 2)
+            long pollMs, // DARGENT_RELAY_POLL_MS (default 1000)
+            int maxAttempts, // DARGENT_RELAY_MAX_ATTEMPTS (E9 §4.1, default 3): ladder runs then EXHAUSTED
+            Duration baseBackoff, // 30 s (1st retry)
+            Duration maxBackoff, // 5 min (cap)
+            int retentionDays // DARGENT_OUTBOX_RETENTION_DAYS (default 7)
+            ) {
         public static Policy fromEnv() {
             // Defaults per §5.7 BoE; maxAttempts default 3 per E9 §4.1
-            return new Policy(32, 2, 1000, 3,
-                    java.time.Duration.ofSeconds(30), java.time.Duration.ofMinutes(5), 7);
+            return new Policy(32, 2, 1000, 3, java.time.Duration.ofSeconds(30), java.time.Duration.ofMinutes(5), 7);
         }
     }
 }

@@ -12,8 +12,8 @@ import io.dargent.payments.domain.model.Payment;
 import io.dargent.payments.domain.model.PaymentStatus;
 import io.dargent.payments.domain.model.Txid;
 import io.dargent.payments.domain.port.out.PaymentRepository;
-import io.dargent.payments.domain.port.out.TxidGenerator;
 import io.dargent.payments.domain.port.out.SecureRandomTxidGenerator;
+import io.dargent.payments.domain.port.out.TxidGenerator;
 import jakarta.persistence.EntityManagerFactory;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -49,8 +49,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  */
 @SpringBootTest(
         classes = PaymentConcurrentTransitionIT.PaymentsTestConfig.class,
-        properties = {"spring.jpa.hibernate.ddl-auto=validate"}
-)
+        properties = {"spring.jpa.hibernate.ddl-auto=validate"})
 @Testcontainers
 class PaymentConcurrentTransitionIT {
 
@@ -88,7 +87,7 @@ class PaymentConcurrentTransitionIT {
                 }
                 String[] emfNames = dlbf.getBeanNamesForType(EntityManagerFactory.class, true, false);
                 if (emfNames.length == 0) {
-                    emfNames = new String[]{"entityManagerFactory"};
+                    emfNames = new String[] {"entityManagerFactory"};
                 }
                 for (String emfName : emfNames) {
                     if (dlbf.containsBeanDefinition(emfName)) {
@@ -120,7 +119,13 @@ class PaymentConcurrentTransitionIT {
         UUID merchantId = UUID.randomUUID();
         Instant createdAt = Instant.parse("2026-08-01T10:00:00Z");
         Instant expiresAt = createdAt.plusSeconds(300);
-        Payment seed = Payment.create(txid, merchantId, io.dargent.shared.money.Money.of(10_000, "BRL"), "race payment", expiresAt, createdAt);
+        Payment seed = Payment.create(
+                txid,
+                merchantId,
+                io.dargent.shared.money.Money.of(10_000, "BRL"),
+                "race payment",
+                expiresAt,
+                createdAt);
         repository.save(seed);
 
         EndToEndId endToEndId = new EndToEndId("E" + "A".repeat(31));

@@ -1,23 +1,17 @@
 package io.dargent.payments.application;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import io.dargent.payments.domain.model.OutboxId;
 import io.dargent.payments.domain.port.out.EventPublisher;
 import io.dargent.payments.domain.port.out.OutboxEventStore;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 /**
  * Unit tests for OutboxDeliveryUseCase (E6 §5.1) — pure TDD with fakes, no Spring.
@@ -38,8 +32,7 @@ class OutboxDeliveryUseCaseTest {
         clock = FIXED_CLOCK;
 
         OutboxDeliveryUseCase.Policy policy = new OutboxDeliveryUseCase.Policy(
-                32, 2, 1000, Integer.MAX_VALUE, java.time.Duration.ofSeconds(30), java.time.Duration.ofMinutes(5), 7
-        );
+                32, 2, 1000, Integer.MAX_VALUE, java.time.Duration.ofSeconds(30), java.time.Duration.ofMinutes(5), 7);
         // Use real TransactionTemplate for unit tests (runs callback synchronously)
         var txTemplate = new org.springframework.transaction.support.TransactionTemplate(null) {
             @Override
@@ -49,28 +42,43 @@ class OutboxDeliveryUseCaseTest {
         };
 
         useCase = new OutboxDeliveryUseCase(
-                store, publisher, new tools.jackson.databind.json.JsonMapper(),
-                FIXED_CLOCK, new OutboxDeliveryUseCase.Policy(
-                        32, 2, 1000, Integer.MAX_VALUE, Duration.ofSeconds(30), Duration.ofMinutes(5), 7
-                ),
+                store,
+                publisher,
+                new tools.jackson.databind.json.JsonMapper(),
+                FIXED_CLOCK,
+                new OutboxDeliveryUseCase.Policy(
+                        32, 2, 1000, Integer.MAX_VALUE, Duration.ofSeconds(30), Duration.ofMinutes(5), 7),
                 txTemplate,
-                new PaymentsMetrics(new io.micrometer.core.instrument.simple.SimpleMeterRegistry())
-        );
+                new PaymentsMetrics(new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
     }
 
-@Test
+    @Test
     void claim_filters_by_due_and_status() {
         // PENDING but not due (missing eventId -> ignored)
-        ((FakeOutboxEventStore) store).insert(
-                OutboxId.generate(Clock.systemUTC()), "tx-1", "payment.created", 1, "{}", "req-1", 0,
-                FIXED_NOW.plusSeconds(10) // due in future
-        );
+        ((FakeOutboxEventStore) store)
+                .insert(
+                        OutboxId.generate(Clock.systemUTC()),
+                        "tx-1",
+                        "payment.created",
+                        1,
+                        "{}",
+                        "req-1",
+                        0,
+                        FIXED_NOW.plusSeconds(10) // due in future
+                        );
         // PENDING and due, with valid eventId
         OutboxId dueId = OutboxId.generate(Clock.systemUTC());
-        ((FakeOutboxEventStore) store).insert(
-                dueId, "tx-2", "payment.created", 1, "{\"eventId\":\"evt-2\"}", "req-2", 0,
-                FIXED_NOW.minusSeconds(10) // due now
-        );
+        ((FakeOutboxEventStore) store)
+                .insert(
+                        dueId,
+                        "tx-2",
+                        "payment.created",
+                        1,
+                        "{\"eventId\":\"evt-2\"}",
+                        "req-2",
+                        0,
+                        FIXED_NOW.minusSeconds(10) // due now
+                        );
 
         int processed = useCase.runOnce(10);
 
@@ -80,10 +88,16 @@ class OutboxDeliveryUseCaseTest {
     @Test
     void batch_size_cap_respected() {
         for (int i = 0; i < 50; i++) {
-            ((FakeOutboxEventStore) store).insert(
-                    OutboxId.generate(Clock.systemUTC()), "tx-" + i, "payment.created", 1,
-                    "{\"eventId\":\"evt-" + i + "\"}", "req-" + i, 0, FIXED_NOW
-            );
+            ((FakeOutboxEventStore) store)
+                    .insert(
+                            OutboxId.generate(Clock.systemUTC()),
+                            "tx-" + i,
+                            "payment.created",
+                            1,
+                            "{\"eventId\":\"evt-" + i + "\"}",
+                            "req-" + i,
+                            0,
+                            FIXED_NOW);
         }
 
         int processed = useCase.runOnce(10); // batch = 10
@@ -95,9 +109,8 @@ class OutboxDeliveryUseCaseTest {
     void skip_locked_semantics_via_fake() {
         // Two workers (simulated by sequential calls with same data) should not both claim same row
         OutboxId id = OutboxId.generate(Clock.systemUTC());
-        ((FakeOutboxEventStore) store).insert(
-                id, "tx-1", "payment.created", 1, "{\"eventId\":\"evt-1\"}", "req-1", 0, FIXED_NOW
-        );
+        ((FakeOutboxEventStore) store)
+                .insert(id, "tx-1", "payment.created", 1, "{\"eventId\":\"evt-1\"}", "req-1", 0, FIXED_NOW);
 
         // First worker claims
         int first = useCase.runOnce(1);
@@ -124,8 +137,13 @@ class OutboxDeliveryUseCaseTest {
 
     @Test
     void backoff_schedule() {
-        var uc = new OutboxDeliveryUseCase(null, null, null, FIXED_CLOCK,
-                new OutboxDeliveryUseCase.Policy(1, 1, 1, 3, java.time.Duration.ofSeconds(30), java.time.Duration.ofMinutes(5), 7),
+        var uc = new OutboxDeliveryUseCase(
+                null,
+                null,
+                null,
+                FIXED_CLOCK,
+                new OutboxDeliveryUseCase.Policy(
+                        1, 1, 1, 3, java.time.Duration.ofSeconds(30), java.time.Duration.ofMinutes(5), 7),
                 null,
                 new PaymentsMetrics(new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
 
@@ -144,8 +162,8 @@ class OutboxDeliveryUseCaseTest {
     @Test
     void first_failure_schedules_30s_backoff_and_stays_pending() {
         OutboxId id = OutboxId.generate(Clock.systemUTC());
-        ((FakeOutboxEventStore) store).insert(
-                id, "tx-1", "payment.created", 1, "{\"eventId\":\"evt-1\"}", "req-1", 0, FIXED_NOW);
+        ((FakeOutboxEventStore) store)
+                .insert(id, "tx-1", "payment.created", 1, "{\"eventId\":\"evt-1\"}", "req-1", 0, FIXED_NOW);
         OutboxDeliveryUseCase uc = useCase(store, new FailingEventPublisher(), 3, advancer);
 
         int published = uc.runOnce(10);
@@ -166,8 +184,8 @@ class OutboxDeliveryUseCaseTest {
     @Test
     void second_failure_schedules_2m_backoff_and_stays_pending() {
         OutboxId id = OutboxId.generate(Clock.systemUTC());
-        ((FakeOutboxEventStore) store).insert(
-                id, "tx-1", "payment.created", 1, "{\"eventId\":\"evt-1\"}", "req-1", 0, FIXED_NOW);
+        ((FakeOutboxEventStore) store)
+                .insert(id, "tx-1", "payment.created", 1, "{\"eventId\":\"evt-1\"}", "req-1", 0, FIXED_NOW);
         OutboxDeliveryUseCase uc = useCase(store, new FailingEventPublisher(), 3, advancer);
 
         uc.runOnce(10); // attempt 1 -> 30s backoff, still PENDING
@@ -177,7 +195,8 @@ class OutboxDeliveryUseCaseTest {
         assertThat(store.markExhaustedCalls).isEmpty();
         assertThat(store.markFailedCalls).hasSize(2);
         assertThat(store.markFailedCalls.get(1).attemptCount()).isEqualTo(2);
-        assertThat(store.markFailedCalls.get(1).nextAttemptAt()).isEqualTo(FIXED_NOW.plus(Duration.ofMinutes(2)).plus(Duration.ofSeconds(30)));
+        assertThat(store.markFailedCalls.get(1).nextAttemptAt())
+                .isEqualTo(FIXED_NOW.plus(Duration.ofMinutes(2)).plus(Duration.ofSeconds(30)));
         assertThat(store.status(id)).isEqualTo("PENDING");
     }
 
@@ -188,8 +207,8 @@ class OutboxDeliveryUseCaseTest {
     @Test
     void third_failure_marks_exhausted_and_never_reclaims() {
         OutboxId id = OutboxId.generate(Clock.systemUTC());
-        ((FakeOutboxEventStore) store).insert(
-                id, "tx-1", "payment.created", 1, "{\"eventId\":\"evt-1\"}", "req-1", 0, FIXED_NOW);
+        ((FakeOutboxEventStore) store)
+                .insert(id, "tx-1", "payment.created", 1, "{\"eventId\":\"evt-1\"}", "req-1", 0, FIXED_NOW);
         OutboxDeliveryUseCase uc = useCase(store, new FailingEventPublisher(), 3, advancer);
 
         uc.runOnce(10); // attempt 1 -> 30s backoff
@@ -217,8 +236,8 @@ class OutboxDeliveryUseCaseTest {
     @Test
     void exhaustion_lost_race_is_a_noop() {
         OutboxId id = OutboxId.generate(Clock.systemUTC());
-        ((FakeOutboxEventStore) store).insert(
-                id, "tx-1", "payment.created", 1, "{\"eventId\":\"evt-1\"}", "req-1", 0, FIXED_NOW);
+        ((FakeOutboxEventStore) store)
+                .insert(id, "tx-1", "payment.created", 1, "{\"eventId\":\"evt-1\"}", "req-1", 0, FIXED_NOW);
         // Pre-advance the row so markExhausted's conditional finds no matching PENDING row
         store.forceAdvance(id);
         OutboxDeliveryUseCase uc = useCase(store, new FailingEventPublisher(), 3, advancer);
@@ -232,27 +251,50 @@ class OutboxDeliveryUseCaseTest {
     /** A clock whose instant can be advanced between relay calls (ladder timings, no sleeps). */
     private final MutableClock advancer = new MutableClock(FIXED_NOW);
 
-    private OutboxDeliveryUseCase useCase(OutboxEventStore store, EventPublisher publisher, int maxAttempts,
-            Clock clock) {
+    private OutboxDeliveryUseCase useCase(
+            OutboxEventStore store, EventPublisher publisher, int maxAttempts, Clock clock) {
         var txTemplate = new org.springframework.transaction.support.TransactionTemplate(null) {
             @Override
             public <T> T execute(org.springframework.transaction.support.TransactionCallback<T> action) {
                 return action.doInTransaction(null);
             }
         };
-        return new OutboxDeliveryUseCase(store, publisher, new tools.jackson.databind.json.JsonMapper(),
-                clock, new OutboxDeliveryUseCase.Policy(32, 2, 1000, maxAttempts,
-                        Duration.ofSeconds(30), Duration.ofMinutes(5), 7), txTemplate,
+        return new OutboxDeliveryUseCase(
+                store,
+                publisher,
+                new tools.jackson.databind.json.JsonMapper(),
+                clock,
+                new OutboxDeliveryUseCase.Policy(
+                        32, 2, 1000, maxAttempts, Duration.ofSeconds(30), Duration.ofMinutes(5), 7),
+                txTemplate,
                 new PaymentsMetrics(new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
     }
 
     static final class MutableClock extends Clock {
         private Instant now;
-        MutableClock(Instant now) { this.now = now; }
-        void advance(Duration d) { now = now.plus(d); }
-        @Override public Instant instant() { return now; }
-        @Override public java.time.ZoneId getZone() { return ZoneOffset.UTC; }
-        @Override public Clock withZone(java.time.ZoneId zone) { return this; }
+
+        MutableClock(Instant now) {
+            this.now = now;
+        }
+
+        void advance(Duration d) {
+            now = now.plus(d);
+        }
+
+        @Override
+        public Instant instant() {
+            return now;
+        }
+
+        @Override
+        public java.time.ZoneId getZone() {
+            return ZoneOffset.UTC;
+        }
+
+        @Override
+        public Clock withZone(java.time.ZoneId zone) {
+            return this;
+        }
     }
 
     // Access private method via reflection
@@ -276,6 +318,7 @@ class OutboxDeliveryUseCaseTest {
         private int claims;
 
         record MarkFailed(OutboxId id, int attemptCount, Instant nextAttemptAt) {}
+
         record MarkExhausted(OutboxId id, int attemptCount) {}
 
         record Row(
@@ -287,22 +330,48 @@ class OutboxDeliveryUseCaseTest {
                 String requestId,
                 String status,
                 int attemptCount,
-                Instant nextAttemptAt
-        ) {}
+                Instant nextAttemptAt) {}
 
         /** Insert a PENDING row tracked by nextAttemptAt (test helper). */
-        void insert(OutboxId id, String aggregateId, String type, int version,
-                    String payload, String requestId, int attemptCount, Instant nextAttemptAt) {
-            rows.put(id, new Row(id, aggregateId, type, version,
-                    payload, requestId, "PENDING", attemptCount, nextAttemptAt));
+        void insert(
+                OutboxId id,
+                String aggregateId,
+                String type,
+                int version,
+                String payload,
+                String requestId,
+                int attemptCount,
+                Instant nextAttemptAt) {
+            rows.put(
+                    id,
+                    new Row(
+                            id,
+                            aggregateId,
+                            type,
+                            version,
+                            payload,
+                            requestId,
+                            "PENDING",
+                            attemptCount,
+                            nextAttemptAt));
         }
 
         /** Pre-advance a row (simulate a lost race: markExhausted's conditional finds no PENDING row). */
         void forceAdvance(OutboxId id) {
             Row r = rows.get(id);
             if (r == null) throw new IllegalStateException("no row " + id);
-            rows.put(id, new Row(r.id(), r.aggregateId(), r.type(), r.version(),
-                    r.payload(), r.requestId(), "SENT", r.attemptCount() + 1, r.nextAttemptAt()));
+            rows.put(
+                    id,
+                    new Row(
+                            r.id(),
+                            r.aggregateId(),
+                            r.type(),
+                            r.version(),
+                            r.payload(),
+                            r.requestId(),
+                            "SENT",
+                            r.attemptCount() + 1,
+                            r.nextAttemptAt()));
         }
 
         int claimCount() {
@@ -322,9 +391,13 @@ class OutboxDeliveryUseCaseTest {
                     .filter(r -> r.nextAttemptAt() != null && !r.nextAttemptAt().isAfter(now))
                     .limit(batch)
                     .map(r -> new OutboxEventStore.OutboxRow(
-                            r.id(), r.aggregateId(), r.type(), r.version(),
-                            r.payload(), r.requestId(), r.attemptCount()
-                    ))
+                            r.id(),
+                            r.aggregateId(),
+                            r.type(),
+                            r.version(),
+                            r.payload(),
+                            r.requestId(),
+                            r.attemptCount()))
                     .toList();
         }
 
@@ -332,8 +405,18 @@ class OutboxDeliveryUseCaseTest {
         public boolean markSent(OutboxId id, int attemptCount, Instant publishedAt) {
             Row r = rows.get(id);
             if (r == null || !"PENDING".equals(r.status())) return false;
-            rows.put(id, new Row(r.id(), r.aggregateId(), r.type(), r.version(),
-                    r.payload(), r.requestId(), "SENT", attemptCount, r.nextAttemptAt()));
+            rows.put(
+                    id,
+                    new Row(
+                            r.id(),
+                            r.aggregateId(),
+                            r.type(),
+                            r.version(),
+                            r.payload(),
+                            r.requestId(),
+                            "SENT",
+                            attemptCount,
+                            r.nextAttemptAt()));
             return true;
         }
 
@@ -341,8 +424,18 @@ class OutboxDeliveryUseCaseTest {
         public boolean markFailed(OutboxId id, int attemptCount, Instant nextAttemptAt) {
             Row r = rows.get(id);
             if (r == null || !"PENDING".equals(r.status())) return false;
-            rows.put(id, new Row(r.id(), r.aggregateId(), r.type(), r.version(),
-                    r.payload(), r.requestId(), "PENDING", attemptCount, nextAttemptAt));
+            rows.put(
+                    id,
+                    new Row(
+                            r.id(),
+                            r.aggregateId(),
+                            r.type(),
+                            r.version(),
+                            r.payload(),
+                            r.requestId(),
+                            "PENDING",
+                            attemptCount,
+                            nextAttemptAt));
             markFailedCalls.add(new MarkFailed(id, attemptCount, nextAttemptAt));
             return true;
         }
@@ -351,8 +444,18 @@ class OutboxDeliveryUseCaseTest {
         public boolean markExhausted(OutboxId id, int attemptCount) {
             Row r = rows.get(id);
             if (r == null || !"PENDING".equals(r.status())) return false;
-            rows.put(id, new Row(r.id(), r.aggregateId(), r.type(), r.version(),
-                    r.payload(), r.requestId(), "EXHAUSTED", attemptCount, r.nextAttemptAt()));
+            rows.put(
+                    id,
+                    new Row(
+                            r.id(),
+                            r.aggregateId(),
+                            r.type(),
+                            r.version(),
+                            r.payload(),
+                            r.requestId(),
+                            "EXHAUSTED",
+                            attemptCount,
+                            r.nextAttemptAt()));
             markExhaustedCalls.add(new MarkExhausted(id, attemptCount));
             return true;
         }
@@ -362,8 +465,18 @@ class OutboxDeliveryUseCaseTest {
             Row r = rows.get(id);
             if (r == null) return RequeueResult.notFound();
             if (!"EXHAUSTED".equals(r.status())) return RequeueResult.notExhaustible();
-            rows.put(id, new Row(r.id(), r.aggregateId(), r.type(), r.version(),
-                    r.payload(), r.requestId(), "PENDING", 0, now));
+            rows.put(
+                    id,
+                    new Row(
+                            r.id(),
+                            r.aggregateId(),
+                            r.type(),
+                            r.version(),
+                            r.payload(),
+                            r.requestId(),
+                            "PENDING",
+                            0,
+                            now));
             return RequeueResult.requeued(r.aggregateId());
         }
 

@@ -15,7 +15,6 @@ import org.springframework.boot.persistence.autoconfigure.EntityScan;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
@@ -28,11 +27,8 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * {@link PaymentRepository} bean.
  */
 @SpringBootTest(
-    classes = PaymentJpaAdapterIT.PaymentsTestConfig.class,
-    properties = {
-        "spring.jpa.hibernate.ddl-auto=validate"
-    }
-)
+        classes = PaymentJpaAdapterIT.PaymentsTestConfig.class,
+        properties = {"spring.jpa.hibernate.ddl-auto=validate"})
 @Testcontainers
 class PaymentJpaAdapterIT extends PaymentRepositoryContractSuite {
 
@@ -69,7 +65,7 @@ class PaymentJpaAdapterIT extends PaymentRepositoryContractSuite {
                 // Boot's JPA auto-config names this bean "entityManagerFactory".
                 String[] emfNames = dlbf.getBeanNamesForType(EntityManagerFactory.class, true, false);
                 if (emfNames.length == 0) {
-                    emfNames = new String[]{"entityManagerFactory"};
+                    emfNames = new String[] {"entityManagerFactory"};
                 }
                 for (String emfName : emfNames) {
                     if (dlbf.containsBeanDefinition(emfName)) {

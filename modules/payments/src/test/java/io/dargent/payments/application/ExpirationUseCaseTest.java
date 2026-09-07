@@ -7,7 +7,6 @@ import io.dargent.payments.domain.model.PaymentStatus;
 import io.dargent.payments.domain.model.Txid;
 import io.dargent.payments.domain.port.out.AuditWriter;
 import io.dargent.payments.domain.port.out.OutboxWriter;
-import io.dargent.payments.domain.port.out.PaymentRepository;
 import io.dargent.payments.persistence.InMemoryPaymentRepository;
 import io.dargent.shared.money.Money;
 import java.time.Clock;
@@ -37,8 +36,13 @@ class ExpirationUseCaseTest {
     private final InMemoryPaymentRepository repo = new InMemoryPaymentRepository();
 
     private ExpirationUseCase useCase() {
-        return new ExpirationUseCase(repo, outbox, audit, new EventEnvelopeFactory(new EventSerializer()),
-                new DirectTransactionTemplate(), Clock.fixed(NOW, OFFSET),
+        return new ExpirationUseCase(
+                repo,
+                outbox,
+                audit,
+                new EventEnvelopeFactory(new EventSerializer()),
+                new DirectTransactionTemplate(),
+                Clock.fixed(NOW, OFFSET),
                 new PaymentsMetrics(new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
     }
 
@@ -57,8 +61,10 @@ class ExpirationUseCaseTest {
         assertThat(outbox.entries.get(0).type()).isEqualTo("payment.expired");
         assertThat(outbox.entries.get(0).version()).isEqualTo(1);
         assertThat(outbox.entries.get(0).aggregateId()).isEqualTo(due.txid().value());
-        assertThat(outbox.entries.get(0).payload()).contains("\"txid\":\"" + due.txid().value() + "\"")
-                .contains("\"amountCents\":10000").contains("\"expiresAt\":\"");
+        assertThat(outbox.entries.get(0).payload())
+                .contains("\"txid\":\"" + due.txid().value() + "\"")
+                .contains("\"amountCents\":10000")
+                .contains("\"expiresAt\":\"");
 
         assertThat(audit.entries).hasSize(1);
         assertThat(audit.entries.get(0).commandName()).isEqualTo("expire_payment");
@@ -103,9 +109,12 @@ class ExpirationUseCaseTest {
     void confirm_won_race_is_a_no_op_with_zero_outbox_and_audit_writes() {
         Payment due = seedPending(Instant.parse("2026-09-02T09:00:00Z"));
         // pretend the webhook confirmed it after the scan returned it
-        Payment confirmed = repo.findByTxid(due.txid()).orElseThrow()
-                .confirm(new io.dargent.payments.domain.model.EndToEndId("E00416968202009221504E2345678910"),
-                        io.dargent.payments.domain.model.FeeBreakdown.of(10_000, new io.dargent.payments.domain.model.BpsRate(100)),
+        Payment confirmed = repo.findByTxid(due.txid())
+                .orElseThrow()
+                .confirm(
+                        new io.dargent.payments.domain.model.EndToEndId("E00416968202009221504E2345678910"),
+                        io.dargent.payments.domain.model.FeeBreakdown.of(
+                                10_000, new io.dargent.payments.domain.model.BpsRate(100)),
                         Instant.parse("2026-09-02T09:30:00Z"));
         repo.updateIfVersionMatches(confirmed, confirmed.version() - 1);
 
@@ -122,9 +131,9 @@ class ExpirationUseCaseTest {
     }
 
     private Payment seedPending(Instant expiresAt) {
-        Txid txid = new Txid(java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 25));
-        Payment payment = Payment.create(txid, MERCHANT, AMOUNT, "order", expiresAt,
-                expiresAt.minusSeconds(3_600));
+        Txid txid =
+                new Txid(java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 25));
+        Payment payment = Payment.create(txid, MERCHANT, AMOUNT, "order", expiresAt, expiresAt.minusSeconds(3_600));
         repo.save(payment);
         return payment;
     }

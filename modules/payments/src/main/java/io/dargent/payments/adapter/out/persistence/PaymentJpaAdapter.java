@@ -42,38 +42,41 @@ public class PaymentJpaAdapter implements PaymentRepository {
     @Override
     @Transactional(readOnly = true)
     public Optional<Payment> findByTxid(Txid txid) {
-        return findEntityByTxid(txid.value())
-                .map(PaymentMapper::toDomain);
+        return findEntityByTxid(txid.value()).map(PaymentMapper::toDomain);
     }
 
     @Override
     @Transactional
     public boolean updateIfVersionMatches(Payment payment, int expectedVersion) {
-        Query update = em.createQuery(
-                "update PaymentEntity p set "
-                        + "p.merchantId = :merchantId, "
-                        + "p.description = :description, "
-                        + "p.amountCents = :amountCents, "
-                        + "p.status = :status, "
-                        + "p.expiresAt = :expiresAt, "
-                        + "p.endToEndId = :endToEndId, "
-                        + "p.feeCents = :feeCents, "
-                        + "p.netCents = :netCents, "
-                        + "p.lateConfirmation = :lateConfirmation, "
-                        + "p.refundedCents = :refundedCents, "
-                        + "p.createdAt = :createdAt, "
-                        + "p.confirmedAt = :confirmedAt, "
-                        + "p.version = :newVersion "
-                        + "where p.txid = :txid and p.version = :expectedVersion");
-        int updatedRows = update
-                .setParameter("merchantId", payment.merchantId())
+        Query update = em.createQuery("update PaymentEntity p set "
+                + "p.merchantId = :merchantId, "
+                + "p.description = :description, "
+                + "p.amountCents = :amountCents, "
+                + "p.status = :status, "
+                + "p.expiresAt = :expiresAt, "
+                + "p.endToEndId = :endToEndId, "
+                + "p.feeCents = :feeCents, "
+                + "p.netCents = :netCents, "
+                + "p.lateConfirmation = :lateConfirmation, "
+                + "p.refundedCents = :refundedCents, "
+                + "p.createdAt = :createdAt, "
+                + "p.confirmedAt = :confirmedAt, "
+                + "p.version = :newVersion "
+                + "where p.txid = :txid and p.version = :expectedVersion");
+        int updatedRows = update.setParameter("merchantId", payment.merchantId())
                 .setParameter("description", payment.description())
                 .setParameter("amountCents", payment.amount().cents())
                 .setParameter("status", payment.status().name())
                 .setParameter("expiresAt", payment.expiresAt())
-                .setParameter("endToEndId", payment.endToEndId() == null ? null : payment.endToEndId().value())
-                .setParameter("feeCents", payment.fee() == null ? null : payment.fee().cents())
-                .setParameter("netCents", payment.net() == null ? null : payment.net().cents())
+                .setParameter(
+                        "endToEndId",
+                        payment.endToEndId() == null
+                                ? null
+                                : payment.endToEndId().value())
+                .setParameter(
+                        "feeCents", payment.fee() == null ? null : payment.fee().cents())
+                .setParameter(
+                        "netCents", payment.net() == null ? null : payment.net().cents())
                 .setParameter("lateConfirmation", payment.lateConfirmation())
                 .setParameter("refundedCents", payment.refunded().cents())
                 .setParameter("createdAt", payment.createdAt())
@@ -92,8 +95,7 @@ public class PaymentJpaAdapter implements PaymentRepository {
     }
 
     private Optional<PaymentEntity> findEntityByTxid(String txid) {
-        return em.createQuery(
-                        "select p from PaymentEntity p where p.txid = :txid", PaymentEntity.class)
+        return em.createQuery("select p from PaymentEntity p where p.txid = :txid", PaymentEntity.class)
                 .setParameter("txid", txid)
                 .getResultStream()
                 .findFirst();
@@ -105,7 +107,8 @@ public class PaymentJpaAdapter implements PaymentRepository {
         return em.createQuery(
                         "select p from PaymentEntity p "
                                 + "where p.status = 'PENDING' and p.expiresAt < :now "
-                                + "order by p.expiresAt", PaymentEntity.class)
+                                + "order by p.expiresAt",
+                        PaymentEntity.class)
                 .setParameter("now", now)
                 .setMaxResults(limit)
                 .getResultStream()
@@ -116,13 +119,10 @@ public class PaymentJpaAdapter implements PaymentRepository {
     @Override
     @Transactional
     public boolean expireIfDue(Payment payment, java.time.Instant now) {
-        Query update = em.createQuery(
-                "update PaymentEntity p set p.status = 'EXPIRED', p.version = p.version + 1 "
-                        + "where p.id = :id and p.status = 'PENDING' and p.expiresAt < :now");
-        int updatedRows = update
-                .setParameter("id", payment.id())
-                .setParameter("now", now)
-                .executeUpdate();
+        Query update = em.createQuery("update PaymentEntity p set p.status = 'EXPIRED', p.version = p.version + 1 "
+                + "where p.id = :id and p.status = 'PENDING' and p.expiresAt < :now");
+        int updatedRows =
+                update.setParameter("id", payment.id()).setParameter("now", now).executeUpdate();
         if (updatedRows == 0) {
             return false;
         }
@@ -137,7 +137,8 @@ public class PaymentJpaAdapter implements PaymentRepository {
                         "select p from PaymentEntity p "
                                 + "where p.status in ('PENDING','EXPIRED') and p.nextReconcileAt is not null "
                                 + "and p.nextReconcileAt <= :now "
-                                + "order by p.nextReconcileAt", PaymentEntity.class)
+                                + "order by p.nextReconcileAt",
+                        PaymentEntity.class)
                 .setParameter("now", now)
                 .setMaxResults(limit)
                 .getResultStream()
@@ -147,15 +148,14 @@ public class PaymentJpaAdapter implements PaymentRepository {
 
     @Override
     @Transactional
-    public boolean updateReconciliationSchedule(Payment payment, java.time.Instant nextReconcileAt, int reconcileAttempts, int expectedVersion) {
-        Query update = em.createQuery(
-                "update PaymentEntity p set "
-                        + "p.nextReconcileAt = :nextReconcileAt, "
-                        + "p.reconcileAttempts = :reconcileAttempts, "
-                        + "p.version = :newVersion "
-                        + "where p.id = :id and p.version = :expectedVersion");
-        int updatedRows = update
-                .setParameter("nextReconcileAt", nextReconcileAt)
+    public boolean updateReconciliationSchedule(
+            Payment payment, java.time.Instant nextReconcileAt, int reconcileAttempts, int expectedVersion) {
+        Query update = em.createQuery("update PaymentEntity p set "
+                + "p.nextReconcileAt = :nextReconcileAt, "
+                + "p.reconcileAttempts = :reconcileAttempts, "
+                + "p.version = :newVersion "
+                + "where p.id = :id and p.version = :expectedVersion");
+        int updatedRows = update.setParameter("nextReconcileAt", nextReconcileAt)
                 .setParameter("reconcileAttempts", reconcileAttempts)
                 .setParameter("newVersion", expectedVersion + 1)
                 .setParameter("id", payment.id())
@@ -172,16 +172,15 @@ public class PaymentJpaAdapter implements PaymentRepository {
 
     @Override
     @Transactional
-    public boolean clearReconciliationScheduleIfPastWindow(Payment payment, java.time.Instant windowEnd, int expectedVersion) {
-        Query update = em.createQuery(
-                "update PaymentEntity p set "
-                        + "p.nextReconcileAt = NULL, "
-                        + "p.version = p.version + 1 "
-                        + "where p.id = :id and p.version = :expectedVersion "
-                        + "and p.status in ('PENDING','EXPIRED') "
-                        + "and p.nextReconcileAt is not null");
-        int updatedRows = update
-                .setParameter("id", payment.id())
+    public boolean clearReconciliationScheduleIfPastWindow(
+            Payment payment, java.time.Instant windowEnd, int expectedVersion) {
+        Query update = em.createQuery("update PaymentEntity p set "
+                + "p.nextReconcileAt = NULL, "
+                + "p.version = p.version + 1 "
+                + "where p.id = :id and p.version = :expectedVersion "
+                + "and p.status in ('PENDING','EXPIRED') "
+                + "and p.nextReconcileAt is not null");
+        int updatedRows = update.setParameter("id", payment.id())
                 .setParameter("expectedVersion", expectedVersion)
                 .executeUpdate();
         if (updatedRows == 0) {
@@ -194,19 +193,16 @@ public class PaymentJpaAdapter implements PaymentRepository {
     @Override
     @Transactional
     public Optional<Payment> findByTxidForUpdate(String txid) {
-        var query = em.createQuery(
-                "select p from PaymentEntity p where p.txid = :txid", PaymentEntity.class)
+        var query = em.createQuery("select p from PaymentEntity p where p.txid = :txid", PaymentEntity.class)
                 .setParameter("txid", txid)
                 .setLockMode(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
-        return query.getResultStream()
-                .findFirst()
-                .map(PaymentMapper::toDomain);
+        return query.getResultStream().findFirst().map(PaymentMapper::toDomain);
     }
 
     @Override
     @Transactional
-    public void insertRefund(UUID paymentId, String txid, long amountCents, long feeReversalCents,
-            long netCents, String requestId) {
+    public void insertRefund(
+            UUID paymentId, String txid, long amountCents, long feeReversalCents, long netCents, String requestId) {
         em.createNativeQuery("""
                 INSERT INTO payments.refunds (id, payment_id, txid, amount_cents,
                     fee_reversal_cents, net_cents, request_id, created_at)

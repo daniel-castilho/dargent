@@ -30,7 +30,35 @@
   <properties>
     <java.version>25</java.version>
     <archunit.version>1.4.1</archunit.version>
+    <!-- E13 S1: OWASP Dependency-Check flagged tomcat-embed-core 11.0.24 (Boot 4.1.1 management)
+         with 9 CVEs CVSS 7.5-9.8 (CVE-2026-65183/65905/65927/66422/68763/68525/68569/65182/65637).
+         Bump to the latest stable 11.0.x via the Boot property — the gate's finding gets a
+         dependency fix, never a suppression. -->
+    <tomcat.version>11.0.25</tomcat.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <!-- 4.9.8.5, not 4.10.x: the 4.10 line requires Maven >= 3.8.9; the wrapper is pinned to
+         3.8.7 (the version CI ran since M0 — wrapper bump is a separate owner decision). -->
+    <spotbugs.version>4.9.8.5</spotbugs.version>
+    <spotless.version>3.10.2</spotless.version>
+    <jacoco.version>0.8.15</jacoco.version>
+    <dependency-check.version>13.0.0</dependency-check.version>
+    <!-- Per-module LINE coverage floors (owner-fixed, testing-playbook §5). The parent is pom
+         packaging (no classes): jacoco.skip=true here is inherited as the DEFAULT-OFF, and every
+         floored module opts back in explicitly with jacoco.skip=false + its floor number — a
+         module that forgets its floor gets NO silent pass, it gets no agent/check at all and
+         shows up in review (fail-visible rather than fail-closed-on-typo). -->
+    <jacoco.skip>true</jacoco.skip>
+    <!-- Aggregated exec used by the module-floor checks (apps/api merge-execution writes it).
+         Default points at the module's own exec so a lone `jacoco:check` still works locally;
+         the CI step overrides it per module to the merged file. -->
+    <jacoco.check.data>${project.build.directory}/jacoco.exec</jacoco.check.data>
+    <!-- Floor-check execution is default-SKIP (verify must not measure module-local data);
+         scripts/check-coverage.sh re-enables it per module against the aggregate exec. -->
+    <jacoco.check.skip>true</jacoco.check.skip>
+    <!-- Parser-satisfier only: the parent never runs the check (skip above); floored modules
+         override BOTH properties. A module that sets skip=false without a floor would get
+         minimum=1.00 — an immediate, loud failure rather than a silent gap. -->
+    <jacoco.line.floor>1.00</jacoco.line.floor>
   </properties>
 
   <dependencyManagement>
@@ -116,6 +144,134 @@
         <configuration>
           <failIfNoSpecifiedTests>false</failIfNoSpecifiedTests>
         </configuration>
+      </plugin>
+      <!-- JaCoCo coverage gate (per-module floors, combined unit+IT data) — E13 S1.
+           Floors are owner-fixed (testing-playbook §5): payments 70 / ledger 75 / shared 80 /
+           notifications 50 / api 40, LINE ratio, measured on combined unit+IT execution data.
+           psp-simulator has no floor (not in the initial owner-fixed set).
+           lessons.md #8: the check MUST run after the IT step — failsafe verify runs before
+           jacoco:check in the default lifecycle binding below, so the .exec data is complete. -->
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <version>${jacoco.version}</version>
+        <executions>
+          <execution>
+            <id>jacoco-prepare-agent</id>
+            <goals>
+              <goal>prepare-agent</goal>
+            </goals>
+          </execution>
+          <execution>
+            <id>jacoco-report</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>report</goal>
+            </goals>
+          </execution>
+          <!-- The COVERAGE GATE is a separate pipeline step (design §11.1: `./mvnw jacoco:check`
+               AFTER the IT step): scripts/check-coverage.sh invokes this execution per module with
+               -Djacoco.check.skip=false against the AGGREGATED exec — hexagonal ITs live in the
+               boot app and their coverage of module adapters must count toward the owning
+               module's floor (playbook §5 "combined unit+IT data"). Default-skip keeps `verify`
+               from measuring the module's OWN exec only (payments 0.69 — false red: the ITs that
+               cover the adapters run in apps/api). -->
+          <execution>
+            <id>jacoco-check</id>
+            <goals>
+              <goal>check</goal>
+            </goals>
+            <configuration>
+              <skip>${jacoco.check.skip}</skip>
+              <dataFile>${jacoco.check.data}</dataFile>
+              <rules>
+                <rule>
+                  <element>BUNDLE</element>
+                  <limits>
+                    <limit>
+                      <counter>LINE</counter>
+                      <value>COVEREDRATIO</value>
+                      <minimum>${jacoco.line.floor}</minimum>
+                    </limit>
+                  </limits>
+                </rule>
+              </rules>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <!-- E13 S1 — OWASP Dependency-Check (design §11.1). Gate: fail CVSS >= 7. Suppressions carry
+           rationale + review date per entry (P4). Invoked as a CI step (not bound to the
+           lifecycle): `./mvnw dependency-check:check` with the NVD data dir cached between runs;
+           keyless mode with documented retry — a tool error MUST fail the job (P2, never
+           silent-pass). -->
+      <plugin>
+        <groupId>org.owasp</groupId>
+        <artifactId>dependency-check-maven</artifactId>
+        <version>${dependency-check.version}</version>
+        <configuration>
+          <failBuildOnCVSS>7</failBuildOnCVSS>
+          <suppressionFile>${maven.multiModuleProjectDirectory}/owasp-suppressions.xml</suppressionFile>
+          <!-- NVD API key rides the repository secret NVD_API_KEY (CI passes it as env — same
+               pattern as the other local systems). Without a key the sync degrades to slow
+               throttled downloads but still WORKS; a tool error still fails the build (P2). -->
+          <dataDirectory>${user.home}/.m2/dependency-check-data</dataDirectory>
+          <nvdApiKey>${env.NVD_API_KEY}</nvdApiKey>
+          <nvdApiDelay>6000</nvdApiDelay>
+          <!-- Retention keeps the cache bounded; formats give CI the summary + the full evidence. -->
+          <retentionJsHours>24</retentionJsHours>
+          <formats>
+            <format>HTML</format>
+            <format>CSV</format>
+          </formats>
+        </configuration>
+      </plugin>
+      <!-- E13 S0 — Spotless format gate (checkstyle-style determinism via palantir-java-format).
+           The ONE normalize commit landed before this gate went live (owner-approved). -->
+      <plugin>
+        <groupId>com.diffplug.spotless</groupId>
+        <artifactId>spotless-maven-plugin</artifactId>
+        <version>${spotless.version}</version>
+        <configuration>
+          <java>
+            <palantirJavaFormat/>
+            <removeUnusedImports/>
+            <importOrder/>
+            <trimTrailingWhitespace/>
+            <endWithNewline/>
+          </java>
+        </configuration>
+        <executions>
+          <execution>
+            <id>spotless-check</id>
+            <goals>
+              <goal>check</goal>
+            </goals>
+            <phase>validate</phase>
+          </execution>
+        </executions>
+      </plugin>
+      <!-- E13 S0 — SpotBugs static-analysis gate (design §11.1): effort max, fail on Medium+.
+           Exclusions carry a rationale per entry (P4). Runs on all production modules;
+           psp-simulator included (it is the outside world, but still our code). -->
+      <plugin>
+        <groupId>com.github.spotbugs</groupId>
+        <artifactId>spotbugs-maven-plugin</artifactId>
+        <version>${spotbugs.version}</version>
+        <configuration>
+          <effort>Max</effort>
+          <threshold>Medium</threshold>
+          <xmlOutput>true</xmlOutput>
+          <excludeFilterFile>${maven.multiModuleProjectDirectory}/spotbugs-exclude.xml</excludeFilterFile>
+        </configuration>
+        <executions>
+          <execution>
+            <id>spotbugs-gate</id>
+            <goals>
+              <goal>check</goal>
+            </goals>
+          </execution>
+        </executions>
       </plugin>
     </plugins>
   </build>

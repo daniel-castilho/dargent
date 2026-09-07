@@ -29,12 +29,14 @@ class MoneyTest {
 
     @Test
     void refuses_cross_currency_arithmetic() {
-        assertThatIllegalArgumentException().isThrownBy(() -> Money.of(100, "BRL").plus(Money.of(100, "USD")));
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> Money.of(100, "BRL").plus(Money.of(100, "USD")));
     }
 
     @Test
     void subtraction_cannot_go_negative() {
-        assertThatIllegalArgumentException().isThrownBy(() -> Money.of(100, "BRL").minus(Money.of(101, "BRL")));
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> Money.of(100, "BRL").minus(Money.of(101, "BRL")));
     }
 
     @Test
@@ -45,6 +47,7 @@ class MoneyTest {
     @Test
     void compares_only_within_the_same_currency() {
         assertThat(Money.of(100, "BRL")).isGreaterThan(Money.of(99, "BRL"));
-        assertThatIllegalArgumentException().isThrownBy(() -> Money.of(100, "BRL").compareTo(Money.of(100, "USD")));
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> Money.of(100, "BRL").compareTo(Money.of(100, "USD")));
     }
 }

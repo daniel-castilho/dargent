@@ -5,6 +5,39 @@ versioning: semantic, cut from annotated git tags (see [release-runbook](docs/re
 
 ## [Unreleased]
 
+### Added — E13 Quality & Security Gates, Block 1 (S0–S3) (2026-09-07)
+
+- **Maven wrapper**: `./mvnw` 3.8.7 (exact match with the system Maven; CI migrated to it in the
+  same commit, `d4f3d7d`). Closes the design §11.1/runbook `./mvnw` fidelity gap.
+- **S0 — SpotBugs 4.9.8.5 (`max`/Medium) + Spotless 3.10.2**, wired into `./mvnw verify`.
+  One pre-gate normalize commit (`f80663f`, semantically empty — formatting only, 229 `.java`
+  files); real findings fixed, not suppressed: 6× `DM_DEFAULT_ENCODING` → explicit UTF-8; 4
+  exclusion classes with rationale + review date (EI_EXPOSE_REP*, DLS — 4.9.8.5 Java-25 record
+  false positives, DMI_RANDOM — SecureRandom per key-gen, HRS — X-Request-Id echoed only after
+  `^[A-Za-z0-9-]{8,64}$`).
+- **S1 — JaCoCo per-module LINE floors** on aggregate (unit+IT) exec: payments **0.70** /
+  ledger **0.75** / shared **0.80** / notifications **0.50** / api **0.40** (owner-fixed,
+  playbook §5); `scripts/check-coverage.sh` reads floors from the module poms; measured
+  0.864 / 0.867 / **1.000** / 0.888 / 0.785. The gate exposed a real hole: `EventEnvelope` had
+  zero coverage (shared 0.66 < 0.80) → `EventEnvelopeTest` closes it. Bite-proof: floor 0.99
+  goes red (`COVERAGE FAIL payments floor=0.99 measured=0.86`, rc=1), revert → green.
+- **S1 — OWASP Dependency-Check 13.0.0**, fail CVSS ≥ 7, keyed NVD (`NVD_API_KEY` repo secret,
+  same pattern as the owner's other systems), cached NVD data (delta syncs after the first run
+  — measured 90min cold vs 20s warm). **Real finding, real bump**: `tomcat-embed-core 11.0.24`
+  (Boot 4.1.1) with 9 CVEs CVSS 7.5–9.8 → `<tomcat.version>11.0.25</tomcat.version>`.
+- **S2 — Trivy 2-pass** on both images: pass 1 SARIF (advisory, uploaded), pass 2
+  `HIGH,CRITICAL` hard gate. **First real image finding caught on run**: `libcrypto3/libssl3
+  3.5.7-r0` (CVE-2026-14456 HIGH) in the alpine runtime → `apk upgrade --no-cache` at image
+  build → `3.5.8-r0` locally verified. **SBOM**: CycloneDX per image →
+  `sbom-<image>-<sha>.json` workflow artifacts.
+- **S3 — CodeQL** (`java`, `security-extended`, push/PR main, action SHA-pinned) + **Dependency
+  Review** PR gate (fail on high, SHA-pinned v5.0.0; repo Dependency graph enabled).
+- **Latent CI defect found by the gates**: `check-coverage.sh` used `rg` (absent on
+  ubuntu-latest → exit 127) → rewritten to grep/sed only; OWASP ran `dependency-check:check`
+  per module (could not resolve sibling SNAPSHOTs → aggregate goal instead).
+- **Infra**: images' runtime now pulls Alpine security fixes at build; dependency graphs,
+  security events, and PR checks configured.
+
 ### Added — E12 Deploy & Runtime Smoke, Block 2 (S4–S6) (2026-09-06)
 
 - **N8 — daily ledger proof**: `proof-daily` CI job (cron 03:00 UTC + `workflow_dispatch`) boots the

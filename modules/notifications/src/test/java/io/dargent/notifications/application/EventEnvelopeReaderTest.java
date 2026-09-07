@@ -1,11 +1,11 @@
 package io.dargent.notifications.application;
 
-import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import java.util.UUID;
 import java.time.Instant;
+import java.util.UUID;
+import org.junit.jupiter.api.Test;
 
 class EventEnvelopeReaderTest {
 
@@ -74,8 +74,7 @@ class EventEnvelopeReaderTest {
                 }
                 """;
 
-        assertThatThrownBy(() -> reader.read(raw))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> reader.read(raw)).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

@@ -13,7 +13,6 @@ import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -29,8 +28,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  * never races Flyway at startup (BD-18).
  */
 @SpringBootTest(
-    classes = DevApiKeyProvisionerTest.TestConfig.class,
-    webEnvironment = SpringBootTest.WebEnvironment.NONE)
+        classes = DevApiKeyProvisionerTest.TestConfig.class,
+        webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @Testcontainers
 class DevApiKeyProvisionerTest {
 
@@ -91,8 +90,7 @@ class DevApiKeyProvisionerTest {
                     .locations(
                             "classpath:db/migration/payments",
                             "classpath:db/migration/ledger",
-                            "classpath:db/migration/notifications"
-                    )
+                            "classpath:db/migration/notifications")
                     .baselineOnMigrate(true)
                     .load();
             flyway.migrate();
@@ -121,17 +119,16 @@ class DevApiKeyProvisionerTest {
             UUID DEV_KEY_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
             UUID DEV_MERCHANT_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
-            jdbc.sql(
-                            """
+            jdbc.sql("""
                             insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at)
                             values (:id, :merchant, 'dev-key', :prefix, :hash, now(), null)
                             on conflict (key_hash) do update set revoked_at = null
                             """)
-                            .param("id", DEV_KEY_ID)
-                            .param("merchant", DEV_MERCHANT_ID)
-                            .param("prefix", prefix)
-                            .param("hash", hash)
-                            .update();
+                    .param("id", DEV_KEY_ID)
+                    .param("merchant", DEV_MERCHANT_ID)
+                    .param("prefix", prefix)
+                    .param("hash", hash)
+                    .update();
         }
     }
 }

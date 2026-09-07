@@ -25,20 +25,19 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * {@code management.server.port} from {@code DARGENT_MANAGEMENT_PORT} (default 9090).
  */
 @SpringBootTest(
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    classes = DargentApiApplication.class,
-    properties = {
-        "spring.profiles.active=prod",
-        "management.server.port=9090",
-        "DARGENT_DB_PASSWORD=prod-test-password-that-is-at-least-32-chars-long",
-        "AWS_ACCESS_KEY_ID=test-access-key",
-        "AWS_SECRET_ACCESS_KEY=test-secret-key",
-        "PSP_BASE_URL=http://psp-simulator:8090",
-        "PSP_WEBHOOK_SECRET=prod-test-webhook-secret-that-is-long-enough",
-        "dargent.psp.webhook-secret=prod-test-webhook-secret-that-is-long-enough",
-        "dargent.relay.enabled=false"
-    }
-)
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        classes = DargentApiApplication.class,
+        properties = {
+            "spring.profiles.active=prod",
+            "management.server.port=9090",
+            "DARGENT_DB_PASSWORD=prod-test-password-that-is-at-least-32-chars-long",
+            "AWS_ACCESS_KEY_ID=test-access-key",
+            "AWS_SECRET_ACCESS_KEY=test-secret-key",
+            "PSP_BASE_URL=http://psp-simulator:8090",
+            "PSP_WEBHOOK_SECRET=prod-test-webhook-secret-that-is-long-enough",
+            "dargent.psp.webhook-secret=prod-test-webhook-secret-that-is-long-enough",
+            "dargent.relay.enabled=false"
+        })
 @Testcontainers
 class ManagementPortIT {
 
@@ -55,9 +54,8 @@ class ManagementPortIT {
     @Autowired
     Environment env;
 
-    private final HttpClient http = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(5))
-            .build();
+    private final HttpClient http =
+            HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
 
     @Test
     void mainPort_actuatorEndpoints_areDenied() throws Exception {
@@ -67,7 +65,8 @@ class ManagementPortIT {
         // When: requesting actuator/health on main port
         var healthReq = HttpRequest.newBuilder()
                 .uri(URI.create(baseUrl + "/actuator/health"))
-                .GET().build();
+                .GET()
+                .build();
         var healthResp = http.send(healthReq, HttpResponse.BodyHandlers.ofString());
 
         // Then: actuator on main port is denied (exact status from denyAll + auth filter chain)
@@ -79,7 +78,8 @@ class ManagementPortIT {
         // When: requesting actuator/prometheus on main port
         var promReq = HttpRequest.newBuilder()
                 .uri(URI.create(baseUrl + "/actuator/prometheus"))
-                .GET().build();
+                .GET()
+                .build();
         var promResp = http.send(promReq, HttpResponse.BodyHandlers.ofString());
 
         // Then: prometheus on main port is also denied
@@ -90,7 +90,8 @@ class ManagementPortIT {
         // When: requesting actuator/info on main port
         var infoReq = HttpRequest.newBuilder()
                 .uri(URI.create(baseUrl + "/actuator/info"))
-                .GET().build();
+                .GET()
+                .build();
         var infoResp = http.send(infoReq, HttpResponse.BodyHandlers.ofString());
 
         // Then: info on main port is also denied
@@ -108,7 +109,8 @@ class ManagementPortIT {
         // When: requesting health on management port
         var healthReq = HttpRequest.newBuilder()
                 .uri(URI.create(mgmtBase + "/actuator/health"))
-                .GET().build();
+                .GET()
+                .build();
         var healthResp = http.send(healthReq, HttpResponse.BodyHandlers.ofString());
 
         // Then: health is 200 UP with no details (show-details: never)
@@ -120,7 +122,8 @@ class ManagementPortIT {
         // When: requesting prometheus on management port
         var promReq = HttpRequest.newBuilder()
                 .uri(URI.create(mgmtBase + "/actuator/prometheus"))
-                .GET().build();
+                .GET()
+                .build();
         var promResp = http.send(promReq, HttpResponse.BodyHandlers.ofString());
 
         // Then: prometheus returns exposition text (registry live)
@@ -136,7 +139,8 @@ class ManagementPortIT {
 
         var infoReq = HttpRequest.newBuilder()
                 .uri(URI.create(mgmtBase + "/actuator/info"))
-                .GET().build();
+                .GET()
+                .build();
         var infoResp = http.send(infoReq, HttpResponse.BodyHandlers.ofString());
 
         assertThat(infoResp.statusCode()).isEqualTo(200);

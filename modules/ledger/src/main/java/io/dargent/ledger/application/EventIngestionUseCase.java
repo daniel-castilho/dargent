@@ -1,22 +1,18 @@
 package io.dargent.ledger.application;
 
-import io.dargent.ledger.application.EventEnvelopeReader;
 import io.dargent.ledger.domain.model.EntryDirection;
 import io.dargent.ledger.domain.model.JournalEntry;
 import io.dargent.ledger.domain.model.Posting;
 import io.dargent.ledger.domain.port.out.LedgerStore;
 import io.dargent.shared.events.EventEnvelope;
+import java.time.Clock;
+import java.util.List;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.support.TransactionTemplate;
-
-import java.time.Clock;
-import java.time.Instant;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
 
 /**
  * Event ingestion use case (spec §5.3, §5.4, §5.7).
@@ -32,8 +28,12 @@ public final class EventIngestionUseCase {
     private final TransactionTemplate txTemplate;
     private final Clock clock;
 
-    public EventIngestionUseCase(EventEnvelopeReader reader, LedgerStore store,
-            JdbcClient jdbc, TransactionTemplate txTemplate, Clock clock) {
+    public EventIngestionUseCase(
+            EventEnvelopeReader reader,
+            LedgerStore store,
+            JdbcClient jdbc,
+            TransactionTemplate txTemplate,
+            Clock clock) {
         this.reader = reader;
         this.store = store;
         this.jdbc = jdbc;
@@ -100,8 +100,13 @@ public final class EventIngestionUseCase {
 
         // Single idempotent insert; a duplicate (event_id already present) is an at-least-once retry.
         boolean inserted = store.insertEventIfAbsent(
-                envelope.eventId(), envelope.type(), envelope.aggregateId(),
-                envelope.merchantId(), envelope.payload(), status, note);
+                envelope.eventId(),
+                envelope.type(),
+                envelope.aggregateId(),
+                envelope.merchantId(),
+                envelope.payload(),
+                status,
+                note);
 
         if (!inserted) {
             // Duplicate delivery — re-read stored status and branch
@@ -130,9 +135,7 @@ public final class EventIngestionUseCase {
                             UPDATE ledger.events
                             SET status = 'POSTED', note = 'Republished — already journaled'
                             WHERE event_id = ?
-                            """)
-                            .param(finalEnvelope.eventId())
-                            .update();
+                            """).param(finalEnvelope.eventId()).update();
                     return true;
                 }
 
@@ -141,21 +144,32 @@ public final class EventIngestionUseCase {
                         UPDATE ledger.events
                         SET status = 'POSTED', note = 'Posted successfully'
                         WHERE event_id = ?
-                        """)
-                        .param(finalEnvelope.eventId())
-                        .update();
+                        """).param(finalEnvelope.eventId()).update();
 
                 // Build postings (spec §5.3)
                 UUID entryId = UUID.randomUUID();
                 var postings = List.of(
-                        new Posting(UUID.randomUUID(), entryId, "payments:processing",
-                                EntryDirection.DEBIT, finalPaymentPayload.amountCents(), finalClock.instant()),
-                        new Posting(UUID.randomUUID(), entryId, "fees:revenue",
-                                EntryDirection.CREDIT, finalPaymentPayload.feeCents(), finalClock.instant()),
-                        new Posting(UUID.randomUUID(), entryId,
+                        new Posting(
+                                UUID.randomUUID(),
+                                entryId,
+                                "payments:processing",
+                                EntryDirection.DEBIT,
+                                finalPaymentPayload.amountCents(),
+                                finalClock.instant()),
+                        new Posting(
+                                UUID.randomUUID(),
+                                entryId,
+                                "fees:revenue",
+                                EntryDirection.CREDIT,
+                                finalPaymentPayload.feeCents(),
+                                finalClock.instant()),
+                        new Posting(
+                                UUID.randomUUID(),
+                                entryId,
                                 "merchant:" + finalPaymentPayload.merchantId() + ":available",
-                                EntryDirection.CREDIT, finalPaymentPayload.netCents(), finalClock.instant())
-                );
+                                EntryDirection.CREDIT,
+                                finalPaymentPayload.netCents(),
+                                finalClock.instant()));
 
                 var entry = new JournalEntry(
                         entryId,
@@ -164,8 +178,7 @@ public final class EventIngestionUseCase {
                         UUID.fromString(finalPaymentPayload.merchantId()),
                         "Payment confirmed: " + finalPaymentPayload.txid(),
                         finalEnvelope.occurredAt(),
-                        postings
-                );
+                        postings);
 
                 // Write journal + postings + balances
                 store.postJournal(entry);
@@ -215,7 +228,8 @@ public final class EventIngestionUseCase {
      * Belt-and-suspenders: if journal insert still collides (UNIQUE on journal_entries.event_id),
      * re-read status and ack as already-posted.
      */
-    private boolean resumePosting(EventEnvelope envelope,
+    private boolean resumePosting(
+            EventEnvelope envelope,
             EventEnvelopeReader.PaymentPayload paymentPayload,
             EventEnvelopeReader.RefundPayload refundPayload) {
         // payment.confirmed resume
@@ -235,14 +249,27 @@ public final class EventIngestionUseCase {
                     // Build postings (spec §5.3)
                     UUID entryId = UUID.randomUUID();
                     var postings = List.of(
-                            new Posting(UUID.randomUUID(), entryId, "payments:processing",
-                                    EntryDirection.DEBIT, finalPaymentPayload.amountCents(), finalClock.instant()),
-                            new Posting(UUID.randomUUID(), entryId, "fees:revenue",
-                                    EntryDirection.CREDIT, finalPaymentPayload.feeCents(), finalClock.instant()),
-                            new Posting(UUID.randomUUID(), entryId,
+                            new Posting(
+                                    UUID.randomUUID(),
+                                    entryId,
+                                    "payments:processing",
+                                    EntryDirection.DEBIT,
+                                    finalPaymentPayload.amountCents(),
+                                    finalClock.instant()),
+                            new Posting(
+                                    UUID.randomUUID(),
+                                    entryId,
+                                    "fees:revenue",
+                                    EntryDirection.CREDIT,
+                                    finalPaymentPayload.feeCents(),
+                                    finalClock.instant()),
+                            new Posting(
+                                    UUID.randomUUID(),
+                                    entryId,
                                     "merchant:" + finalPaymentPayload.merchantId() + ":available",
-                                    EntryDirection.CREDIT, finalPaymentPayload.netCents(), finalClock.instant())
-                    );
+                                    EntryDirection.CREDIT,
+                                    finalPaymentPayload.netCents(),
+                                    finalClock.instant()));
 
                     var entry = new JournalEntry(
                             entryId,
@@ -251,8 +278,7 @@ public final class EventIngestionUseCase {
                             UUID.fromString(finalPaymentPayload.merchantId()),
                             "Payment confirmed: " + finalPaymentPayload.txid(),
                             finalEnvelope.occurredAt(),
-                            postings
-                    );
+                            postings);
 
                     // Write journal + postings + balances
                     store.postJournal(entry);
@@ -261,7 +287,8 @@ public final class EventIngestionUseCase {
                     // Belt-and-suspenders: journal_entries.event_id UNIQUE collision
                     // Re-read status; if POSTED, ack as already-posted; else rethrow
                     String status = store.findEventStatus(finalEnvelope.eventId())
-                            .orElseThrow(() -> new IllegalStateException("Event " + finalEnvelope.eventId() + " vanished"));
+                            .orElseThrow(
+                                    () -> new IllegalStateException("Event " + finalEnvelope.eventId() + " vanished"));
                     if ("POSTED".equals(status)) {
                         return true;
                     }

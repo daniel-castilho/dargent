@@ -10,8 +10,16 @@
     <relativePath>../../pom.xml</relativePath>
   </parent>
 
+  <properties>
+    <!-- E13 S1: owner-fixed LINE coverage floor (shared, testing-playbook §5) — measured on combined unit+IT data. -->
+    <jacoco.line.floor>0.80</jacoco.line.floor>
+    <jacoco.skip>false</jacoco.skip>
+  </properties>
+
+
   <artifactId>dargent-shared</artifactId>
   <name>Dargent Shared</name>
+
   <description>Minimal cross-cutting: Money, event envelope, error contract. Zero business rules (AGENTS.md §2.1).</description>
 
   <!-- Deliberately NO Spring/JPA/Jackson compile dependencies: this module is pure. -->

@@ -10,8 +10,16 @@
     <relativePath>../../pom.xml</relativePath>
   </parent>
 
+  <properties>
+    <!-- E13 S1: owner-fixed LINE coverage floor (payments, testing-playbook §5) — measured on combined unit+IT data. -->
+    <jacoco.line.floor>0.70</jacoco.line.floor>
+    <jacoco.skip>false</jacoco.skip>
+  </properties>
+
+
   <artifactId>dargent-payments</artifactId>
   <name>Dargent Payments</name>
+
   <description>Payment lifecycle, idempotency, outbox, webhook intake, reconciliation, refunds (design.md §3.2).</description>
 
   <dependencies>

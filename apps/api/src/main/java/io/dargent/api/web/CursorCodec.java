@@ -1,5 +1,6 @@
 package io.dargent.api.web;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Base64;
 
@@ -13,13 +14,13 @@ public final class CursorCodec {
 
     public static String encode(String txid, Instant createdAt) {
         String raw = txid + "|" + createdAt.toEpochMilli() * 1000; // micros
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(raw.getBytes());
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(raw.getBytes(StandardCharsets.UTF_8));
     }
 
     public static Decoded decode(String cursor) {
         String decoded;
         try {
-            decoded = new String(Base64.getUrlDecoder().decode(cursor));
+            decoded = new String(Base64.getUrlDecoder().decode(cursor), StandardCharsets.UTF_8);
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException("Invalid cursor encoding", e);
         }

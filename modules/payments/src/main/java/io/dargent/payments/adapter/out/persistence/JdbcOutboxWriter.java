@@ -2,7 +2,6 @@ package io.dargent.payments.adapter.out.persistence;
 
 import io.dargent.payments.domain.model.OutboxId;
 import io.dargent.payments.domain.port.out.OutboxWriter;
-import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 

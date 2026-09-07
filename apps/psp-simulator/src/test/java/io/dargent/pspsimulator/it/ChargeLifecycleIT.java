@@ -1,6 +1,7 @@
 package io.dargent.pspsimulator.it;
 
-import java.time.Duration;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 import io.dargent.pspsimulator.charge.CreateChargeRequest;
 import io.dargent.pspsimulator.charge.CreateChargeResponse;
@@ -8,20 +9,16 @@ import io.dargent.pspsimulator.charge.GetChargeResponse;
 import io.dargent.pspsimulator.charge.PayChargeResponse;
 import io.dargent.pspsimulator.webhook.TestWebhookReceiver;
 import io.dargent.pspsimulator.webhook.WebhookSigner;
+import java.time.Duration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.awaitility.Awaitility.await;
 
 /**
  * The one full-stack lifecycle proof (spec §7): POST create → GET detail → pay → the real dispatcher
@@ -57,10 +54,10 @@ class ChargeLifecycleIT {
         String callbackUrl = "http://localhost:" + port + "/test-receiver/webhooks/psp";
         long amount = 12_345L;
 
-        CreateChargeResponse created = client.post().uri("/cobs")
+        CreateChargeResponse created = client.post()
+                .uri("/cobs")
                 .contentType(MediaType.APPLICATION_JSON)
-                .body(new CreateChargeRequest(txid, amount,
-                        "2030-01-01T00:00:00Z", callbackUrl, "E2 lifecycle IT"))
+                .body(new CreateChargeRequest(txid, amount, "2030-01-01T00:00:00Z", callbackUrl, "E2 lifecycle IT"))
                 .retrieve()
                 .onStatus(status -> !status.is2xxSuccessful(), (request, response) -> {
                     throw new AssertionError("create failed: " + response.getStatusCode());
@@ -73,25 +70,25 @@ class ChargeLifecycleIT {
         assertThat(created.receiverName()).isNotBlank();
         assertThat(created.receiverCity()).isNotBlank();
 
-        PayChargeResponse paid = client.post().uri("/cobs/{txid}/payments", txid)
-                .retrieve()
-                .body(PayChargeResponse.class);
+        PayChargeResponse paid =
+                client.post().uri("/cobs/{txid}/payments", txid).retrieve().body(PayChargeResponse.class);
         assertThat(paid).isNotNull();
         assertThat(paid.status()).isEqualTo("PAID");
         String endToEndId = paid.endToEndId();
         assertThat(endToEndId).matches("^E[A-Za-z0-9]{31}$");
         assertThat(paid.paidAt()).isNotBlank();
 
-        GetChargeResponse detail = client.get().uri("/cobs/{txid}", txid)
-                .retrieve()
-                .body(GetChargeResponse.class);
+        GetChargeResponse detail =
+                client.get().uri("/cobs/{txid}", txid).retrieve().body(GetChargeResponse.class);
         assertThat(detail).isNotNull();
         assertThat(detail.status()).isEqualTo("PAID");
         assertThat(detail.endToEndId()).isEqualTo(endToEndId);
 
-        await().atMost(Duration.ofSeconds(5)).pollInterval(Duration.ofMillis(50))
+        await().atMost(Duration.ofSeconds(5))
+                .pollInterval(Duration.ofMillis(50))
                 .until(() -> receiver.captured().size() >= 1);
-        await().during(Duration.ofMillis(350)).pollInterval(Duration.ofMillis(100))
+        await().during(Duration.ofMillis(350))
+                .pollInterval(Duration.ofMillis(100))
                 .atMost(Duration.ofSeconds(3))
                 .until(() -> receiver.captured().size() == 1);
 

@@ -1,12 +1,11 @@
 package io.dargent.pspsimulator.charge;
 
-import java.time.Instant;
-
-import io.dargent.pspsimulator.error.PspApiException;
-import org.junit.jupiter.api.Test;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import io.dargent.pspsimulator.error.PspApiException;
+import java.time.Instant;
+import org.junit.jupiter.api.Test;
 
 class ChargeTest {
 
@@ -39,7 +38,9 @@ class ChargeTest {
     @Test
     void a_paid_charge_stays_paid_forever_even_after_expiry() {
         Charge charge = openCharge(10_000, Instant.parse("2026-08-29T00:30:00Z"));
-        charge.pay(Instant.parse("2026-08-29T00:15:00Z"), "E9040381234567890123456789012345",
+        charge.pay(
+                Instant.parse("2026-08-29T00:15:00Z"),
+                "E9040381234567890123456789012345",
                 "psp-evt-3f2b9c1e-8a4d-4e2a-9b1c-7d5f0a6e8c9d");
         assertThat(charge.statusFor(Instant.parse("2030-01-01T00:00:00Z"))).isEqualTo(ChargeStatus.PAID);
         assertThat(charge.status()).isEqualTo(ChargeStatus.PAID);
@@ -61,11 +62,15 @@ class ChargeTest {
     @Test
     void paying_an_already_paid_charge_is_rejected_with_already_paid() {
         Charge charge = openCharge(10_000, Instant.parse("2026-08-29T00:30:00Z"));
-        charge.pay(Instant.parse("2026-08-29T00:15:00Z"), "E9040381234567890123456789012345",
+        charge.pay(
+                Instant.parse("2026-08-29T00:15:00Z"),
+                "E9040381234567890123456789012345",
                 "psp-evt-3f2b9c1e-8a4d-4e2a-9b1c-7d5f0a6e8c9d");
 
-        assertThatThrownBy(() -> charge.pay(Instant.parse("2026-08-29T00:16:00Z"),
-                "E9xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", "psp-evt-5d1a4b2c-9e8f-4a3b-8c7d-6e5f4a3b2c1d"))
+        assertThatThrownBy(() -> charge.pay(
+                        Instant.parse("2026-08-29T00:16:00Z"),
+                        "E9xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                        "psp-evt-5d1a4b2c-9e8f-4a3b-8c7d-6e5f4a3b2c1d"))
                 .isInstanceOf(PspApiException.class)
                 .satisfies(e -> {
                     PspApiException ex = (PspApiException) e;
@@ -78,8 +83,10 @@ class ChargeTest {
     void paying_an_expired_charge_is_rejected_with_charge_expired() {
         Charge charge = openCharge(10_000, Instant.parse("2026-08-29T00:30:00Z"));
 
-        assertThatThrownBy(() -> charge.pay(Instant.parse("2026-08-29T00:31:00Z"),
-                "E9040381234567890123456789012345", "psp-evt-3f2b9c1e-8a4d-4e2a-9b1c-7d5f0a6e8c9d"))
+        assertThatThrownBy(() -> charge.pay(
+                        Instant.parse("2026-08-29T00:31:00Z"),
+                        "E9040381234567890123456789012345",
+                        "psp-evt-3f2b9c1e-8a4d-4e2a-9b1c-7d5f0a6e8c9d"))
                 .isInstanceOf(PspApiException.class)
                 .satisfies(e -> {
                     PspApiException ex = (PspApiException) e;

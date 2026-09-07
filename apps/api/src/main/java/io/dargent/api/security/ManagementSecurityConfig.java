@@ -27,11 +27,9 @@ public class ManagementSecurityConfig {
 
     @Bean
     public SecurityFilterChain managementFilterChain(HttpSecurity http) throws Exception {
-        http
-                .securityMatcher(new ManagementPortRequestMatcher(managementPort))
+        http.securityMatcher(new ManagementPortRequestMatcher(managementPort))
                 .csrf(csrf -> csrf.disable())
-                .authorizeHttpRequests(auth -> auth
-                        .anyRequest().permitAll());
+                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
         return http.build();
     }
 

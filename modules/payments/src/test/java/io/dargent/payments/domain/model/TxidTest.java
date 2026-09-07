@@ -23,41 +23,33 @@ class TxidTest {
 
     @Test
     void rejects_null() {
-        assertThatThrownBy(() -> new Txid(null))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new Txid(null)).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void rejects_empty() {
-        assertThatThrownBy(() -> new Txid(""))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new Txid("")).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void rejects_blank() {
-        assertThatThrownBy(() -> new Txid(" ".repeat(25)))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new Txid(" ".repeat(25))).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void rejects_24_chars() {
-        assertThatThrownBy(() -> new Txid(VALID.substring(0, 24)))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new Txid(VALID.substring(0, 24))).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void rejects_26_chars() {
-        assertThatThrownBy(() -> new Txid(VALID + "Z"))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new Txid(VALID + "Z")).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void rejects_non_alphanumeric_characters() {
-        assertThatThrownBy(() -> new Txid("8KD4Z9X2Q7W1M5T3R6Y0A1B2-"))
-                .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new Txid("8KD4Z9X2Q7W1M5T3R6Y0A1 B2"))
-                .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new Txid("8KD4Z9X2Q7W1M5T3R6Y0A1B2ç"))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new Txid("8KD4Z9X2Q7W1M5T3R6Y0A1B2-")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new Txid("8KD4Z9X2Q7W1M5T3R6Y0A1 B2")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new Txid("8KD4Z9X2Q7W1M5T3R6Y0A1B2ç")).isInstanceOf(IllegalArgumentException.class);
     }
 }

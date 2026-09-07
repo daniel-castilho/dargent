@@ -1,17 +1,15 @@
 package io.dargent.ledger.it;
 
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import java.sql.*;
+import java.util.UUID;
+import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.*;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
-
-import java.sql.*;
-import javax.sql.DataSource;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * DEBT-5 barrier: DB-level deferred constraint/trigger enforcing journal balance at commit.
@@ -43,10 +41,11 @@ class JournalBalanceDbBarrierIT {
                 .load();
         flyway.migrate();
 
-// Add test-local deferred trigger for journal balance (E5-style inline DDL)
-            try (var conn = dataSource.getConnection(); var stmt = conn.createStatement()) {
-                // Create function to check journal balance
-                stmt.execute("""
+        // Add test-local deferred trigger for journal balance (E5-style inline DDL)
+        try (var conn = dataSource.getConnection();
+                var stmt = conn.createStatement()) {
+            // Create function to check journal balance
+            stmt.execute("""
                     CREATE OR REPLACE FUNCTION ledger.check_journal_balance()
                     RETURNS TRIGGER LANGUAGE plpgsql AS $$
                     DECLARE
@@ -87,17 +86,17 @@ class JournalBalanceDbBarrierIT {
                     $$;
                 """);
 
-                // Deferred constraint trigger on postings - fires at commit
-                stmt.execute("""
+            // Deferred constraint trigger on postings - fires at commit
+            stmt.execute("""
                     DROP TRIGGER IF EXISTS trg_check_journal_balance ON ledger.postings;
                     CREATE CONSTRAINT TRIGGER trg_check_journal_balance
                     AFTER INSERT OR UPDATE ON ledger.postings
                     DEFERRABLE INITIALLY DEFERRED
                     FOR EACH ROW EXECUTE FUNCTION ledger.check_journal_balance();
                 """);
-            } catch (SQLException e) {
-                throw new RuntimeException("Failed to install test-local DB barrier", e);
-            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to install test-local DB barrier", e);
+        }
     }
 
     @AfterAll
@@ -294,17 +293,18 @@ class JournalBalanceDbBarrierIT {
 
             // CHECK constraint fires at INSERT time, not deferred
             assertThatThrownBy(() -> {
-                try (var ps = conn.prepareStatement("""
+                        try (var ps = conn.prepareStatement("""
                         INSERT INTO ledger.postings (id, entry_id, account, direction, amount_cents, created_at)
                         VALUES (?, ?, ?, ?::text, ?, now())""")) {
-                    ps.setObject(1, UUID.randomUUID());
-                    ps.setObject(2, entryId);
-                    ps.setString(3, "account:debit");
-                    ps.setString(4, "DEBIT");
-                    ps.setLong(5, 0); // zero amount - violates existing CHECK
-                    ps.executeUpdate();
-                }
-            }).isInstanceOf(SQLException.class)
+                            ps.setObject(1, UUID.randomUUID());
+                            ps.setObject(2, entryId);
+                            ps.setString(3, "account:debit");
+                            ps.setString(4, "DEBIT");
+                            ps.setLong(5, 0); // zero amount - violates existing CHECK
+                            ps.executeUpdate();
+                        }
+                    })
+                    .isInstanceOf(SQLException.class)
                     .hasMessageContaining("postings_amount_cents_check");
         }
     }

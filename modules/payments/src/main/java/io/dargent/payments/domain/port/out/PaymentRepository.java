@@ -2,7 +2,6 @@ package io.dargent.payments.domain.port.out;
 
 import io.dargent.payments.domain.model.Payment;
 import io.dargent.payments.domain.model.Txid;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -55,7 +54,8 @@ public interface PaymentRepository {
      * {@code next_reconcile_at} and increments {@code reconcile_attempts}. Conditional on the
      * current version to detect lost races.
      */
-    boolean updateReconciliationSchedule(Payment payment, java.time.Instant nextReconcileAt, int reconcileAttempts, int expectedVersion);
+    boolean updateReconciliationSchedule(
+            Payment payment, java.time.Instant nextReconcileAt, int reconcileAttempts, int expectedVersion);
 
     /**
      * Conditionally clears the reconciliation schedule when the give-up window is reached (spec §4,
@@ -69,8 +69,8 @@ public interface PaymentRepository {
      * Inserts a refund record for the given payment. The refund row is inserted within the same
      * transaction as the payment status update. Returns true if inserted.
      */
-    void insertRefund(UUID paymentId, String txid, long amountCents, long feeReversalCents, long netCents,
-            String requestId);
+    void insertRefund(
+            UUID paymentId, String txid, long amountCents, long feeReversalCents, long netCents, String requestId);
 
     /**
      * Finds the payment by txid with a pessimistic lock (SELECT FOR UPDATE).

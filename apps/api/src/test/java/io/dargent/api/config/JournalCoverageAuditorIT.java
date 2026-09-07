@@ -35,13 +35,9 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * </ul>
  */
 @SpringBootTest(
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    classes = {DargentApiApplication.class, JournalCoverageAuditorIT.AuditorTestConfig.class},
-    properties = {
-        "DARGENT_JOURNAL_COVERAGE_ENABLED=true",
-        "dargent.psp.webhook-secret=dev-only-secret"
-    }
-)
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        classes = {DargentApiApplication.class, JournalCoverageAuditorIT.AuditorTestConfig.class},
+        properties = {"DARGENT_JOURNAL_COVERAGE_ENABLED=true", "dargent.psp.webhook-secret=dev-only-secret"})
 @Testcontainers
 class JournalCoverageAuditorIT {
 
@@ -60,7 +56,8 @@ class JournalCoverageAuditorIT {
     @BeforeEach
     void setUp() {
         jdbc.sql("truncate payments.audit_log, payments.payments, payments.api_keys, payments.outbox, "
-                + "payments.idempotency_keys, ledger.events restart identity cascade").update();
+                        + "payments.idempotency_keys, ledger.events restart identity cascade")
+                .update();
     }
 
     // =============================================================== spec §6 gap directions
@@ -73,13 +70,21 @@ class JournalCoverageAuditorIT {
         assertThat(auditor.runOnce()).isEqualTo(1);
         assertThat(auditRows()).isEqualTo(1);
         assertThat(jdbc.sql("select command_name from payments.audit_log")
-                .query(String.class).single()).isEqualTo("journal_coverage_gap");
+                        .query(String.class)
+                        .single())
+                .isEqualTo("journal_coverage_gap");
         assertThat(jdbc.sql("select aggregate_id from payments.audit_log")
-                .query(String.class).single()).isEqualTo(txid);
+                        .query(String.class)
+                        .single())
+                .isEqualTo(txid);
         assertThat(jdbc.sql("select request_id from payments.audit_log")
-                .query(String.class).single()).startsWith("PHASE_A:");
+                        .query(String.class)
+                        .single())
+                .startsWith("PHASE_A:");
         assertThat(jdbc.sql("select actor_key_id from payments.audit_log where command_name='journal_coverage_gap'")
-                .query((rs, i) -> rs.getObject("actor_key_id")).optional()).isEmpty();
+                        .query((rs, i) -> rs.getObject("actor_key_id"))
+                        .optional())
+                .isEmpty();
     }
 
     @Test
@@ -90,9 +95,13 @@ class JournalCoverageAuditorIT {
         assertThat(auditor.runOnce()).isEqualTo(1);
         assertThat(auditRows()).isEqualTo(1);
         assertThat(jdbc.sql("select request_id from payments.audit_log")
-                .query(String.class).single()).startsWith("PHASE_B:");
+                        .query(String.class)
+                        .single())
+                .startsWith("PHASE_B:");
         assertThat(jdbc.sql("select actor_key_id from payments.audit_log where command_name='journal_coverage_gap'")
-                .query((rs, i) -> rs.getObject("actor_key_id")).optional()).isEmpty();
+                        .query((rs, i) -> rs.getObject("actor_key_id"))
+                        .optional())
+                .isEmpty();
     }
 
     @Test
@@ -116,9 +125,13 @@ class JournalCoverageAuditorIT {
         assertThat(auditor.runOnce()).isEqualTo(1);
         assertThat(auditRows()).isEqualTo(1);
         assertThat(jdbc.sql("select aggregate_id from payments.audit_log")
-                .query(String.class).single()).isEqualTo(txid);
+                        .query(String.class)
+                        .single())
+                .isEqualTo(txid);
         assertThat(jdbc.sql("select request_id from payments.audit_log")
-                .query(String.class).single()).startsWith("PHASE_C:");
+                        .query(String.class)
+                        .single())
+                .startsWith("PHASE_C:");
     }
 
     @Test
@@ -129,7 +142,9 @@ class JournalCoverageAuditorIT {
         assertThat(auditor.runOnce()).isEqualTo(1);
         assertThat(auditRows()).isEqualTo(1);
         assertThat(jdbc.sql("select request_id from payments.audit_log")
-                .query(String.class).single()).startsWith("PHASE_D:");
+                        .query(String.class)
+                        .single())
+                .startsWith("PHASE_D:");
     }
 
     @Test
@@ -224,11 +239,13 @@ class JournalCoverageAuditorIT {
 
     private long auditRows() {
         return jdbc.sql("select count(*) from payments.audit_log where command_name='journal_coverage_gap'")
-                .query(Long.class).single();
+                .query(Long.class)
+                .single();
     }
 
     private String txid(String prefix) {
-        return prefix + UUID.randomUUID().toString().replace("-", "").toUpperCase().substring(0, 23);
+        return prefix
+                + UUID.randomUUID().toString().replace("-", "").toUpperCase().substring(0, 23);
     }
 
     @Configuration
@@ -241,8 +258,7 @@ class JournalCoverageAuditorIT {
                     .locations(
                             "classpath:db/migration/payments",
                             "classpath:db/migration/ledger",
-                            "classpath:db/migration/notifications"
-                    )
+                            "classpath:db/migration/notifications")
                     .baselineOnMigrate(true)
                     .cleanDisabled(false)
                     .load();

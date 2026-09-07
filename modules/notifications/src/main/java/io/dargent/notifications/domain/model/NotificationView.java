@@ -12,11 +12,4 @@ import java.util.UUID;
  * {@code WHERE merchant_id = ?} comes from the principal in the adapter/controller.
  */
 public record NotificationView(
-        UUID id,
-        UUID eventId,
-        String type,
-        String txid,
-        UUID merchantId,
-        Instant occurredAt,
-        Instant createdAt) {
-}
+        UUID id, UUID eventId, String type, String txid, UUID merchantId, Instant occurredAt, Instant createdAt) {}

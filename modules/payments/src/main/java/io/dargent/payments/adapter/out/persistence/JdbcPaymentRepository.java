@@ -4,7 +4,6 @@ import io.dargent.payments.domain.model.Payment;
 import io.dargent.payments.domain.model.Txid;
 import io.dargent.payments.domain.port.out.DuplicatePaymentTxidException;
 import io.dargent.payments.domain.port.out.PaymentRepository;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -46,7 +45,11 @@ public class JdbcPaymentRepository implements PaymentRepository {
                 .param("status", payment.status().name())
                 .param("version", payment.version())
                 .param("expiresAt", payment.expiresAt())
-                .param("endToEndId", payment.endToEndId() == null ? null : payment.endToEndId().value())
+                .param(
+                        "endToEndId",
+                        payment.endToEndId() == null
+                                ? null
+                                : payment.endToEndId().value())
                 .param("fee", payment.fee() == null ? null : payment.fee().cents())
                 .param("net", payment.net() == null ? null : payment.net().cents())
                 .param("lateConfirmation", payment.lateConfirmation())
@@ -63,12 +66,7 @@ public class JdbcPaymentRepository implements PaymentRepository {
                 where status = 'PENDING' and expires_at < :now
                 order by expires_at
                 limit :limit
-                """)
-                .param("now", now)
-                .param("limit", limit)
-                .query(PaymentEntity.class)
-                .list()
-                .stream()
+                """).param("now", now).param("limit", limit).query(PaymentEntity.class).list().stream()
                 .map(PaymentMapper::toDomain)
                 .toList();
     }
@@ -80,16 +78,14 @@ public class JdbcPaymentRepository implements PaymentRepository {
                     status = 'EXPIRED',
                     version = version + 1
                 where id = :id and status = 'PENDING' and expires_at < :now
-                """)
-                .param("id", payment.id())
-                .param("now", now)
-                .update();
+                """).param("id", payment.id()).param("now", now).update();
         return updated != 0;
     }
 
     @Override
     public java.util.List<Payment> findDueReconciliation(java.time.Instant now, int limit) {
-        return jdbc.sql("""
+        return jdbc
+                .sql("""
                 select * from payments.payments
                 where status in ('PENDING', 'EXPIRED')
                   and next_reconcile_at is not null
@@ -107,7 +103,8 @@ public class JdbcPaymentRepository implements PaymentRepository {
     }
 
     @Override
-    public boolean updateReconciliationSchedule(Payment payment, java.time.Instant nextReconcileAt, int reconcileAttempts, int expectedVersion) {
+    public boolean updateReconciliationSchedule(
+            Payment payment, java.time.Instant nextReconcileAt, int reconcileAttempts, int expectedVersion) {
         int updated = jdbc.sql("""
                 update payments.payments set
                     next_reconcile_at = :nextReconcileAt,
@@ -125,7 +122,8 @@ public class JdbcPaymentRepository implements PaymentRepository {
     }
 
     @Override
-    public boolean clearReconciliationScheduleIfPastWindow(Payment payment, java.time.Instant windowEnd, int expectedVersion) {
+    public boolean clearReconciliationScheduleIfPastWindow(
+            Payment payment, java.time.Instant windowEnd, int expectedVersion) {
         int updated = jdbc.sql("""
                 update payments.payments set
                     next_reconcile_at = NULL,
@@ -176,7 +174,11 @@ public class JdbcPaymentRepository implements PaymentRepository {
                 .param("status", payment.status().name())
                 .param("newVersion", expectedVersion + 1)
                 .param("expiresAt", payment.expiresAt())
-                .param("endToEndId", payment.endToEndId() == null ? null : payment.endToEndId().value())
+                .param(
+                        "endToEndId",
+                        payment.endToEndId() == null
+                                ? null
+                                : payment.endToEndId().value())
                 .param("fee", payment.fee() == null ? null : payment.fee().cents())
                 .param("net", payment.net() == null ? null : payment.net().cents())
                 .param("lateConfirmation", payment.lateConfirmation())
@@ -195,8 +197,8 @@ public class JdbcPaymentRepository implements PaymentRepository {
     }
 
     @Override
-    public void insertRefund(UUID paymentId, String txid, long amountCents, long feeReversalCents, long netCents,
-            String requestId) {
+    public void insertRefund(
+            UUID paymentId, String txid, long amountCents, long feeReversalCents, long netCents, String requestId) {
         jdbc.sql("""
                 insert into payments.refunds (id, payment_id, txid, amount_cents, fee_reversal_cents,
                     net_cents, request_id, created_at)

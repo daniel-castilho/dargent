@@ -10,8 +10,16 @@
     <relativePath>../../pom.xml</relativePath>
   </parent>
 
+  <properties>
+    <!-- E13 S1: owner-fixed LINE coverage floor (notifications, testing-playbook §5) — measured on combined unit+IT data. -->
+    <jacoco.line.floor>0.50</jacoco.line.floor>
+    <jacoco.skip>false</jacoco.skip>
+  </properties>
+
+
   <artifactId>dargent-notifications</artifactId>
   <name>Dargent Notifications</name>
+
   <description>Event consumer for notification records (E10 spec §1). Pure event consumer — no rich domain required.</description>
 
   <dependencies>

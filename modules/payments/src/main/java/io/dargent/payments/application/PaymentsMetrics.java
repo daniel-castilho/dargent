@@ -26,7 +26,8 @@ public final class PaymentsMetrics {
 
     /** Payment state transition. {@code from} is {@code "none"} for the creation transition. */
     public void transition(String from, String to, String outcome) {
-        registry.counter(TRANSITIONS, "from", from, "to", to, "outcome", outcome).increment();
+        registry.counter(TRANSITIONS, "from", from, "to", to, "outcome", outcome)
+                .increment();
     }
 
     /** Relay mark path result: {@code sent} | {@code failed} | {@code exhausted}. */

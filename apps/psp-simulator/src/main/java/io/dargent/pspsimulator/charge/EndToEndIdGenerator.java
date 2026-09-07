@@ -8,8 +8,7 @@ import java.security.SecureRandom;
  */
 public final class EndToEndIdGenerator {
 
-    private static final String ALPHANUMERIC =
-            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    private static final String ALPHANUMERIC = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     private static final int TAIL_LENGTH = 31;
 
     private final SecureRandom random = new SecureRandom();

@@ -5,14 +5,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import jakarta.servlet.Filter;
 import jakarta.servlet.Servlet;
 import jakarta.servlet.ServletConfig;
-import jakarta.servlet.ServletException;
 import jakarta.servlet.ServletRequest;
 import jakarta.servlet.ServletResponse;
 import org.junit.jupiter.api.Test;
+import org.slf4j.MDC;
 import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
-import org.slf4j.MDC;
 
 /**
  * {@code X-Request-Id} correlation contract (E3 spec §5.4): a valid accepted id is echoed as-is; an
@@ -69,11 +68,24 @@ class RequestIdFilterTest {
         final String[] seenInChain = new String[1];
 
         Servlet testServlet = new Servlet() {
-            @Override public void init(ServletConfig config) {}
-            @Override public ServletConfig getServletConfig() { return null; }
-            @Override public void service(ServletRequest req, ServletResponse res) {}
-            @Override public String getServletInfo() { return "test"; }
-            @Override public void destroy() {}
+            @Override
+            public void init(ServletConfig config) {}
+
+            @Override
+            public ServletConfig getServletConfig() {
+                return null;
+            }
+
+            @Override
+            public void service(ServletRequest req, ServletResponse res) {}
+
+            @Override
+            public String getServletInfo() {
+                return "test";
+            }
+
+            @Override
+            public void destroy() {}
         };
 
         Filter observing = (req, res, chain) -> seenInChain[0] = MDC.get("requestId");

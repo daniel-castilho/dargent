@@ -9,20 +9,15 @@ import java.util.Map;
  * serializes this record with {@code @JsonProperty} stable names — no per-writer formats.
  */
 public record ErrorResponse(
-        String type,
-        String title,
-        int status,
-        String code,
-        String detail,
-        Map<String, String> fields) {
+        String type, String title, int status, String code, String detail, Map<String, String> fields) {
 
     public static ErrorResponse of(ErrorCode errorCode, String detail) {
-        return new ErrorResponse("about:blank", errorCode.title(), errorCode.httpStatus().value(),
-                errorCode.code(), detail, null);
+        return new ErrorResponse(
+                "about:blank", errorCode.title(), errorCode.httpStatus().value(), errorCode.code(), detail, null);
     }
 
     public static ErrorResponse of(ErrorCode errorCode, String detail, Map<String, String> fields) {
-        return new ErrorResponse("about:blank", errorCode.title(), errorCode.httpStatus().value(),
-                errorCode.code(), detail, fields);
+        return new ErrorResponse(
+                "about:blank", errorCode.title(), errorCode.httpStatus().value(), errorCode.code(), detail, fields);
     }
 }

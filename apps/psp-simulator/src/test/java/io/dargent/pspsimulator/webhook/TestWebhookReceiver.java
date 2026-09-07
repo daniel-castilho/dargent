@@ -1,15 +1,13 @@
 package io.dargent.pspsimulator.webhook;
 
+import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
-
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import jakarta.servlet.http.HttpServletRequest;
 
 /**
  * Test double for the PSP's delivery target: a real HTTP receiver that captures the exact raw body
@@ -21,15 +19,15 @@ import jakarta.servlet.http.HttpServletRequest;
 @RequestMapping("/test-receiver/webhooks/psp")
 public class TestWebhookReceiver {
 
-    public record Captured(byte[] rawBody, String timestamp, String signature, String contentType) {
-    }
+    public record Captured(byte[] rawBody, String timestamp, String signature, String contentType) {}
 
     private final List<Captured> deliveries = new CopyOnWriteArrayList<>();
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
     public void receive(HttpServletRequest request) throws IOException {
         byte[] body = request.getInputStream().readAllBytes();
-        deliveries.add(new Captured(body,
+        deliveries.add(new Captured(
+                body,
                 request.getHeader("X-PSP-Timestamp"),
                 request.getHeader("X-PSP-Signature"),
                 request.getContentType()));

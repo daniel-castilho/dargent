@@ -36,8 +36,12 @@ public final class NotificationIngestionUseCase {
 
         // Single idempotent insert; a duplicate (event_id already present) is an at-least-once retry.
         store.insertNotificationIfAbsent(
-                envelope.eventId(), envelope.type(), envelope.aggregateId(),
-                envelope.merchantId(), envelope.payload(), envelope.occurredAt());
+                envelope.eventId(),
+                envelope.type(),
+                envelope.aggregateId(),
+                envelope.merchantId(),
+                envelope.payload(),
+                envelope.occurredAt());
 
         // Duplicate delivery — ack + skip (idempotent)
         return true;

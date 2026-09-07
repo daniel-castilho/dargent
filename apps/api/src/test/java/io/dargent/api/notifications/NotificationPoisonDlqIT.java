@@ -43,13 +43,13 @@ import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
  * (LedgerPoisonDlqIT): zero Java sleeps, all barriers absorbed by SQS long-polls.
  */
 @SpringBootTest(
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    classes = {DargentApiApplication.class, NotificationPoisonDlqIT.PoisonTestConfig.class},
-    properties = {
-        "dargent.relay.enabled=false",
-        "dargent.notifs.consumer.enabled=false",
-        "dargent.psp.webhook-secret=dev-only-secret"
-    })
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        classes = {DargentApiApplication.class, NotificationPoisonDlqIT.PoisonTestConfig.class},
+        properties = {
+            "dargent.relay.enabled=false",
+            "dargent.notifs.consumer.enabled=false",
+            "dargent.psp.webhook-secret=dev-only-secret"
+        })
 @Testcontainers
 class NotificationPoisonDlqIT {
 
@@ -57,8 +57,7 @@ class NotificationPoisonDlqIT {
     private static final String NOTIFS_QUEUE = "dargent-payments-notif-dlqit.fifo";
     private static final String NOTIFS_DLQ = "dargent-payments-notif-dlq-dlqit.fifo";
     private static final UUID MERCHANT = UUID.fromString("11111111-1111-1111-1111-111111111111");
-    private static final Clock FIXED_CLOCK =
-            Clock.fixed(Instant.parse("2027-01-01T12:00:00Z"), ZoneOffset.UTC);
+    private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2027-01-01T12:00:00Z"), ZoneOffset.UTC);
     private static final String POISON_BODY = "{\"hello\":\"world\"}";
 
     @Container
@@ -66,9 +65,9 @@ class NotificationPoisonDlqIT {
     static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:16-alpine");
 
     @Container
-    static final LocalStackContainer localstack =
-            new LocalStackContainer(DockerImageName.parse("localstack/localstack:3.8.1"))
-                    .withServices(LocalStackContainer.Service.SNS, LocalStackContainer.Service.SQS);
+    static final LocalStackContainer localstack = new LocalStackContainer(
+                    DockerImageName.parse("localstack/localstack:3.8.1"))
+            .withServices(LocalStackContainer.Service.SNS, LocalStackContainer.Service.SQS);
 
     private static SqsClient sqs;
     private static String notifsUrl;
@@ -84,7 +83,8 @@ class NotificationPoisonDlqIT {
     static void awsEnvironment(org.springframework.test.context.DynamicPropertyRegistry registry) {
         ensureTopology();
         registry.add("AWS_ENDPOINT_URL", () -> localstack
-                .getEndpointOverride(LocalStackContainer.Service.SNS).toString());
+                .getEndpointOverride(LocalStackContainer.Service.SNS)
+                .toString());
         registry.add("AWS_REGION", () -> REGION);
         registry.add("AWS_ACCESS_KEY_ID", () -> "test");
         registry.add("AWS_SECRET_ACCESS_KEY", () -> "test");
@@ -118,10 +118,11 @@ class NotificationPoisonDlqIT {
         for (int i = 0; i < 60; i++) {
             bumpPoisonReceiveCount();
             List<Message> dlq = sqs.receiveMessage(ReceiveMessageRequest.builder()
-                    .queueUrl(dlqUrl)
-                    .maxNumberOfMessages(10)
-                    .waitTimeSeconds(2)
-                    .build()).messages();
+                            .queueUrl(dlqUrl)
+                            .maxNumberOfMessages(10)
+                            .waitTimeSeconds(2)
+                            .build())
+                    .messages();
             if (!dlq.isEmpty()) {
                 return dlq.get(0).body();
             }
@@ -145,7 +146,9 @@ class NotificationPoisonDlqIT {
     }
 
     private long notificationRows() {
-        return jdbc.sql("select count(*) from notifications.notification").query(Long.class).single();
+        return jdbc.sql("select count(*) from notifications.notification")
+                .query(Long.class)
+                .single();
     }
 
     private static synchronized void ensureTopology() {
@@ -155,18 +158,17 @@ class NotificationPoisonDlqIT {
         sqs = SqsClient.builder()
                 .endpointOverride(localstack.getEndpointOverride(LocalStackContainer.Service.SQS))
                 .region(Region.of(REGION))
-                .credentialsProvider(StaticCredentialsProvider.create(
-                        AwsBasicCredentials.create("test", "test")))
+                .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create("test", "test")))
                 .build();
         dlqUrl = createFifoQueue(sqs, NOTIFS_DLQ, null);
-        String dlqArn = sqs.getQueueAttributes(r -> r.queueUrl(dlqUrl)
-                .attributeNames(QueueAttributeName.QUEUE_ARN))
-                .attributes().get(QueueAttributeName.QUEUE_ARN);
+        String dlqArn = sqs.getQueueAttributes(r -> r.queueUrl(dlqUrl).attributeNames(QueueAttributeName.QUEUE_ARN))
+                .attributes()
+                .get(QueueAttributeName.QUEUE_ARN);
         String redrive = "{\"deadLetterTargetArn\":\"" + dlqArn + "\",\"maxReceiveCount\":\"2\"}";
         notifsUrl = createFifoQueue(sqs, NOTIFS_QUEUE, redrive);
         // Short visibility so the poison becomes visible again quickly for its redrive journey.
-        sqs.setQueueAttributes(r -> r.queueUrl(notifsUrl)
-                .attributes(Map.of(QueueAttributeName.VISIBILITY_TIMEOUT, "1")));
+        sqs.setQueueAttributes(
+                r -> r.queueUrl(notifsUrl).attributes(Map.of(QueueAttributeName.VISIBILITY_TIMEOUT, "1")));
     }
 
     private static String createFifoQueue(SqsClient client, String name, String redrive) {
@@ -189,8 +191,7 @@ class NotificationPoisonDlqIT {
                     .locations(
                             "classpath:db/migration/payments",
                             "classpath:db/migration/ledger",
-                            "classpath:db/migration/notifications"
-                    )
+                            "classpath:db/migration/notifications")
                     .baselineOnMigrate(true)
                     .load();
             flyway.migrate();
@@ -210,8 +211,7 @@ class NotificationPoisonDlqIT {
         }
 
         @Bean
-        SqsNotificationConsumer poisonConsumer(NotificationIngestionUseCase ingestion,
-                SqsClient poisonTestSqsClient) {
+        SqsNotificationConsumer poisonConsumer(NotificationIngestionUseCase ingestion, SqsClient poisonTestSqsClient) {
             return new SqsNotificationConsumer(poisonTestSqsClient, notifsUrl, 10, 1000, ingestion);
         }
     }

@@ -50,7 +50,8 @@ public class WebhookController {
     private final MeterRegistry metrics;
     private final String secret;
 
-    public WebhookController(WebhookIntakeUseCase useCase,
+    public WebhookController(
+            WebhookIntakeUseCase useCase,
             WebhookSignatureValidator validator,
             WebhookEventStore webhookEventStore,
             ErrorResponseWriter errorWriter,
@@ -79,43 +80,40 @@ public class WebhookController {
         String signature = request.getHeader("X-PSP-Signature");
 
         var verdict = validator.verify(
-                timestamp == null ? "" : timestamp,
-                rawBody,
-                signature == null ? "" : signature,
-                secret);
+                timestamp == null ? "" : timestamp, rawBody, signature == null ? "" : signature, secret);
 
         if (verdict == WebhookSignatureValidator.Verdict.INVALID) {
-            metrics.counter("dargent.webhook.signature.failures", "reason", "invalid").increment();
-            persistRawAndRespond(request, response, rawBody, false,
-                    "INVALID_SIGNATURE", "Invalid signature");
+            metrics.counter("dargent.webhook.signature.failures", "reason", "invalid")
+                    .increment();
+            persistRawAndRespond(request, response, rawBody, false, "INVALID_SIGNATURE", "Invalid signature");
             return;
         }
         if (verdict == WebhookSignatureValidator.Verdict.EXPIRED) {
-            metrics.counter("dargent.webhook.signature.failures", "reason", "expired").increment();
-            persistRawAndRespond(request, response, rawBody, false,
-                    "SIGNATURE_EXPIRED", "Signature expired");
+            metrics.counter("dargent.webhook.signature.failures", "reason", "expired")
+                    .increment();
+            persistRawAndRespond(request, response, rawBody, false, "SIGNATURE_EXPIRED", "Signature expired");
             return;
         }
 
         JsonNode parsed;
         if (rawBody.length == 0) {
-            metrics.counter("dargent.webhook.payload.failures", "reason", "empty").increment();
-            persistRawAndRespond(request, response, rawBody, true,
-                    "INVALID_REQUEST", "Empty webhook body");
+            metrics.counter("dargent.webhook.payload.failures", "reason", "empty")
+                    .increment();
+            persistRawAndRespond(request, response, rawBody, true, "INVALID_REQUEST", "Empty webhook body");
             return;
         }
         try {
             parsed = objectMapper.readTree(rawBody);
         } catch (JacksonException e) {
-            metrics.counter("dargent.webhook.payload.failures", "reason", "not_json").increment();
-            persistRawAndRespond(request, response, rawBody, true,
-                    "INVALID_REQUEST", "Body is not valid JSON");
+            metrics.counter("dargent.webhook.payload.failures", "reason", "not_json")
+                    .increment();
+            persistRawAndRespond(request, response, rawBody, true, "INVALID_REQUEST", "Body is not valid JSON");
             return;
         }
         if (!parsed.isObject()) {
-            metrics.counter("dargent.webhook.payload.failures", "reason", "not_object").increment();
-            persistRawAndRespond(request, response, rawBody, true,
-                    "INVALID_REQUEST", "Body is not a JSON object");
+            metrics.counter("dargent.webhook.payload.failures", "reason", "not_object")
+                    .increment();
+            persistRawAndRespond(request, response, rawBody, true, "INVALID_REQUEST", "Body is not a JSON object");
             return;
         }
         String type = text(parsed, "type");
@@ -125,20 +123,12 @@ public class WebhookController {
 
         String providerEventId = endToEndId + "|" + type;
 
-        log.info("Webhook intake type={} provider_event_id={} txid={}",
-                type, providerEventId, txid);
+        log.info("Webhook intake type={} provider_event_id={} txid={}", type, providerEventId, txid);
 
         String requestId = (String) request.getAttribute(RequestIdFilter.ATTRIBUTE);
 
         var outcome = useCase.execute(new WebhookIntakeUseCase.Input(
-                providerEventId,
-                eventId,
-                type,
-                txid,
-                new String(rawBody, StandardCharsets.UTF_8),
-                true,
-                requestId
-        ));
+                providerEventId, eventId, type, txid, new String(rawBody, StandardCharsets.UTF_8), true, requestId));
 
         switch (outcome) {
             case WebhookIntakeUseCase.Outcome.Processed ignored -> writeSuccess(response, "processed");
@@ -151,8 +141,14 @@ public class WebhookController {
         }
     }
 
-    private void persistRawAndRespond(HttpServletRequest request, HttpServletResponse response,
-            byte[] rawBody, boolean signatureValid, String errorCode, String detail) throws IOException {
+    private void persistRawAndRespond(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            byte[] rawBody,
+            boolean signatureValid,
+            String errorCode,
+            String detail)
+            throws IOException {
         // payload_raw is jsonb — an opaque (non-JSON) attack body must still be persisted verbatim for the
         // audit, so unparseable bytes are wrapped in a JSON string (escaping handled by Jackson).
         String rawText = new String(rawBody, StandardCharsets.UTF_8);
@@ -177,8 +173,7 @@ public class WebhookController {
                 signatureValid,
                 "IGNORED",
                 clock.instant(),
-                clock.instant()
-        ));
+                clock.instant()));
 
         errorWriter.write(request, response, ErrorCode.valueOf(errorCode), detail);
     }

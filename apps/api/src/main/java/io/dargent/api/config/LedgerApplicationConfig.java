@@ -33,8 +33,12 @@ public class LedgerApplicationConfig {
     }
 
     @Bean
-    EventIngestionUseCase eventIngestionUseCase(EventEnvelopeReader reader, LedgerStore store,
-            JdbcClient jdbc, TransactionTemplate txTemplate, Clock clock) {
+    EventIngestionUseCase eventIngestionUseCase(
+            EventEnvelopeReader reader,
+            LedgerStore store,
+            JdbcClient jdbc,
+            TransactionTemplate txTemplate,
+            Clock clock) {
         return new EventIngestionUseCase(reader, store, jdbc, txTemplate, clock);
     }
 

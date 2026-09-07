@@ -54,21 +54,20 @@ import tools.jackson.databind.json.JsonMapper;
  * within the modeled window, which a same-request pair always is.
  */
 @SpringBootTest(
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    classes = {DargentApiApplication.class, OnCallTxidDrillIT.TestConfig.class},
-    properties = {
-        "spring.profiles.active=prod",
-        "management.server.port=9090",
-        "DARGENT_DB_PASSWORD=prod-test-password-that-is-at-least-32-chars-long",
-        "AWS_ACCESS_KEY_ID=test-access-key",
-        "AWS_SECRET_ACCESS_KEY=test-secret-key",
-        "PSP_BASE_URL=http://psp-stub:8090",
-        "PSP_WEBHOOK_SECRET=prod-test-webhook-secret-that-is-long-enough",
-        "dargent.psp.base-url=http://psp-stub:8090",
-        "dargent.psp.webhook-secret=prod-test-webhook-secret-that-is-long-enough",
-        "dargent.relay.enabled=false"
-    }
-)
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        classes = {DargentApiApplication.class, OnCallTxidDrillIT.TestConfig.class},
+        properties = {
+            "spring.profiles.active=prod",
+            "management.server.port=9090",
+            "DARGENT_DB_PASSWORD=prod-test-password-that-is-at-least-32-chars-long",
+            "AWS_ACCESS_KEY_ID=test-access-key",
+            "AWS_SECRET_ACCESS_KEY=test-secret-key",
+            "PSP_BASE_URL=http://psp-stub:8090",
+            "PSP_WEBHOOK_SECRET=prod-test-webhook-secret-that-is-long-enough",
+            "dargent.psp.base-url=http://psp-stub:8090",
+            "dargent.psp.webhook-secret=prod-test-webhook-secret-that-is-long-enough",
+            "dargent.relay.enabled=false"
+        })
 @Testcontainers
 class OnCallTxidDrillIT {
 
@@ -100,9 +99,10 @@ class OnCallTxidDrillIT {
     void setUp() throws Exception {
         CapturingAppender.clear();
         baseUrl = "http://localhost:" + mainPort;
-        jdbc.sql("truncate payments.outbox, payments.idempotency_keys, payments.audit_log, payments.payments, payments.api_keys restart identity cascade").update();
         jdbc.sql(
-                "insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
+                        "truncate payments.outbox, payments.idempotency_keys, payments.audit_log, payments.payments, payments.api_keys restart identity cascade")
+                .update();
+        jdbc.sql("insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
                         + "values (:id, :merchant, 'it-key', :prefix, :hash, now(), null)")
                 .param("id", KEY_ID)
                 .param("merchant", MERCHANT)
@@ -116,14 +116,18 @@ class OnCallTxidDrillIT {
     void onCallDrill_statusAndTrail_resolvedFromEmittedLines() throws Exception {
         // Given: the operator's real create at 02:50, with its own X-Request-Id
         String requestId = "req-drill-01";
-        var resp = post("/v1/payments",
+        var resp = post(
+                "/v1/payments",
                 "{\"amount\":5000,\"description\":\"drill seed\"}",
                 Map.of(
-                        "Authorization", "Bearer " + rawKey,
-                        "Content-Type", "application/json",
-                        "Idempotency-Key", "idem-drill-01",
-                        "X-Request-Id", requestId
-                ));
+                        "Authorization",
+                        "Bearer " + rawKey,
+                        "Content-Type",
+                        "application/json",
+                        "Idempotency-Key",
+                        "idem-drill-01",
+                        "X-Request-Id",
+                        requestId));
         assertThat(resp.statusCode()).isEqualTo(201);
         assertThat(resp.headers().firstValue("X-Request-Id")).contains(requestId);
         String txid = MAPPER.readTree(resp.body()).at("/txid").asText();
@@ -169,23 +173,20 @@ class OnCallTxidDrillIT {
 
         // DB complement (may complement, not replace): last transition + next_attempt_at
         var outbox = jdbc.sql(
-                "select type, request_id, next_attempt_at from payments.outbox where aggregate_id = :txid")
+                        "select type, request_id, next_attempt_at from payments.outbox where aggregate_id = :txid")
                 .param("txid", txid)
-                .query((rs, i) -> new Object[]{rs.getString(1), rs.getString(2), rs.getTimestamp(3)})
+                .query((rs, i) -> new Object[] {rs.getString(1), rs.getString(2), rs.getTimestamp(3)})
                 .list();
         assertThat(outbox).hasSize(1);
         assertThat(outbox.get(0)[0]).as("last transition").isEqualTo("payment.created");
         assertThat(outbox.get(0)[1]).isEqualTo(requestId);
-        Instant nextAttempt = outbox.get(0)[2] != null
-                ? ((java.sql.Timestamp) outbox.get(0)[2]).toInstant()
-                : null;
+        Instant nextAttempt = outbox.get(0)[2] != null ? ((java.sql.Timestamp) outbox.get(0)[2]).toInstant() : null;
         assertThat(nextAttempt).isNotNull();
 
         // Pendular facts confirmed on the DB state (due, not expired)
-        var payment = jdbc.sql(
-                "select status, next_reconcile_at, expires_at from payments.payments where txid = :txid")
+        var payment = jdbc.sql("select status, next_reconcile_at, expires_at from payments.payments where txid = :txid")
                 .param("txid", txid)
-                .query((rs, i) -> new Object[]{rs.getString(1), rs.getTimestamp(2), rs.getTimestamp(3)})
+                .query((rs, i) -> new Object[] {rs.getString(1), rs.getTimestamp(2), rs.getTimestamp(3)})
                 .single();
         assertThat(payment[0]).isEqualTo("PENDING");
         Instant reconciledDue = ((java.sql.Timestamp) payment[1]).toInstant();
@@ -246,8 +247,7 @@ class OnCallTxidDrillIT {
                     .locations(
                             "classpath:db/migration/payments",
                             "classpath:db/migration/ledger",
-                            "classpath:db/migration/notifications"
-                    )
+                            "classpath:db/migration/notifications")
                     .baselineOnMigrate(true)
                     .load();
             flyway.migrate();

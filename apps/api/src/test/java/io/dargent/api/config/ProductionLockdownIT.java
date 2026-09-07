@@ -2,6 +2,8 @@ package io.dargent.api.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import io.dargent.api.DargentApiApplication;
@@ -38,8 +40,6 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.json.JsonMapper;
 
 /**
  * Production lockdown IT (E11 S3, observability-e11-prompt §S3): with the {@code prod} profile,
@@ -52,20 +52,19 @@ import com.fasterxml.jackson.databind.json.JsonMapper;
  * so POST /v1/payments yields a real 201.
  */
 @SpringBootTest(
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    classes = {DargentApiApplication.class, ProductionLockdownIT.TestConfig.class},
-    properties = {
-        "spring.profiles.active=prod",
-        "management.server.port=9091",
-        "DARGENT_DB_PASSWORD=prod-test-password-that-is-at-least-32-chars-long",
-        "AWS_ACCESS_KEY_ID=test-access-key",
-        "AWS_SECRET_ACCESS_KEY=test-secret-key",
-        "PSP_BASE_URL=http://psp-stub:8090",
-        "PSP_WEBHOOK_SECRET=prod-test-webhook-secret-that-is-long-enough",
-        "dargent.psp.webhook-secret=prod-test-webhook-secret-that-is-long-enough",
-        "dargent.relay.enabled=false"
-    }
-)
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        classes = {DargentApiApplication.class, ProductionLockdownIT.TestConfig.class},
+        properties = {
+            "spring.profiles.active=prod",
+            "management.server.port=9091",
+            "DARGENT_DB_PASSWORD=prod-test-password-that-is-at-least-32-chars-long",
+            "AWS_ACCESS_KEY_ID=test-access-key",
+            "AWS_SECRET_ACCESS_KEY=test-secret-key",
+            "PSP_BASE_URL=http://psp-stub:8090",
+            "PSP_WEBHOOK_SECRET=prod-test-webhook-secret-that-is-long-enough",
+            "dargent.psp.webhook-secret=prod-test-webhook-secret-that-is-long-enough",
+            "dargent.relay.enabled=false"
+        })
 @Testcontainers
 class ProductionLockdownIT {
 
@@ -74,8 +73,7 @@ class ProductionLockdownIT {
     private static final UUID KEY_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
     private static final UUID OTHER_MERCHANT = UUID.fromString("33333333-3333-3333-3333-333333333333");
     private static final UUID OTHER_KEY_ID = UUID.fromString("44444444-4444-4444-4444-444444444444");
-    private static final Clock FIXED_CLOCK =
-            Clock.fixed(Instant.parse("2026-08-29T12:00:00Z"), ZoneOffset.UTC);
+    private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2026-08-29T12:00:00Z"), ZoneOffset.UTC);
     private static final String PSP_EXPIRES_AT = "2026-08-29T12:02:00Z";
 
     @Container
@@ -101,10 +99,11 @@ class ProductionLockdownIT {
     @BeforeEach
     void setUp() {
         baseUrl = "http://localhost:" + mainPort;
-        jdbc.sql("truncate payments.outbox, payments.idempotency_keys, payments.audit_log, payments.payments, payments.api_keys restart identity cascade").update();
-        // Owner merchant's key (rawKey, prefix psp_test_) stays active for the tests.
         jdbc.sql(
-                "insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
+                        "truncate payments.outbox, payments.idempotency_keys, payments.audit_log, payments.payments, payments.api_keys restart identity cascade")
+                .update();
+        // Owner merchant's key (rawKey, prefix psp_test_) stays active for the tests.
+        jdbc.sql("insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
                         + "values (:id, :merchant, 'it-key', :prefix, :hash, now(), null)")
                 .param("id", KEY_ID)
                 .param("merchant", MERCHANT)
@@ -146,7 +145,8 @@ class ProductionLockdownIT {
 
         var healthReq = HttpRequest.newBuilder()
                 .uri(URI.create(mgmtBase + "/actuator/health"))
-                .GET().build();
+                .GET()
+                .build();
         var healthResp = http.send(healthReq, HttpResponse.BodyHandlers.ofString());
 
         // health is 200 UP with no detail groups (show-details: never)
@@ -157,7 +157,8 @@ class ProductionLockdownIT {
 
         var promReq = HttpRequest.newBuilder()
                 .uri(URI.create(mgmtBase + "/actuator/prometheus"))
-                .GET().build();
+                .GET()
+                .build();
         var promResp = http.send(promReq, HttpResponse.BodyHandlers.ofString());
 
         assertThat(promResp.statusCode()).isEqualTo(200);
@@ -166,7 +167,8 @@ class ProductionLockdownIT {
 
         var infoReq = HttpRequest.newBuilder()
                 .uri(URI.create(mgmtBase + "/actuator/info"))
-                .GET().build();
+                .GET()
+                .build();
         var infoResp = http.send(infoReq, HttpResponse.BodyHandlers.ofString());
 
         assertThat(infoResp.statusCode()).isEqualTo(200);
@@ -190,7 +192,9 @@ class ProductionLockdownIT {
     @Test
     void businessEndpoint_postWithKey_returns201() throws Exception {
         psp.mode = PspStub.Mode.SUCCESS;
-        var resp = post("/v1/payments", "{\"amount\":10000,\"description\":\"Order #123\",\"expiresIn\":\"PT30M\"}",
+        var resp = post(
+                "/v1/payments",
+                "{\"amount\":10000,\"description\":\"Order #123\",\"expiresIn\":\"PT30M\"}",
                 Map.of(
                         "Authorization", "Bearer " + rawKey,
                         "Content-Type", "application/json",
@@ -206,7 +210,9 @@ class ProductionLockdownIT {
     void crossMerchant_access_returns404() throws Exception {
         psp.mode = PspStub.Mode.SUCCESS;
         // owner creates a payment via the real API (proven shape: CreatePaymentIT)
-        var created = post("/v1/payments", "{\"amount\":7777}",
+        var created = post(
+                "/v1/payments",
+                "{\"amount\":7777}",
                 Map.of(
                         "Authorization", "Bearer " + rawKey,
                         "Content-Type", "application/json",
@@ -220,10 +226,10 @@ class ProductionLockdownIT {
         // first so the other merchant's key can take the shared dev key_prefix
         // (uq_api_keys_key_prefix_active is partial over non-revoked keys).
         jdbc.sql("update payments.api_keys set revoked_at = now() where id = :id")
-                .param("id", KEY_ID).update();
+                .param("id", KEY_ID)
+                .update();
         String otherRawKey = ApiKeyHasher.generateRawKey();
-        jdbc.sql(
-                "insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
+        jdbc.sql("insert into payments.api_keys (id, merchant_id, name, key_prefix, key_hash, created_at, revoked_at) "
                         + "values (:id, :merchant, 'other-key', :prefix, :hash, now(), null)")
                 .param("id", OTHER_KEY_ID)
                 .param("merchant", OTHER_MERCHANT)
@@ -241,9 +247,7 @@ class ProductionLockdownIT {
     // ------------------------------------------------------------------ helpers
 
     private HttpResponse<String> get(String path, String rawKey) throws Exception {
-        var builder = HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl + path))
-                .GET();
+        var builder = HttpRequest.newBuilder().uri(URI.create(baseUrl + path)).GET();
         if (rawKey != null) {
             builder.header("Authorization", "Bearer " + rawKey);
         }
@@ -262,7 +266,8 @@ class ProductionLockdownIT {
         return new JsonMapper().readTree(resp.body());
     }
 
-    // ------------------------------------------------------------------ test config (proven infra from CreatePaymentIT/JsonLogCorrelationIT)
+    // ------------------------------------------------------------------ test config (proven infra from
+    // CreatePaymentIT/JsonLogCorrelationIT)
 
     @Configuration
     static class TestConfig {
@@ -274,8 +279,7 @@ class ProductionLockdownIT {
                     .locations(
                             "classpath:db/migration/payments",
                             "classpath:db/migration/ledger",
-                            "classpath:db/migration/notifications"
-                    )
+                            "classpath:db/migration/notifications")
                     .baselineOnMigrate(true)
                     .load();
             flyway.migrate();
@@ -316,7 +320,10 @@ class ProductionLockdownIT {
 
     /** Stateful HttpHandler for the PSP stub with a recorded, zero-wait sleeper (AGENTS §5.3). */
     static final class PspStub {
-        enum Mode { SUCCESS, FAIL }
+        enum Mode {
+            SUCCESS,
+            FAIL
+        }
 
         volatile Mode mode = Mode.SUCCESS;
         volatile long latencyMs = 0L;
@@ -355,14 +362,14 @@ class ProductionLockdownIT {
                     String requestBody = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
                     String txid = extractTxid(requestBody);
                     respBody = ("{\"txid\":\"" + txid + "\",\"expiresAt\":\"" + PSP_EXPIRES_AT
-                            + "\",\"endToEndId\":\"E2E-1\",\"brcode\":\"000201-terribly-long-brcode\"}")
+                                    + "\",\"endToEndId\":\"E2E-1\",\"brcode\":\"000201-terribly-long-brcode\"}")
                             .getBytes(StandardCharsets.UTF_8);
                 }
             } else if ("GET".equals(method) && path.startsWith("/cobs/")) {
                 String txid = path.substring("/cobs/".length());
                 status = 200;
                 respBody = ("{\"txid\":\"" + txid + "\",\"expiresAt\":\"" + PSP_EXPIRES_AT
-                        + "\",\"endToEndId\":\"E2E-1\",\"brcode\":\"000201-terribly-long-brcode\"}")
+                                + "\",\"endToEndId\":\"E2E-1\",\"brcode\":\"000201-terribly-long-brcode\"}")
                         .getBytes(StandardCharsets.UTF_8);
             } else {
                 status = 404;

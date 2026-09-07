@@ -19,7 +19,8 @@ class SecureRandomTxidGeneratorTest {
         var generator = new SecureRandomTxidGenerator();
         assertThat(java.util.stream.IntStream.range(0, 50)
                         .mapToObj(i -> generator.generate().value())
-                        .distinct().count())
+                        .distinct()
+                        .count())
                 .isEqualTo(50);
     }
 }

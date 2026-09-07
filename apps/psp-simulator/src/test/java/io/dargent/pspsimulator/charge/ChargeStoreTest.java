@@ -1,10 +1,9 @@
 package io.dargent.pspsimulator.charge;
 
-import java.time.Instant;
-
-import org.junit.jupiter.api.Test;
-
 import static org.assertj.core.api.Assertions.assertThat;
+
+import java.time.Instant;
+import org.junit.jupiter.api.Test;
 
 class ChargeStoreTest {
 
@@ -17,7 +16,8 @@ class ChargeStoreTest {
     @Test
     void inserting_a_new_txid_returns_null_and_then_stores_it() {
         ChargeStore store = new ChargeStore();
-        assertThat(store.putIfAbsent(charge(TXID, Instant.parse("2030-01-01T00:00:00Z")))).isNull();
+        assertThat(store.putIfAbsent(charge(TXID, Instant.parse("2030-01-01T00:00:00Z"))))
+                .isNull();
         assertThat(store.get(TXID)).isNotNull();
     }
 
