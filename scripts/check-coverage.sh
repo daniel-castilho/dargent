@@ -16,7 +16,7 @@ AGG="$(pwd)/apps/api/target/coverage-aggregate.exec"
 
 fail=0
 while read -r module; do
-    floor=$(rg -o '<jacoco\.line\.floor>[0-9.]+</jacoco\.line\.floor>' "$module/pom.xml" \
+    floor=$(grep -oE '<jacoco\.line\.floor>[0-9.]+</jacoco\.line\.floor>' "$module/pom.xml" \
         | head -1 | sed -E 's#.*>([0-9.]+)<.*#\1#')
     [[ -n "$floor" ]] || { echo "COVERAGE FAIL  $module: no jacoco.line.floor in its pom (P1 — floors live in module poms)"; fail=1; continue; }
     out=$(./mvnw -B jacoco:check@jacoco-check -pl "$module" \
