@@ -7,7 +7,6 @@ import java.net.http.HttpResponse;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.testcontainers.containers.localstack.LocalStackContainer;
-import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.utility.DockerImageName;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
@@ -26,7 +25,6 @@ public abstract class ReadinessHealthSupport {
 
     static final String REGION = "us-east-1";
 
-    @Container
     static final LocalStackContainer localstack = new LocalStackContainer(
                     DockerImageName.parse("localstack/localstack:3.8.1"))
             .withServices(LocalStackContainer.Service.SNS, LocalStackContainer.Service.SQS);
@@ -36,8 +34,17 @@ public abstract class ReadinessHealthSupport {
     private static String notifsUrl;
     private static String topicArn;
 
-    /** Creates the queues + topic. Safe to call from each context; idempotent per JVM. */
+    /**
+     * Starts LocalStack once per JVM and creates the queues + topic. NOT a JUnit-managed
+     * {@code @Container} on purpose: a shared static container is stopped by the extension
+     * after the FIRST IT class while the second class still references its URLs (the CI
+     * cross-class failure — readiness DOWN in the GOOD context). Manual lifecycle; Ryuk reaps
+     * at JVM exit; both IT classes in the same fork share one LocalStack.
+     */
     static synchronized void ensureTopology() {
+        if (!localstack.isRunning()) {
+            localstack.start();
+        }
         if (ledgerUrl != null) {
             return;
         }
