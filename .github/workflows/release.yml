@@ -141,34 +141,27 @@ jobs:
           sha256sum dargent-api-${{ steps.semver.outputs.semver }}.jar
 
       - name: Compose release notes
-        id: notes
         run: |
-          # Runbook §1: notes = tag annotation + auto-generated changelog section. The
-          # annotation is prepended via --notes (per `gh release create --help`: additional
-          # notes are prepended when --generate-notes is also given).
+          # Runbook §1: notes = tag annotation + auto-generated changelog section (--notes
+          # prepends when --generate-notes is also given). The file is written WITHOUT a
+          # GITHUB_OUTPUT multiline heredoc (delimiter must be a standalone line — a value
+          # lacking a trailing newline glues the terminator and breaks the command file).
           annotation="$(git show -s --format=%B "${{ steps.semver.outputs.tag }}")"
-          body="Image: \`${{ steps.push.outputs.digest }}\`
-
-          Tag: \`${{ steps.semver.outputs.tag }}\` · Semver tag: \`${{ steps.semver.outputs.semver }}\`
-
-          ${annotation}
-
-          Assets: API jar (extracted from the shipped image) + CycloneDX SBOM of the exact pushed digest."
-          printf '%s' "$body" > notes.md
-          # Multiline value: heredoc EOF delimiter (GITHUB_OUTPUT truncates at first newline otherwise).
-          {
-            echo "notes_text<<EOF"
-            cat notes.md
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
+          printf 'Image: `%s`\n\n' "${{ steps.push.outputs.digest }}" > notes.md
+          printf 'Tag: `%s` · Semver tag: `%s`\n\n' \
+            "${{ steps.semver.outputs.tag }}" "${{ steps.semver.outputs.semver }}" >> notes.md
+          printf '%s\n\n' "$annotation" >> notes.md
+          printf 'Assets: API jar (extracted from the shipped image) + CycloneDX SBOM of the exact pushed digest.\n' >> notes.md
 
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # --notes prepends to the auto-generated changelog (per gh release create --help).
+          notes="$(cat notes.md)"
           gh release create "${{ steps.semver.outputs.tag }}" \
             "dargent-api-${{ steps.semver.outputs.semver }}.jar" \
             "sbom-dargent-api-${{ steps.semver.outputs.semver }}.json" \
             --title "Dargent ${{ steps.semver.outputs.semver }}" \
-            --notes "${{ steps.notes.outputs.notes_text }}" \
+            --notes "$notes" \
             --generate-notes
