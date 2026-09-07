@@ -88,6 +88,7 @@ jobs:
     permissions:
       contents: read
       security-events: write
+      packages: write
     steps:
       - uses: actions/checkout@v7
 
@@ -132,6 +133,27 @@ jobs:
         with:
           sarif_file: trivy-psp.sarif
           category: trivy-psp
+
+      # E14 S1 — Registry push on main only (runbook §1 literal: "every commit on `main`").
+      # sha-<short7> is immutable, :edge is moving. PR/schedule/dispatch builds scan but never
+      # push (PR heads are unvetted; fork PRs cannot write packages). GITHUB_TOKEN only — no PATs.
+      - name: Login to GHCR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0 (SHA-pinned, supply-chain per threat-model)
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Push API image (sha-<short7> + :edge)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          short7="${GITHUB_SHA:0:7}"
+          dest="ghcr.io/daniel-castilho/dargent-api"
+          docker tag dargent-api:${{ github.sha }} "$dest:sha-$short7"
+          docker tag dargent-api:${{ github.sha }} "$dest:edge"
+          docker push "$dest:sha-$short7"
+          docker push "$dest:edge"
+          echo "digest: $(docker inspect --format='{{index .RepoDigests 0}}' "$dest:sha-$short7")"
 
       # E13 S2 — Trivy pass 2: HARD GATE on HIGH,CRITICAL for BOTH images (design §11.1).
       - name: Trivy pass 2 — HIGH/CRITICAL gate (both images)
