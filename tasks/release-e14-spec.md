@@ -58,13 +58,13 @@ true in the same epic that exercises it.
 
 | Step | Deliverable | Evidence (run id / digest / file) | Status |
 |---|---|---|---|
-| S0 | lint `3[0-9]{9,}` green, count N | | ☐ |
-| S0 | governance docs synced, epics E9=23/23 + E14 cell `post-M4` + DEBT-8 body-cap word | | ☐ |
-| S1 | sha+edge pushed on main | | ☐ |
-| S2 | rc rehearsal green end-to-end | | ☐ |
-| S2 | Release assets jar+SBOM, digest match | | ☐ |
-| S3 | backup/restore scripts + negative test ≠0 | | ☐ |
-| S4 | restore-drill green + record w/ measured RTO | | ☐ |
+| S0 | lint `3[0-9]{9,}` green, count N | 89 ids, 0 violations (local relint, commit `7a416a3`; CodeQL `34140383190` green) | ✅ |
+| S0 | governance docs synced, epics E9=23/23 + E14 cell `post-M4` + DEBT-8 body-cap word | PR #5 merged `c2e58c3` (CI `34140383196` 6/6 green incl evidence-lint) | ✅ |
+| S1 | sha+edge pushed on main | PR #6 merged `6c2e7a4`; push run `34143313416` image job green; GHCR versions: `sha-6c2e7a4`, `sha-f6d0303`+`edge` | ✅ |
+| S2 | rc rehearsal green end-to-end | rc1 FAILED (notes heredoc — run `34145039268`, tag never moved); fix PR #8 merged `9d0ce22`; rc2 GREEN run `34148023947` | ✅ |
+| S2 | Release assets jar+SBOM, digest match | Release `v1.0.0-rc2`: GHCR `1.0.0-rc2` = `sha256:344a4f0bf9bf90562010261f48ca33e7afd976df2f49f0d6e3b86e5b483f6c7f` == body digest; asset jar sha256 `9b412908bceb9eabdc30088eeefdc7b280ab79732e7cfd9b4bd4a7650834711d` == image-extracted jar | ✅ |
+| S3 | backup/restore scripts + negative test ≠0 | local: tampered manifest → `MISMATCH expected=14 actual=13` → exit 1; republish 4/4 paths (unset→1, relay-off→404-reason, happy→0, 501-window→1) — PR #9 merged `e1132ea` | ✅ |
+| S4 | restore-drill green + record w/ measured RTO | CI `restore-drill` job green: run `34155211811` (job `101847517958`), `DRILL RESULT: PASS — RTO 21s (≤ 1800s)`; record `docs/drills/restore-2026-09-07.md` (local 23s + CI 21s + negative paths) | ✅ |
 | S5 | two-release migration verdict | | ☐ |
 | S6 | releases/v1.0.0.md + CHANGELOG + README | | ☐ |
 | S7 | RC regression all-green + freeze | | ☐ |
