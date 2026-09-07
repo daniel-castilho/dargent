@@ -54,7 +54,7 @@ jobs:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         run: |
           set -euo pipefail
-          attempt() { ./mvnw -B dependency-check:check -DskipTests "$@"; }
+          attempt() { ./mvnw -B dependency-check:aggregate -DskipTests "$@"; }
           if ! attempt; then
             echo "OWASP attempt 1 failed — retrying once in 60s (NVD sync flakiness, documented P2 policy)"
             sleep 60
