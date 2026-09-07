@@ -43,7 +43,12 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 (SHA-pinned, design §11.1)
         with:
           path: ~/.m2/dependency-check-data
-          key: owasp-nvd-${{ github.run_id }}
+          # Stable key + manual bump (owner pattern from spotpobre/flowtxt: dependency-check-nvd-v1/v2).
+          # A fixed key converges to ONE cache entry (~113MB) instead of one entry per run_id
+          # churning the 10GB LRU cap (eviction would reintroduce cold syncs). actions/cache is
+          # branch-namespace scoped: new branches restore from the default-branch namespace and
+          # delta-sync (never cold). Force a fresh NVD dataset by bumping the suffix v1 -> v2.
+          key: owasp-nvd-v1
           restore-keys: owasp-nvd-
 
       # E13 S1: OWASP Dependency-Check — fail CVSS >= 7. NVD API key rides the repository secret
