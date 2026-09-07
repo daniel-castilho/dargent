@@ -67,8 +67,8 @@ public final class SettlementUseCase {
 
             var settlement = new Settlement(UUID.randomUUID(), merchantId, idempotencyKey, balance, entryId, now);
             Settlement persisted = store.insertSettlement(settlement).orElse(settlement);
-            store.recordAudit(
-                    new LedgerStore.AuditEntry(UUID.randomUUID(), "SETTLE", actorKeyId, merchantId, idempotencyKey));
+            store.recordAudit(new LedgerStore.AuditEntry(
+                    UUID.randomUUID(), "ledger_admin_settlement", actorKeyId, merchantId, idempotencyKey));
             return SettlementResult.created(persisted);
         });
     }

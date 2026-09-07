@@ -550,9 +550,10 @@ build (PR gate)
 ├── ./mvnw test                        → pure unit
 ├── ArchUnit + scripts/check-boundaries.sh  → double boundaries (semantic + import/FQN)
 ├── ./mvnw spotbugs:check              → 0 bugs
-├── OWASP Dependency-Check             → cached NVD + NVD_API_KEY; report-only, degrades to cache
+├── OWASP Dependency-Check             → cached NVD + NVD_API_KEY; gate CVSS ≥ 7 (P2: tool outage fails the job)
 ├── ./mvnw test -Dtest='*IT'           → Testcontainers (Postgres + LocalStack + WireMock)
 ├── ./mvnw jacoco:check                → combined unit+IT coverage, per-module floors
+├── scripts/evidence-lint.sh           → cited CI run ids must resolve + carry their numbers (P6)
 └── clean package + jar artifact       → consumed by the jobs below
 
 image (needs: build)

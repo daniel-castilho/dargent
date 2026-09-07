@@ -38,6 +38,14 @@ management:
   endpoint:
     health:
       show-details: never
+      # E13 S4 R2: readiness = ALL contributors (db + diskSpace + the SNS/SQS spine indicators,
+      # registered only when the spine is enabled). Boot's default readiness group carries only
+      # readinessState/ping — redefining membership here makes /actuator/health/readiness the
+      # real deploy gate the blue-green canary consumes. Liveness keeps its default (process-only).
+      group:
+        readiness:
+          include: '*'
+          show-details: never
   # N12 (E12 S4): SLO buckets from slos.md thresholds — the whole rider. p50/p95/p99 readable from
   # the bucket histogram; publish-percentile-histogram keeps bucket boundaries exact for downstream
   # tooling. MetricsScrapeIT asserts the 0.25s bucket line exists.

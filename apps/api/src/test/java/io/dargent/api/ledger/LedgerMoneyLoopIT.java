@@ -260,7 +260,7 @@ class LedgerMoneyLoopIT {
         reconciliation.rebuild(KEY_ID);
         assertProofOk(3, 9);
 
-        long audit = jdbc.sql("select count(*) from ledger.audit_log where command = 'REBUILD'")
+        long audit = jdbc.sql("select count(*) from ledger.audit_log where command = 'ledger_admin_rebuild'")
                 .query(Long.class)
                 .single();
         assertThat(audit).isEqualTo(1);

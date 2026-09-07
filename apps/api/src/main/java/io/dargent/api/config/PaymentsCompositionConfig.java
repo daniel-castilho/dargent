@@ -53,7 +53,10 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.transaction.support.TransactionTemplate;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
+import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
 import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.sns.SnsClient;
 import software.amazon.awssdk.services.sqs.SqsClient;
 import tools.jackson.databind.ObjectMapper;
 
@@ -252,16 +255,33 @@ public class PaymentsCompositionConfig {
         return new JdbcOutboxEventStore(jdbc);
     }
 
+    // E13 S4 R2: shared SNS client — one per app. The relay and the readiness probe consume the
+    // SAME client (spec: "existing clients only"), keeping the per-call timeout contract here.
     @Bean
     @ConditionalOnProperty(name = "dargent.relay.enabled", havingValue = "true", matchIfMissing = false)
-    EventPublisher snsEventPublisher(
-            @Value("${DARGENT_EVENTS_TOPIC_ARN}") String topicArn,
+    SnsClient snsClient(
             @Value("${DARGENT_EVENTS_PUBLISH_TIMEOUT_MS}") long timeoutMs,
             @Value("${AWS_REGION}") String region,
             @Value("${AWS_ENDPOINT_URL}") String endpointUrl,
             @Value("${AWS_ACCESS_KEY_ID:test}") String accessKey,
             @Value("${AWS_SECRET_ACCESS_KEY:test}") String secretKey) {
-        return new SnsEventPublisher(topicArn, timeoutMs, region, endpointUrl, accessKey, secretKey);
+        Duration timeout = Duration.ofMillis(timeoutMs);
+        return SnsClient.builder()
+                .region(Region.of(region))
+                .endpointOverride(URI.create(endpointUrl))
+                .httpClient(UrlConnectionHttpClient.builder().build())
+                .overrideConfiguration(ClientOverrideConfiguration.builder()
+                        .apiCallAttemptTimeout(timeout)
+                        .apiCallTimeout(timeout)
+                        .build())
+                .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(accessKey, secretKey)))
+                .build();
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "dargent.relay.enabled", havingValue = "true", matchIfMissing = false)
+    EventPublisher snsEventPublisher(SnsClient snsClient, @Value("${DARGENT_EVENTS_TOPIC_ARN}") String topicArn) {
+        return new SnsEventPublisher(snsClient, topicArn);
     }
 
     @Bean

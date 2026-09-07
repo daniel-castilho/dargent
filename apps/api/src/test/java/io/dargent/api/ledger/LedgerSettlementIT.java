@@ -31,6 +31,7 @@ import org.springframework.boot.testcontainers.service.connection.ServiceConnect
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
@@ -80,7 +81,15 @@ class LedgerSettlementIT {
 
     private String baseUrl;
     private final HttpClient http = HttpClient.newHttpClient();
-    private final String rawKey = ApiKeyHasher.generateRawKey();
+    // E13 R3: the test key doubles as the designated ledger-admin key (the 200/201 ladder leg);
+    // admin-denial legs live in LedgerAdminRotationIT. Static + DynamicPropertySource because the
+    // property must exist at context creation (OutboxAdminRotationIT pattern).
+    private static final String rawKey = ApiKeyHasher.generateRawKey();
+
+    @DynamicPropertySource
+    static void adminKeyProperty(org.springframework.test.context.DynamicPropertyRegistry registry) {
+        registry.add("DARGENT_LEDGER_ADMIN_KEY", () -> rawKey);
+    }
 
     @BeforeEach
     void setUp() {
@@ -113,7 +122,7 @@ class LedgerSettlementIT {
         assertThat(balance("payouts:external")).isEqualTo(9900);
         assertThat(settlementCount()).isEqualTo(1);
         assertProofOk();
-        assertThat(auditCount("SETTLE")).isEqualTo(1);
+        assertThat(auditCount("ledger_admin_settlement")).isEqualTo(1);
 
         // Replay same key — same settlement, no double-posting.
         var replay = postSettlement("settle-key-01");

@@ -189,7 +189,10 @@ class MetricsScrapeIT {
 
     private String baseUrl;
     private final HttpClient http = HttpClient.newHttpClient();
-    private final String rawKey = ApiKeyHasher.generateRawKey();
+    // E13 R3: static — /v1/ledger/proof is admin-gated, so the DARGENT_LEDGER_ADMIN_KEY property
+    // (context-creation time) must equal the key later inserted in setUp().
+    private static final String rawKey = ApiKeyHasher.generateRawKey();
+    private static final String adminKeyForScrape = rawKey;
 
     @DynamicPropertySource
     static void awsEnvironment(DynamicPropertyRegistry registry) {
@@ -201,6 +204,8 @@ class MetricsScrapeIT {
         registry.add("DARGENT_EVENTS_TOPIC_ARN", () -> topicArn);
         registry.add("DARGENT_LEDGER_QUEUE_URL", () -> ledgerUrl);
         registry.add("DARGENT_NOTIFS_QUEUE_URL", () -> notifsUrl);
+        // E13 R3: /v1/ledger/proof is admin-gated — the scrape's key doubles as the admin key.
+        registry.add("DARGENT_LEDGER_ADMIN_KEY", () -> adminKeyForScrape);
     }
 
     @BeforeEach
