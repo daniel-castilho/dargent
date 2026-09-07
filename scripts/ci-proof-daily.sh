@@ -44,13 +44,17 @@ export DARGENT_LEDGER_POLL_MS=1000
 export DARGENT_RECONCILER_ENABLED=true
 export DARGENT_RECONCILER_SCAN_MS=2000
 
+# E13 R3: /v1/ledger/proof is admin-gated — the job-scoped smoke key (P1) doubles as the
+# designated admin key for this run. Generated BEFORE compose up so both see the same value.
+SMOKE_KEY=$(python3 -c 'import secrets,string; a=string.digits+string.ascii_uppercase+string.ascii_lowercase; print("psp_test_"+"".join(secrets.choice(a) for _ in range(43)))')
+[[ "${#SMOKE_KEY}" -eq 52 ]] || fail "P0: generated key length ${#SMOKE_KEY} != 52"
+export DARGENT_LEDGER_ADMIN_KEY="$SMOKE_KEY"
+
 note "P0 stack up (event spine ON: relay + ledger consumer)"
 compose up -d
 "$SCRIPT_DIR/deploy.sh" --wait-ready api-blue >/dev/null
 
 # ------------------------------------------------------------------ P1: job-scoped API key (Q2 contract)
-SMOKE_KEY=$(python3 -c 'import secrets,string; a=string.digits+string.ascii_uppercase+string.ascii_lowercase; print("psp_test_"+"".join(secrets.choice(a) for _ in range(43)))')
-[[ "${#SMOKE_KEY}" -eq 52 ]] || fail "P1: generated key length ${#SMOKE_KEY} != 52"
 KEY_HASH=$(printf '%s' "$SMOKE_KEY" | sha256sum | cut -d' ' -f1)
 compose exec -T postgres psql -U dargent -d dargent -v ON_ERROR_STOP=1 -q \
     -c "delete from payments.api_keys where key_prefix = 'psp_test_'" \

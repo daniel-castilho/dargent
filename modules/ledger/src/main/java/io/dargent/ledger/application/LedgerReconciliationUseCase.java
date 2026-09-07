@@ -31,8 +31,20 @@ public final class LedgerReconciliationUseCase {
         return result;
     }
 
+    /**
+     * E13 R3: admin-proof path. Audited as {@code ledger_admin_proof} with the presented key's
+     * real identity (never a sentinel) — admin access is accountable even though the proof is
+     * read-only. The no-actor overload stays for internal schedulers (JournalCoverageAuditor).
+     */
+    public LedgerStore.ProofResult proof(UUID actorKeyId) {
+        store.recordAudit(
+                new LedgerStore.AuditEntry(UUID.randomUUID(), "ledger_admin_proof", actorKeyId, null, "proof"));
+        return proof();
+    }
+
     public LedgerStore.ProofResult rebuild(UUID actorKeyId) {
-        store.recordAudit(new LedgerStore.AuditEntry(UUID.randomUUID(), "REBUILD", actorKeyId, null, "balances"));
+        store.recordAudit(
+                new LedgerStore.AuditEntry(UUID.randomUUID(), "ledger_admin_rebuild", actorKeyId, null, "balances"));
         store.rebuildBalances();
         return store.verifyProof();
     }

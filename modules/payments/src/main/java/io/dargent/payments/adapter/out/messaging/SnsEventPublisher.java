@@ -3,7 +3,6 @@ package io.dargent.payments.adapter.out.messaging;
 import io.dargent.payments.domain.port.out.EventPublisher;
 import java.net.URI;
 import java.time.Duration;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
@@ -34,18 +33,29 @@ public class SnsEventPublisher implements EventPublisher {
 
     private final SnsClient sns;
     private final String topicArn;
-    private final Duration timeout;
 
-    public SnsEventPublisher(
-            @Value("${DARGENT_EVENTS_TOPIC_ARN}") String topicArn,
-            @Value("${DARGENT_EVENTS_PUBLISH_TIMEOUT_MS}") long timeoutMs,
-            @Value("${AWS_REGION}") String region,
-            @Value("${AWS_ENDPOINT_URL}") String endpointUrl,
-            @Value("${AWS_ACCESS_KEY_ID:test}") String accessKey,
-            @Value("${AWS_SECRET_ACCESS_KEY:test}") String secretKey) {
+    /**
+     * Primary constructor: consumes the relay's shared {@code SnsClient} bean (E13 R2 readiness
+     * probes the same client) — one client per app, never a probe-only second client.
+     */
+    public SnsEventPublisher(SnsClient sns, String topicArn) {
+        this.sns = sns;
         this.topicArn = topicArn;
-        this.timeout = Duration.ofMillis(timeoutMs);
-        this.sns = SnsClient.builder()
+    }
+
+    /**
+     * Self-building constructor — keeps module ITs ({@code OutboxRelayIT},
+     * {@code OutboxExhaustionIT}) and old wiring intact with the E6 per-call timeout contract.
+     */
+    public SnsEventPublisher(
+            String topicArn, long timeoutMs, String region, String endpointUrl, String accessKey, String secretKey) {
+        this(buildClient(timeoutMs, region, endpointUrl, accessKey, secretKey), topicArn);
+    }
+
+    private static SnsClient buildClient(
+            long timeoutMs, String region, String endpointUrl, String accessKey, String secretKey) {
+        Duration timeout = Duration.ofMillis(timeoutMs);
+        return SnsClient.builder()
                 .region(Region.of(region))
                 .endpointOverride(URI.create(endpointUrl))
                 .httpClient(UrlConnectionHttpClient.builder().build())
