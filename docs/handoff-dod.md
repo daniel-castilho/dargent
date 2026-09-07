@@ -20,8 +20,9 @@ gh run list --limit 5
 # Surefire summary for every class you cite
 grep -h "Tests run" **/target/surefire-reports/*.txt | tail -20
 
-# Per-cited-class test inventory (the count you must match, or omit counts entirely)
-grep -c "@Test" <each cited test file>
+# Per-cited-class test inventory — ANCHORED pattern (unanchored counts @Testcontainers too;
+# this channel shipped inflated numbers for a week because of it)
+grep -c "@Test$" <each cited test file>   # or better: the surefire summary itself
 ```
 
 ## 2. Self-audit — run BEFORE sending (any "no" = fix the handoff, not the audit)
@@ -55,4 +56,5 @@ grep -c "@Test" <each cited test file>
 | §2 sha check | Citing commits that resolve nowhere |
 | §2 main-claims | "re-enabled" against a commit message reading "disabled (HOLD)"; Known-Gap narrative about a @Disabled test |
 | §2 owner-quote | `@Disabled("HOLD: owner re-baselining...")` with no owner authorization |
+| §1 arithmetic | Correct per-class list, wrong sum (TD-34: 1+6+2+10+3+1 stated as 22 — the TD-31 correction itself carried the off-by-one it fixed) |
 | §2 no-closure | Four consecutive "E9 CLOSED" declarations from one epic |
