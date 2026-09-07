@@ -5,6 +5,48 @@ versioning: semantic, cut from annotated git tags (see [release-runbook](docs/re
 
 ## [Unreleased]
 
+### Added — E14 Release Engineering, Block 1 (S0–S4) (2026-09-07)
+
+- **S1 — GHCR push on main**: ci.yml image job pushes `ghcr.io/daniel-castilho/dargent-api:sha-<short7>`
+  (immutable) + `:edge` (moving) on every main commit (Trivy-clean first, `packages: write`
+  job-scoped, GITHUB_TOKEN only, main-only gating). Runbook §1 `<org>` → literal. First images:
+  `sha-6c2e7a4`, `sha-f6d0303`+`edge`.
+- **S2 — Release workflow** (`.github/workflows/release.yml`, tag `v*` only): gates re-run the
+  full suite on the tagged commit (boundaries, migration gate, `./mvnw -B verify`, OWASP cached,
+  floors) → image → non-root gate → Trivy pass 2 → GHCR push `<semver>` (v stripped) → CycloneDX
+  SBOM scanned BY DIGEST (the exact pushed image) → jar extracted FROM the shipped image (not a
+  sibling build) → GitHub Release with tag annotation + auto-generated changelog + digest in
+  body. Rehearsals: `v1.0.0-rc1` failed at notes composition (GITHUB_OUTPUT heredoc newline bug —
+  fixed, tag never moved per contract), `v1.0.0-rc2` GREEN end-to-end (run `34148023947`):
+  `matched` digest `sha256:344a4f0bf9bf90562010261f48ca33e7afd976df2f49f0d6e3b86e5b483f6c7f` ==
+  Release body digest; asset jar sha256 `9b412908bceb9eabdc30088eeefdc7b280ab79732e7cfd9b4bd4a7650834711d`
+  == jar extracted from the image (bit-for-bit).
+- **S3 — Backup/restore machinery** (runbook §6): `scripts/backup.sh` (pg_dump -Fc + manifest:
+  per-table counts, ΣDR/ΣCR, size, pg version, timestamp; `dargent-YYYYMMDD-HHMMSS.dump`),
+  `scripts/restore.sh <dump>` (fresh cluster → pg_restore → Flyway no-op check (history H0==H1,
+  else dump/code mismatch) → per-table counts vs manifest → balance proof → GO/NO-GO line;
+  non-zero on ANY mismatch; never starts traffic). `deploy/systemd/dargent-backup.{service,timer}`
+  + `postgres-wal-archival.conf` (15-min WAL, rotation 8) shipped-as-files, honestly declared
+  not-CI-drilled. Compose line `DARGENT_OUTBOX_ADMIN_KEY` (default EMPTY = 404-hidden).
+- **S3 — Outbox republish tool** `scripts/republish-outbox.sh --from <ts> [--to] [--types]`
+  (Q2 Proposal A, owner-adjudicated): wraps `POST /v1/outbox/republish`; fail-closed preconditions
+  (key unset / key without `api_keys` row → actionable message); relay OFF → WARN + proceed (404
+  reported with reason); counts the FULL window directly and fails when the 500/call cap leaves
+  rows — `matched=500 republished=500 window_rows=501` → split-window instruction (the endpoint
+  does not consume the window; the tool never silently under-republishes). All four paths proven
+  (exit codes 0/1 recorded in the drill record).
+- **S4 — THE DRILL**: `scripts/ci-restore-drill.sh` + CI `restore-drill` job (workflow_dispatch;
+  also a release gate in release.yml): seeded stack (3 money-path txns) → backup → **destroy the
+  cluster (down -v)** → restore + verify → post-restore money path CONFIRMED → teardown; wall-clocked
+  RTO. Isolated compose project (`dargent-drill`, ports 18xxx) — the first repo job that destroys
+  a cluster on purpose, never touching the dev stack. First record
+  `docs/drills/restore-2026-09-07.md`: **RTO 23 s** (≤ 30 min stated), negative path tampered
+  manifest → `exit 1`.
+- **S0 — Governance sync**: epics E9 row corrected to **23/23** executable `@Test$` (TD-34 channel
+  arithmetic fix), E14 cell → `post-M4 (cuts v1.0.0)`; governance guide + handoff-dod corrected
+  copies landed in `docs/`; AGENTS §8 DEBT-8 "and request body cap"; E14 task package
+  (`tasks/release-e14-*.md`) landed.
+
 ### Added — E13 Quality & Security Gates, Block 2 (S4–S5) (2026-09-07)
 
 - **S4/R1 — Evidence-lint** (`scripts/evidence-lint.sh` + CI job on PR + nightly): every

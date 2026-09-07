@@ -1,0 +1,9 @@
+[Unit]
+Description=Dargent nightly backup timer (02:30 local, before the 03:00 UTC proof-daily CI job)
+
+[Timer]
+OnCalendar=*-*-* 02:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

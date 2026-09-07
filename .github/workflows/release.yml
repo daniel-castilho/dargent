@@ -1,6 +1,8 @@
 # E14 S2 — Release workflow. Triggered ONLY by an annotated tag `v*` (runbook §1 tag flow).
 # Contracts (§3): gates NEVER skip the release path; SBOM = the pushed image digest; tag
 # immutability (fix-forward via vX.Y.Z+1, never move a tag). GITHUB_TOKEN only — no PATs.
+# E14 S3/S4: the gates include the RESTORE DRILL (runbook §6) — a release ships only from a
+# backup chain that has been restored + verified in the same run ("the drill is the deliverable").
 name: Release
 
 on:
@@ -62,8 +64,32 @@ jobs:
           name: test-reports
           path: '**/target/surefire-reports/**'
 
+  # E14 S4: the restore drill IS part of the release gates (runbook §2 item 4 — a release only
+  # ships from a backup chain restored + verified in the same run).
+  restore-drill:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build compose images
+        run: |
+          docker build -t dargent-api:compose -f apps/api/Dockerfile .
+          docker build -t dargent-psp-simulator:compose -f apps/psp-simulator/Dockerfile .
+
+      - name: Restore drill — backup → destroy → restore → verify (RTO measured)
+        run: bash scripts/ci-restore-drill.sh
+
+      - name: Upload drill artifacts (always — the record is the deliverable)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: restore-drill
+          path: |
+            /tmp/restore-drill/**
+          if-no-files-found: ignore
+
   release:
-    needs: gates
+    needs: [gates, restore-drill]
     runs-on: ubuntu-latest
     # contents: write — create the GitHub Release; packages: write — push the image.
     permissions:
