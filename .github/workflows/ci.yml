@@ -147,7 +147,7 @@ jobs:
       - name: Push API image (sha-<short7> + :edge)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-          short7="${{ github.sha[0:7] }}"
+          short7="${GITHUB_SHA:0:7}"
           dest="ghcr.io/daniel-castilho/dargent-api"
           docker tag dargent-api:${{ github.sha }} "$dest:sha-$short7"
           docker tag dargent-api:${{ github.sha }} "$dest:edge"
