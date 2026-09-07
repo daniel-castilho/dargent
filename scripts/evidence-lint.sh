@@ -4,7 +4,7 @@
 #
 # Sources (contract §3 R1): docs/epics.md (whole) + the §10 acceptance-matrix section of each
 # tasks/*-spec.md. For each source, assert:
-#   (a) every backtick-quoted `33\d+` run id resolves via `gh api repos/<repo>/actions/runs/<id>` (200),
+#   (a) every backtick-quoted `3[0-9]{9,}` run id resolves via `gh api repos/<repo>/actions/runs/<id>` (200),
 #   (b) every id has a run-number reference (`run #N` / `runs #N` / bare `#N`) ADJACENT, i.e. within
 #       ±1 line of the id's line.
 # Output: `file:line: violation` (P6 — evidence discipline; never silent). Exit 1 on any violation.
@@ -22,7 +22,10 @@ REPO="${GITHUB_REPOSITORY:-daniel-castilho/dargent}"
 
 cd "$REPO_DIR"
 
-ID_RE='`33[0-9]{8,}`'
+# Owner adjudication 2026-09-07 (E13 close): the id pattern widens from `33\d+` to
+# `3[0-9]{9,}` — GitHub run ids entered the 34… range (34079606961, 34094292279) and the
+# literal 33-prefix had a blind spot. Same ±1-line adjacency contract.
+ID_RE='`3[0-9]{9,}`'
 NUM_RE='(^|[^0-9])#([0-9]+)'
 
 FAILS=()
