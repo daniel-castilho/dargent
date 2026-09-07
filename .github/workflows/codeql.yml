@@ -1,0 +1,40 @@
+# CodeQL — Java SAST (E13 S3, design §11.1): java, security-extended queries, push/PR on main.
+# Third-party action pinned by commit SHA (design §11.1); the github/codeql-action is owned by
+# GitHub but still SHA-pinned here — belt and braces for a security-critical path.
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@486fec2a3ea2626afcd8c7e9208b4f515078dd7e # codeql-bundle-v2.26.4
+        with:
+          languages: java
+          queries: security-extended
+
+      - name: Build (no tests — CodeQL instruments the compile)
+        run: ./mvnw -B clean compile -DskipTests
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@486fec2a3ea2626afcd8c7e9208b4f515078dd7e # codeql-bundle-v2.26.4
+        with:
+          category: '/language:java'

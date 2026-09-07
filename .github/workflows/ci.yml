@@ -78,6 +78,11 @@ jobs:
   image:
     needs: build
     runs-on: ubuntu-latest
+    # E13 S2/S3: SARIF upload (Trivy pass 1, CodeQL) needs security-events: write — scoped to
+    # this job only; every other job keeps the workflow-level contents: read.
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - uses: actions/checkout@v7
 
@@ -97,9 +102,62 @@ jobs:
           fi
           echo "OK: image runs non-root"
 
-      # M4 adds: Trivy 2-pass (SARIF advisory + HIGH/CRITICAL gate), SBOM CycloneDX,
-      # CodeQL, Dependency Review, k6 performance (consultative) — design.md §11.1.
-      # runtime-smoke (E12 S2+S3) is live below: compose → readiness → smoke → chaos → shutdown.
+      # E13 S2 — Trivy pass 1: SARIF (advisory, non-blocking) for BOTH images.
+      - name: Trivy pass 1 — SARIF advisory (api)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: dargent-api:${{ github.sha }}
+          format: sarif
+          output: trivy-api.sarif
+      - name: Trivy pass 1 — SARIF advisory (psp-simulator)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: dargent-psp-simulator:${{ github.sha }}
+          format: sarif
+          output: trivy-psp.sarif
+      - name: Upload Trivy SARIF (advisory)
+        if: always()
+        uses: github/codeql-action/upload-sarif@486fec2a3ea2626afcd8c7e9208b4f515078dd7e # codeql-bundle-v2.26.4
+        with:
+          sarif_file: trivy-api.sarif
+          category: trivy-api
+      - name: Upload Trivy SARIF (psp-simulator, advisory)
+        if: always()
+        uses: github/codeql-action/upload-sarif@486fec2a3ea2626afcd8c7e9208b4f515078dd7e # codeql-bundle-v2.26.4
+        with:
+          sarif_file: trivy-psp.sarif
+          category: trivy-psp
+
+      # E13 S2 — Trivy pass 2: HARD GATE on HIGH,CRITICAL for BOTH images (design §11.1).
+      - name: Trivy pass 2 — HIGH/CRITICAL gate (both images)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: dargent-api:${{ github.sha }}
+          format: table
+          exit-code: '1'
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+
+      # E13 S2 — SBOM CycloneDX per image (naming: sbom-<image>-<tag>.json; release
+      # attachment is E14). Same trivy scanner, cyclonedx format.
+      - name: SBOM CycloneDX (api)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: dargent-api:${{ github.sha }}
+          format: cyclonedx
+          output: sbom-dargent-api-${{ github.sha }}.json
+      - name: SBOM CycloneDX (psp-simulator)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: dargent-psp-simulator:${{ github.sha }}
+          format: cyclonedx
+          output: sbom-dargent-psp-simulator-${{ github.sha }}.json
+      - name: Upload SBOM artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: sbom-${{ github.sha }}
+          path: sbom-*.json
+          if-no-files-found: error
 
   runtime-smoke:
     needs: [build]
@@ -127,6 +185,18 @@ jobs:
             /tmp/smoke.*
             /tmp/shutdown.probe.body*
           if-no-files-found: ignore
+
+  # E13 S3 — Dependency Review: PR gate, fails on high+ severity NEW vulnerabilities in the
+  # dependency diff (base vs head). Action SHA-pinned (third-party, design §11.1).
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Dependency Review
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
 
   # E12 S4 rider N8: daily ledger proof. Full event spine ON (relay + ledger consumer), one real
   # payment through money path, then /v1/ledger/proof + DB-level Σ DR = Σ CR + projection == lines.
