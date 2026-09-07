@@ -7,7 +7,7 @@ If a procedure here is wrong, fix it in the same PR that discovered the fact.
 
 ## 1. Artifacts & promotion flow
 
-- Every commit on `main`: CI builds **the** jar and **the** image `ghcr.io/<org>/dargent-api:sha-<short7>`
+- Every commit on `main`: CI builds **the** jar and **the** image `ghcr.io/daniel-castilho/dargent-api:sha-<short7>`
   (immutable) + `:edge` (moving). A commit always maps to the same jar + image.
 - Annotated tag `vX.Y.Z` (cut when a milestone meets DoD): CI re-runs all gates on the tagged commit, pushes
   the semver image, and opens the GitHub Release with the jar + CycloneDX SBOM of the exact shipped image.
