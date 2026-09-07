@@ -89,7 +89,7 @@ Milestone mapping in brackets. Every row = one test (or group) that must exist a
 27. Late webhook beyond anti-replay window → rejected → reconciler confirms [M3]
 
 **Production shape**
-28. Lockdown IT: prod profile boots with Swagger/api-docs absent, actuator health-only, `show-details: never` [M4]
+28. Lockdown IT: prod profile boots with Swagger/api-docs absent, actuator health-only, `show-details: never` [M4] — satisfied by `ProductionLockdownIT` (E11 S3; link re-verified E13 S5)
 
 ## 5. Coverage policy
 
