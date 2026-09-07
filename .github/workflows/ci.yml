@@ -39,6 +39,34 @@ jobs:
       - name: Build, unit and integration tests
         run: ./mvnw -B verify
 
+      - name: Cache OWASP NVD data
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 (SHA-pinned, design §11.1)
+        with:
+          path: ~/.m2/dependency-check-data
+          key: owasp-nvd-${{ github.run_id }}
+          restore-keys: owasp-nvd-
+
+      # E13 S1: OWASP Dependency-Check — fail CVSS >= 7. NVD API key rides the repository secret
+      # NVD_API_KEY (no key → throttled-but-working sync); data dir cached across runs; 2 documented
+      # retries (P2: a tool outage MUST fail the job — this gate never silently passes).
+      - name: OWASP Dependency-Check (NVD keyed, cached)
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        run: |
+          set -euo pipefail
+          attempt() { ./mvnw -B dependency-check:check -DskipTests "$@"; }
+          if ! attempt; then
+            echo "OWASP attempt 1 failed — retrying once in 60s (NVD sync flakiness, documented P2 policy)"
+            sleep 60
+            attempt || { echo "OWASP attempt 2 failed — FAILING THE JOB (never silent-pass)"; exit 1; }
+          fi
+
+      # E13 S1: owner-fixed per-module LINE floors, measured on combined unit+IT data (the
+      # aggregate exec built by apps/api during verify — hexagonal ITs live in the boot app).
+      # design.md §11.1: the check is a separate step AFTER the IT step. Floors live in module poms.
+      - name: Coverage floors (payments/ledger/shared/notifications/api)
+        run: bash scripts/check-coverage.sh
+
       - name: Upload test reports on failure
         if: failure()
         uses: actions/upload-artifact@v7

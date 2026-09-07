@@ -30,12 +30,18 @@
   <properties>
     <java.version>25</java.version>
     <archunit.version>1.4.1</archunit.version>
+    <!-- E13 S1: OWASP Dependency-Check flagged tomcat-embed-core 11.0.24 (Boot 4.1.1 management)
+         with 9 CVEs CVSS 7.5-9.8 (CVE-2026-65183/65905/65927/66422/68763/68525/68569/65182/65637).
+         Bump to the latest stable 11.0.x via the Boot property — the gate's finding gets a
+         dependency fix, never a suppression. -->
+    <tomcat.version>11.0.25</tomcat.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <!-- 4.9.8.5, not 4.10.x: the 4.10 line requires Maven >= 3.8.9; the wrapper is pinned to
          3.8.7 (the version CI ran since M0 — wrapper bump is a separate owner decision). -->
     <spotbugs.version>4.9.8.5</spotbugs.version>
     <spotless.version>3.10.2</spotless.version>
     <jacoco.version>0.8.15</jacoco.version>
+    <dependency-check.version>13.0.0</dependency-check.version>
     <!-- Per-module LINE coverage floors (owner-fixed, testing-playbook §5). The parent is pom
          packaging (no classes): jacoco.skip=true here is inherited as the DEFAULT-OFF, and every
          floored module opts back in explicitly with jacoco.skip=false + its floor number — a
@@ -193,6 +199,32 @@
             </configuration>
           </execution>
         </executions>
+      </plugin>
+      <!-- E13 S1 — OWASP Dependency-Check (design §11.1). Gate: fail CVSS >= 7. Suppressions carry
+           rationale + review date per entry (P4). Invoked as a CI step (not bound to the
+           lifecycle): `./mvnw dependency-check:check` with the NVD data dir cached between runs;
+           keyless mode with documented retry — a tool error MUST fail the job (P2, never
+           silent-pass). -->
+      <plugin>
+        <groupId>org.owasp</groupId>
+        <artifactId>dependency-check-maven</artifactId>
+        <version>${dependency-check.version}</version>
+        <configuration>
+          <failBuildOnCVSS>7</failBuildOnCVSS>
+          <suppressionFile>${maven.multiModuleProjectDirectory}/owasp-suppressions.xml</suppressionFile>
+          <!-- NVD API key rides the repository secret NVD_API_KEY (CI passes it as env — same
+               pattern as the other local systems). Without a key the sync degrades to slow
+               throttled downloads but still WORKS; a tool error still fails the build (P2). -->
+          <dataDirectory>${user.home}/.m2/dependency-check-data</dataDirectory>
+          <nvdApiKey>${env.NVD_API_KEY}</nvdApiKey>
+          <nvdApiDelay>6000</nvdApiDelay>
+          <!-- Retention keeps the cache bounded; formats give CI the summary + the full evidence. -->
+          <retentionJsHours>24</retentionJsHours>
+          <formats>
+            <format>HTML</format>
+            <format>CSV</format>
+          </formats>
+        </configuration>
       </plugin>
       <!-- E13 S0 — Spotless format gate (checkstyle-style determinism via palantir-java-format).
            The ONE normalize commit landed before this gate went live (owner-approved). -->
