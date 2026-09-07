@@ -269,3 +269,33 @@ jobs:
             /tmp/proof-daily.*
             /tmp/smoke.*
           if-no-files-found: ignore
+
+  # E14 S4: THE DRILL (runbook §6 — "the drill is the deliverable"). Boots a seeded stack on an
+  # ISOLATED compose project (dargent-drill — the first repo job that destroys a cluster on
+  # purpose), runs the money path, backs up, DESTROYS the cluster (down -v), restores + verifies
+  # (counts vs manifest, ΣDR=ΣCR, projection==lines, Flyway no-op), then proves the restored
+  # cluster serves NEW traffic. Wall-clocks the restore section (RTO ≤ 30 min budget).
+  # In the release chain: release.yml runs this same drill in its gates before the tag ships.
+  restore-drill:
+    needs: build
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build compose images
+        run: |
+          docker build -t dargent-api:compose -f apps/api/Dockerfile .
+          docker build -t dargent-psp-simulator:compose -f apps/psp-simulator/Dockerfile .
+
+      - name: Restore drill — backup → destroy → restore → verify (RTO measured)
+        run: bash scripts/ci-restore-drill.sh
+
+      - name: Upload drill artifacts (always — the record is the deliverable)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: restore-drill
+          path: |
+            /tmp/restore-drill/**
+          if-no-files-found: ignore

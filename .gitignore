@@ -27,6 +27,9 @@ perf/results/
 deploy/runtime/last-deploy.txt
 deploy/runtime/deploy-overlay.yaml
 
+# Backup dumps + manifests (E14 S3 — never commit data)
+backups/
+
 # Logs
 *.log
 

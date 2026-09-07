@@ -76,6 +76,10 @@ services:
       # (contract — never change the default without owner sign-off). Proof-daily exports the
       # job-scoped smoke key here so P5 can call the (now admin-gated) proof endpoint.
       DARGENT_LEDGER_ADMIN_KEY: ${DARGENT_LEDGER_ADMIN_KEY:-}
+      # E14 S3 (Q2 Proposal A): outbox admin gate (republish/requeue). Default EMPTY = 404-hidden
+      # (same posture as the ledger admin key above — never change the default without owner sign-off).
+      # scripts/republish-outbox.sh exports the operator's key here.
+      DARGENT_OUTBOX_ADMIN_KEY: ${DARGENT_OUTBOX_ADMIN_KEY:-}
       DARGENT_EXPIRATION_ENABLED: ${DARGENT_EXPIRATION_ENABLED:-false}
     ports:
       - "8081:8080"

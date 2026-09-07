@@ -1,0 +1,16 @@
+[Unit]
+Description=Dargent nightly database backup (pg_dump -Fc + manifest, runbook §6)
+Documentation=file:///opt/dargent/docs/release-runbook.md
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+# Run from the repo checkout on the host; the script targets the running compose stack.
+WorkingDirectory=/opt/dargent
+ExecStart=/opt/dargent/scripts/backup.sh --out-dir /var/backups/dargent
+# Rotation: keep 8 dumps (systemd timer units have no built-in rotation — ExecStartPost prunes)
+ExecStartPost=/bin/sh -c 'ls -1t /var/backups/dargent/dargent-*.dump 2>/dev/null | tail -n +9 | xargs -r rm -f; ls -1t /var/backups/dargent/dargent-*.manifest.json 2>/dev/null | tail -n +9 | xargs -r rm -f'
+User=dargent
+Group=dargent
+Nice=10

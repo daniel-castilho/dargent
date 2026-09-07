@@ -89,9 +89,14 @@ expand/contract contract — this is why it exists.
   **Traffic never returns over an unverified restore** (script exits non-zero on any count mismatch).
 - **Quarterly restore drill:** run the restore into a scratch port; record date, dump age, verification output
   and wall-clock RTO in `docs/drills/restore-<date>.md`. The drill is the deliverable — a backup without a
-  recorded restore is a hope.
+  recorded restore is a hope. **CI drills it too:** the `restore-drill` job (workflow_dispatch + a release-gate
+  step in `release.yml`) runs backup → destroy → restore → verify end-to-end on an isolated compose project and
+  uploads the drill artifacts. First record: `docs/drills/restore-2026-09-07.md` (RTO 23 s; negative paths
+  proven: tampered-manifest → exit 1, republish cap/relay/key-set paths).
 - **LocalStack is disposable by design:** after a host loss, queues re-provision at boot; missed events replay
-  via the outbox republish tool (`scripts/republish-outbox.sh --from <ts>`); nothing else is lost.
+  via the outbox republish tool (`scripts/republish-outbox.sh --from <ts> [--to <ts>] [--types a,b]` —
+  admin-gated by `DARGENT_OUTBOX_ADMIN_KEY`, prints `matched` vs `republished` and fails when matched >
+  republished so the 500-row/call cap never silently under-republishes); nothing else is lost.
 
 ### Deploy drill record — S1 (E12 Block 1), 2026-09-06
 
