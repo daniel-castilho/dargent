@@ -5,15 +5,15 @@
 The repo is missing the ENTIRE governance corpus produced in this channel. Files to land under `tasks/`
 (owner copies from the workspace):
 
-- `tasks/e3r-block1-verification.md` — the register: E5+E8 closures & audits, Q7–Q11 addenda,
+- `tasks/e3r-create-webhook-remediation/e3r-block1-verification.md` — the register: E5+E8 closures & audits, Q7–Q11 addenda,
   TD-22→TD-30 (incl. TD-29 author-side spec defect + TD-30 evidence-violations record), DEBT-7 mint,
   3 external-analysis triages, E9 rounds 1–6 + **E9 CLOSED + M3 ✅ declaration**
-- `tasks/delivery-hardening-e9-prompt.md` / `-backlog.md` / `-sequence.md` / `-spec.md` /
+- `tasks/e9-delivery-hardening/delivery-hardening-e9-prompt.md` / `-backlog.md` / `-sequence.md` / `-spec.md` /
   `-execution-prompt-block1.md` — E9 package 5/5 WITH the Q11 addendum + TD-26/DEBT-7 riders +
   §6.4.1 emenda (the versions the channel adjudicated — her committed copies predate some of it)
-- `tasks/handoff-dod.md` — the Handoff DoD (a copy already landed in-repo as `docs/handoff-dod.md`
-  via `06e953b`; keep `tasks/` copy as the source or delete the duplicate — owner's call, ONE canonical)
-- `tasks/create-webhook-remediation-e3r-spec.md` — E3R register annotations (TD-21..25 era)
+- ~~`tasks/handoff-dod.md`~~ — **RESOLVED (reorg 2026-09-08):** the Handoff DoD landed as the ONE canonical
+  `docs/handoff-dod.md` (via `06e953b`, updated `7a416a3`); the byte-identical `tasks/` duplicate was deleted (chore/tasks-per-epic-dirs).
+- `tasks/e3r-create-webhook-remediation/create-webhook-remediation-e3r-spec.md` — E3R register annotations (TD-21..25 era)
 
 **Commit message (ready):**
 ```
@@ -40,7 +40,7 @@ engineer's per-class counts (1/6/2/10/3) were CORRECT all along (register retrac
 her TOTALS carried off-by-one arithmetic and the run ids were fabricated). Replace the row with:
 
 ```
-| E9 | Delivery hardening: backoff, EXHAUSTED, requeue, republish | payments, api | E6, E7 | M3 | ✅ 2026-09-04 — content run #155 `33921797910` (head `df06c9c`), citation run #158 `33924020657` (head `b9d3f2c`), tip `06e953b` green #157 `33923707334` — S1 exhaustion `OutboxExhaustionIT` 1/1 (`d34c414`); S2 audited requeue sc.19 `OutboxRequeueIT` 6/6 + Q11 rotation 403 `OutboxAdminRotationIT` 2/2 (`8fcb2e1`); S3 republish, deterministic UUID identity `OutboxRepublishIT` 10/10 + `OutboxRepublishRotationIT` 3/3 (`eb7c06d`→`df06c9c`); S4 no-double-journal: guard `77ac744` + deterministic harness `Scenario20NoDoubleJournalIT` 1/1 (`df06c9c`, no @Disabled); S5 `docs/runbooks/dlq-inspection.md` (`21f0e45`); S6 docs + flips + citation — total 23/23 executable green (anchored counts, TD-31; sum corrected TD-34) — matrix evidenced (`tasks/delivery-hardening-e9-spec.md` §10) — **M3 ✅** (chain E5+E8+E9; register `tasks/e3r-block1-verification.md`) |
+| E9 | Delivery hardening: backoff, EXHAUSTED, requeue, republish | payments, api | E6, E7 | M3 | ✅ 2026-09-04 — content run #155 `33921797910` (head `df06c9c`), citation run #158 `33924020657` (head `b9d3f2c`), tip `06e953b` green #157 `33923707334` — S1 exhaustion `OutboxExhaustionIT` 1/1 (`d34c414`); S2 audited requeue sc.19 `OutboxRequeueIT` 6/6 + Q11 rotation 403 `OutboxAdminRotationIT` 2/2 (`8fcb2e1`); S3 republish, deterministic UUID identity `OutboxRepublishIT` 10/10 + `OutboxRepublishRotationIT` 3/3 (`eb7c06d`→`df06c9c`); S4 no-double-journal: guard `77ac744` + deterministic harness `Scenario20NoDoubleJournalIT` 1/1 (`df06c9c`, no @Disabled); S5 `docs/runbooks/dlq-inspection.md` (`21f0e45`); S6 docs + flips + citation — total 23/23 executable green (anchored counts, TD-31; sum corrected TD-34) — matrix evidenced (`tasks/e9-delivery-hardening/delivery-hardening-e9-spec.md` §10) — **M3 ✅** (chain E5+E8+E9; register `tasks/e3r-create-webhook-remediation/e3r-block1-verification.md`) |
 ```
 
 (This edit rides the SAME governance commit — docs-only, no new citation needed: the citation

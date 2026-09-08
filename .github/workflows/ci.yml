@@ -226,7 +226,7 @@ jobs:
           fail-on-severity: high
 
   # E13 S4 R1: evidence-lint — every backtick-quoted `3[0-9]{9,}` run id cited in docs/epics.md and the
-  # acceptance-matrix sections of tasks/*-spec.md must resolve via gh api AND carry its run number
+  # acceptance-matrix sections of tasks/<epic>/*-spec.md must resolve via gh api AND carry its run number
   # within ±1 line. Evidence discipline is P6: a violation fails this job (never silent). Runs on
   # PR (imports the PR-head docs) and on the nightly schedule.
   evidence-lint:
