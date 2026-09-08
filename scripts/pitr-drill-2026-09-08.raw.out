@@ -1,0 +1,17 @@
+PITR 11:13:05: P0 booting primary (archive_mode=on, archive_command to /tmp/pitr-rehearsal/wal_archive)
+PITR 11:13:08: P1 schema + seed A (3000 balanced payments/journal/postings)
+PITR 11:13:09: P1 seed A ok — 3000 payments (ΣDR=7501500)
+PITR 11:13:09: P2 pg_basebackup at seed-A state (base_snapshot)
+total 4656
+-rw------- 1 castilho castilho 4709841 Sep  8 11:13 base.tar.gz
+-rw------- 1 castilho castilho   56142 Sep  8 11:13 pg_wal.tar.gz
+PITR 11:13:56: P3 post-base side effects: +1500 payments (must be recovered by WAL replay), pause marker written at a known lsn
+PITR 11:13:57: P3 side effects ok — total now 4500 payments (3A+3B postings), pause target lsn=0/528B640 (commit ts 2026-09-08 15:13:57.240688)
+PITR 11:13:57: P4 killing primary WITHOUT shutdown (kill -9)
+PITR 11:13:57: P5 restoring from base + archived WAL to target_lsn=0/528B640
+PITR 11:14:02: P5 recovered (in-recovery=t, paused at target)
+PITR 11:14:02: P5 recovered — total payments=4500 (A=3000, B=1500), recovery wall-clock 1s
+PITR 11:14:02: P6 validation at recovered state (counts + balance proof)
+PITR 11:14:03: P6 PASS — ΣDR=ΣCR=10127250, projection==lines, postings=13500
+PITR 11:14:03: achieved RPO ≈ 6s of WAL replay (target lsn 0/528B640, commit ts 2026-09-08 15:13:57.240688; archive lag < archive_timeout 5s)
+PITR 11:14:05: PITR PASS — 3000 base + 1500 WAL-replayed, counts + balance + projection verified, RPO ~6s
