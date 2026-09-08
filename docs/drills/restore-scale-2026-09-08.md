@@ -74,4 +74,27 @@ DRILL D4 restore VERIFIED — measured RTO 21s (budget 1800s)
 DRILL RESULT: PASS — 3 API txns + 20000 scale-seeded txns, backup→destroy→restore verified, RTO 21s
 ```
 
-(CI dispatch run id, when executed, supersedes this local record's RTO line with its own.)
+## CI dispatch record (the official at-scale number)
+
+Run `34244399134` (workflow_dispatch on main, 2026-09-08 15:34–15:36 UTC), job
+`restore-drill-scale` — **SUCCESS** with `DRILL_SCALE_SEED_TXNS=50000`:
+
+| Metric | Value |
+|---|---|
+| Seeded | **50 000** payments + 50 000 POSTED events + 50 000 journal_entries + **150 000 postings** (200k ledger lines) |
+| Manifest | payments=50 003 (50k seed + 3 API smoke), ΣDR=ΣCR=**264 980 000** cents, balanced |
+| Backup | `dargent-20260908-153540.dump` — **5.6 MB** (5 635 696 bytes) |
+| **Measured RTO at scale** | **23 s** (budget ≤ 1800 s) — GO/NO-GO: **GO** |
+| Post-restore | fresh smoke txn CONFIRMED on the restored cluster |
+
+Verbatim:
+```
+DRILL 15:35:40: D1b seed ok — payments/journal/postings/events = 50000/50000/150000/50000
+DRILL 15:35:43: D2 backup ok — dargent-20260908-153540.dump (5635696 bytes), manifest: payments=50003 ΣDR=264980000 ΣCR=264980000
+GO/NO-GO: GO — restore verified (counts match manifest, ΣDR=ΣCR=264980000, projection==lines) in 23s
+DRILL D4 restore VERIFIED — measured RTO 23s (budget 1800s)
+```
+
+**Honest delta, both ends now measured:** 36 KB/3 txns → ~20 s; 2.28 MB/20k txns → 21 s;
+5.6 MB/50k txns (200k lines) → **23 s**. RTO stays flat across this class — dominated by
+boot + pg_restore fixed overhead. Measured, never extrapolated.
