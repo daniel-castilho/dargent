@@ -10,6 +10,35 @@ When a lesson repeats three times, promote it to [coding-standards.md](coding-st
 
 ---
 
+## 19. One migration file has exactly one checksum — reverting a modified migration fixes the hypothetical DB and breaks every real one (2026-09-07, E14 S5 — the F1 story)
+
+The two-release migration review (v0.3.0 ↔ v1.0.0) found `V301__create_notifications_schema.sql`
+was modified after v0.3.0 without a version bump (E10 S1 `30245af` added the notification table) —
+the classic Flyway history violation. The textbook remedy is "revert the file to its v0.3.0 content
+and add V302 with the table". The owner approved that remedy. **It was wrong, and the empirical
+harness proved it before shipping:**
+
+- **A migration file's identity IS its checksum.** The v0.3.0 V301 (schema-only) and the current
+  V301 (schema + table) are different files to Flyway. The database records exactly one checksum per
+  version. No single V301 can validate against BOTH histories — the two populations are mutually
+  exclusive.
+- The v0.3.0 history exists only hypothetically (zero production deployments). The full-content V301
+  history is what every real database — dev, CI, drill volumes — carries. **Reverting V301 breaks
+  the only databases that exist, with the exact `checksum mismatch` error the fix meant to remove.**
+- Resolution: A' — V301 ships unchanged; direct v0.3.0 → v1.0.0 migration declared UNSUPPORTED;
+  v0.3.0 data moves via **data-only dump → fresh v1.0.0 boot → load → verify** (a full-dump restore
+  is forbidden — it carries the old checksummed history). Proven by rehearsal: seeded v0.3.0 DB →
+  data-only dump (history excluded) → fresh 18-migration boot → clean load → identical counts,
+  balance proof green, zero history leakage.
+
+**Golden rules:**
+- Before reverting a migration, ask "did any database already apply the *current* content?" — if
+  yes, the revert is a new checksum-vs-history break, not a repair. Fix by disposition (declare the
+  dead upgrade path + add an additive migration for what's missing), never by editing applied content.
+- Round-trip a migration remedy against BOTH histories (old-content-applied and new-content-applied)
+  with the Flyway version the app embeds, before letting a human decide. The decision needs evidence
+  about who the file's population actually is.
+
 ## 16. GitHub Actions expressions have no string slicing — `${{ github.sha[0:7] }}` is a parse error that silently suppresses the whole workflow (2026-09-07, E14 S1)
 
 The S1 ci.yml push produced a **0-second, zero-job, logless "failure" run** and PR #6 got no CI
