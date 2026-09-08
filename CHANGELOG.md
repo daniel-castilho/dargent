@@ -5,7 +5,18 @@ versioning: semantic, cut from annotated git tags (see [release-runbook](docs/re
 
 ## [Unreleased]
 
-(nothing yet — E16 lands here)
+### Added (E16 S1 — Alertmanager, logging-stub receiver, amtool in CI)
+
+- `metrics` compose profile gains **Alertmanager** (`prom/alertmanager:v0.27.0`) and a
+  **webhook-logger stub** receiver (`docker/alertmanager/` — one-file stdlib HTTP sink; NO pager,
+  NO external sink by fence). Prometheus `alerting:` section points at it. Routes: `critical`
+  (repeat 5 m) / `warning` (repeat 4 h) → the stub; the route tree matches the E15 S2 rule labels.
+- CI: **`amtool check-config`** step beside promtool (additions-only — a broken route tree is a
+  red build). Local wiring evidence: an alert posted to the Alertmanager API was routed and
+  logged by the stub (`DWARF_LEDGER_PROOF_FAIL`, severity=critical, end-to-end).
+- observability.md §5 gains the Alertmanager paragraph (routes, stub, how to point a real
+  receiver later); epics.md mints the E16 row (the former "E16 Stretch batch" renamed to M5 —
+  its scoping package lives channel-side, `tasks/m5-scoping.md`).
 
 ## [1.1.0] - 2026-09-08
 

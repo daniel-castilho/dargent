@@ -38,6 +38,14 @@ jobs:
           docker run --rm -v "$PWD/docker/prometheus:/etc/prometheus:ro" \
             --entrypoint promtool prom/prometheus:v2.53.0 test rules /etc/prometheus/rules-tests/alert-rules.test.yml
 
+      # E16 S1: Alertmanager config validated in CI the same way promtool entered (additions
+      # only). amtool check-config fails the build on a broken route tree/receiver — the
+      # moving part ships with its check (spec §1.3).
+      - name: Amtool — Alertmanager config check (E16 S1)
+        run: |
+          docker run --rm -v "$PWD/docker/alertmanager:/etc/alertmanager:ro" \
+            --entrypoint amtool prom/alertmanager:v0.27.0 check-config /etc/alertmanager/alertmanager.yml
+
       # Migration gate (D16/TD-33): refined policy self-test — widening passes, destructive /
       # CHECK-narrowing / parse-unknown abort (fail-closed). Runs on scratch git trees.
       - name: Migration gate tests (TD-33)

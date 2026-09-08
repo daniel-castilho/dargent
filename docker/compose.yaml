@@ -174,5 +174,26 @@ services:
       - "9095:9090"
     restart: unless-stopped
 
+  # E16 S1: Alertmanager — severity routes to a webhook-logger stub (NO pager, NO external
+  # sink; spec §2 non-goal). The stub is a real HTTP target so "alerts flowing" is provable.
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    profiles: ["metrics"]
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    ports:
+      - "9093:9093"
+    restart: unless-stopped
+
+  # E16 S1: the stub receiver — one-file stdlib HTTP sink that logs every alert group.
+  webhook-logger:
+    build:
+      context: ./alertmanager/webhook-logger
+    image: dargent-webhook-logger:compose
+    profiles: ["metrics"]
+    ports:
+      - "9096:9095"
+    restart: unless-stopped
+
 volumes:
   pgdata:

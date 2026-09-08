@@ -1,0 +1,33 @@
+# Dargent Alertmanager config (E16 S1) — metrics profile.
+#
+# Routes by severity (matches docker/prometheus/rules/alert-rules.yml labels):
+#   critical -> webhook-logger stub   (the ONLY receiver: a local HTTP sink that logs; NO pager,
+#                                      NO external sink — spec §2 non-goal, owner-fenced)
+#   warning  -> webhook-logger stub
+# How to point a REAL receiver later: replace the webhook_configs url below (or add email /
+# slack / pager integrations) and re-run `amtool check-config` — the route tree stays.
+global:
+  resolve_timeout: 1m
+
+route:
+  receiver: webhook-logger
+  group_by: ['alertname', 'severity']
+  group_wait: 5s
+  group_interval: 30s
+  repeat_interval: 4h
+  routes:
+    - matchers:
+        - severity = "critical"
+      receiver: webhook-logger
+      repeat_interval: 5m
+    - matchers:
+        - severity = "warning"
+      receiver: webhook-logger
+
+receivers:
+  - name: webhook-logger
+    webhook_configs:
+      # The stub service (same compose network, metrics profile). It logs every alert group it
+      # receives — the "alerts flowing" evidence line for the drill/doc.
+      - url: http://webhook-logger:9095/
+        send_resolved: true
