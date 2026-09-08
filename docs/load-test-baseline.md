@@ -1,11 +1,43 @@
-# Dargent load test baseline (E15 S3)
+# Dargent load test baseline (E15 S3 + E16 S3 honest run)
 
 Consultative money-path baseline. **NOT a CI gate** (no per-push job). One number
 published: 414 HTTP requests/s sustained by 24 VUs with a 0.00% error rate on the full
 create → idempotent replay → pay → confirm (webhook roundtrip) money path, against a
 single-host docker compose stack.
 
-## Run metadata
+## Two-row comparison — happy path vs HONEST path (E16 S3)
+
+Same script (`scripts/load/k6-money-path.js`), same 24 VUs / 2m30s, same host class. The
+difference is the ENVIRONMENT: happy = spine OFF + abuse-control limits raised for the run
+(spec §4); **honest = full spine ON (demo overlay: relay, ledger consumer, reconciler,
+expiration) + DEFAULT limiter limits (100 burst / 0.5 rps refill / 64 KiB cap)** — the
+production-shaped posture.
+
+| | Happy (E15 S3) | **Honest (E16 S3)** |
+|---|---|---|
+| Date / commit | 2026-09-08 @ `5eeede0` (pre-S1-merge main) | 2026-09-08 @ `47b05cf` (post-v1.1.0 main) |
+| Spine (relay/ledger/reconciler) | OFF | **ON (demo overlay)** |
+| Webhook limiter | raised (10000/100) for the run | **DEFAULT (100 / 0.5 rps)** |
+| HTTP rps | 414 (peak 440 in run 2) | **432 / 440 (two runs)** |
+| HTTP errors | 0.00% | **0.00%** (0 / 72 675) |
+| p95 create | 17.08 ms | **37.38 ms** (spine ON costs ~20 ms) |
+| p95 confirm GET | 2.58 ms | **5.59 ms** |
+| Iterations completed | 11 924 | **106–159** (each waits for CONFIRMED) |
+| **Confirm within 90 s deadline** | 100% (11 924/11 924) | **94%** (100/106) and 86% (137/159) across two runs |
+| Iteration duration p95 | 281 ms | **1m34s** (waiting on reconciler) |
+
+**Reading the honest number (the delta IS the result):** under default limits the PSP
+simulator's webhook burst exhausts the per-IP token bucket (~100 burst) within seconds; every
+payment past the burst stops being webhook-confirmed and waits for the **reconciler**
+(first backoff rung 60 s < deadline 90 s — most confirm; the rest expire past the k6 deadline,
+which the script counts as a failed check while the system itself stays correct). HTTP-level
+the API never degraded: 0 errors, latency well inside SLO. The money path did not break — the
+*confirmation path* shifted from webhook to reconciler under abuse-control defaults.
+
+**This honest number seeds the M5 k6-gate threshold decision (D4) — recorded, not gated**
+(the M5 fence keeps k6 consultative until that epic decides).
+
+## Run metadata (happy path — E15 S3)
 
 | Field | Value |
 |---|---|
@@ -91,6 +123,23 @@ key, so every POST also exercised outbox+expiration/reconciler-free write path.
 - Webhook abuse-control limits raised for this run only (see tuning row) — they gate smoke
   and demo, not the baseline.
 - `chaos.*` all OFF in the simulator (design.md §12 defaults).
+
+## Honest-run verbatim (E16 S3, run 2 of 2 — full raw preserved at `scripts/k6-honest-2026-09-08.raw.out`)
+
+```
+    checks_succeeded...: 99.99% 72905 out of 72911
+    checks_failed......: 0.00%  6 out of 72911
+    ✗ confirm CONFIRMED within deadline
+      ↳  94% — ✓ 100 / ✗ 6
+    http_req_failed................: 0.00%   0 out of 72675
+    http_reqs......................: 72675   440.377036/s
+    iterations.....................: 106     0.642311/s
+      { name:confirm }.............: p(95)=5.59ms
+      { name:create }..............: p(95)=37.38ms
+      { name:pay }.................: p(95)=4ms
+      { name:replay }..............: p(95)=5.71ms
+    iteration_duration.............: avg=18.78s med=291.13ms max=1m37s p(90)=1m22s p(95)=1m34s
+```
 
 ## Reproduction
 

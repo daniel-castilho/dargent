@@ -5,6 +5,32 @@ versioning: semantic, cut from annotated git tags (see [release-runbook](docs/re
 
 ## [Unreleased]
 
+### Added (E16 S3 — honest k6 run: spine ON + default limiter, published beside the baseline)
+
+- Same `scripts/load/k6-money-path.js`, same 24 VUs / 2m30s — but the **production-shaped
+  environment**: demo overlay (relay/ledger consumer/reconciler/expiration ON) + **default**
+  webhook abuse limits (100 burst / 0.5 rps / 64 KiB). Two runs, published BESIDE the 414 rps
+  happy-path as a two-row comparison in `docs/load-test-baseline.md`.
+- **The delta IS the result:** HTTP layer never degraded (440 rps, 0.00% errors, create p95
+  37.38 ms), but the PSP's webhook burst exhausts the per-IP bucket in seconds — confirmations
+  shift from webhook to the **reconciler** (94%/86% within the 90 s k6 deadline across the two
+  runs; the rest confirmed later or expired per policy — the system stayed correct, the path
+  shifted). This honest number **seeds the M5 k6-gate threshold decision (D4) — recorded,
+  not gated** (M5 fence).
+
+### Added (E16 S2 — PITR v2: off-disk WAL, pgdata-volume destruction survives)
+
+- `scripts/pitr-rehearsal-v2.sh`: the E15 S5 caveat answered — WAL archive and base snapshot on
+  **separate named docker volumes**, and the disaster is the **destruction of the pgdata volume
+  itself** (`docker volume rm` after `kill -9`). Recovery onto a FRESH volume replayed every
+  post-base txn from the surviving volumes: **A=3 000 + B=1 500 recovered, ΣDR=ΣCR, projection==
+  lines, measured RPO ≈ 6–8 s** (same bound as v1 — `archive_timeout=5s` dominates, not topology).
+- CI: dispatch-only **`pitr-drill`** job (Q-batch disposition: CI-ified as dispatch; NOT wired
+  into release.yml — the dump-restore drill stays THE release gate; recorded in the drill doc).
+- `docs/drills/pitr-v2-2026-09-08.md`: procedure, verbatim transcript, honest v1↔v2 comparison
+  (survives-volume-destruction gained at ≈0 RPO cost), residual limits, two new gotchas carved
+  (fresh volumes mount root-owned — archive writes fail EACCES silently; canonical tar names).
+
 ### Added (E16 S1 — Alertmanager, logging-stub receiver, amtool in CI)
 
 - `metrics` compose profile gains **Alertmanager** (`prom/alertmanager:v0.27.0`) and a
