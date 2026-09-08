@@ -105,3 +105,12 @@ groups:
             caller (PSP integration) is likely broken — reconcile the payment flow, since these
             events are rejected before ingestion.'
           runbook: release-runbook.md §7 — Webhook 429/413 storm
+  - name: dwarf_bite_rule
+    rules:
+      - alert: DWARF_BROKEN_RULE
+        expr: 'up{[invalid'
+        labels:
+          severity: critical
+          team: payments
+        annotations:
+          summary: 'intentionally broken PromQL (E15 S2 bite proof)'
