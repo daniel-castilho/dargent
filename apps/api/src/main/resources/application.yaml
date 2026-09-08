@@ -22,6 +22,13 @@ dargent:
     callback-url: ${PSP_CALLBACK_URL:http://api-blue:8080/webhooks/psp}
     create-max-attempts: ${PSP_CREATE_MAX_ATTEMPTS:3}
     create-backoff-base-ms: ${PSP_CREATE_BACKOFF_BASE_MS:200}
+  # Webhook abuse controls (E15 S1, DEBT-8): generous defaults that never trip in demo/smoke;
+  # env-tunable per spec §4. Rate limit = hand-rolled per-IP token bucket (Q-batch 2026-09-08).
+  webhook:
+    rate-limit:
+      capacity: ${DARGENT_WEBHOOK_RATE_LIMIT_CAPACITY:100}
+      refill-per-second: ${DARGENT_WEBHOOK_RATE_LIMIT_REFILL_PER_SECOND:0.5}
+    body-cap-bytes: ${DARGENT_WEBHOOK_BODY_CAP_BYTES:65536}
   pix:
     profile:
       pix-key: ${DARGENT_PIX_KEY:dargent-dev-receber@example.com}

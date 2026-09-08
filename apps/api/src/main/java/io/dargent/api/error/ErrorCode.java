@@ -28,6 +28,8 @@ public enum ErrorCode {
     INVALID_STATE("invalid_state", HttpStatus.CONFLICT, "Invalid state"),
     NOT_EXHAUSTIBLE("not_exhaustible", HttpStatus.CONFLICT, "Outbox row is not exhausted"),
     INVALID_WINDOW("invalid_window", HttpStatus.BAD_REQUEST, "Invalid republish window"),
+    PAYLOAD_TOO_LARGE("payload_too_large", HttpStatus.PAYLOAD_TOO_LARGE, "Payload exceeds the allowed size"),
+    RATE_LIMITED("rate_limited", HttpStatus.TOO_MANY_REQUESTS, "Too many requests"),
     IDEMPOTENCY_KEY_IN_FLIGHT("idempotency_key_in_flight", HttpStatus.TOO_EARLY, "Idempotency key in flight"),
     PSP_UNAVAILABLE("psp_unavailable", HttpStatus.BAD_GATEWAY, "Payment provider unavailable"),
     INTERNAL("internal", HttpStatus.INTERNAL_SERVER_ERROR, "Internal error");

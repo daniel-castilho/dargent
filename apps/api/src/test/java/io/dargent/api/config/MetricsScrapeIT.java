@@ -66,7 +66,7 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * E11 S4 metrics scrape IT (spec §6): one boot, all legs, one scrape.
  *
- * <p>Drives every one of the 8 frozen series (observability.md §3) through the REAL HTTP surface
+ * <p>Drives every one of the 10 frozen series (observability.md §3) through the REAL HTTP surface
  * and the REAL schedulers (deterministic {@code runOnce()} calls — house pattern), then scrapes
  * {@code /actuator/prometheus} on the isolated management port and asserts each series is
  * present, with its frozen tag vocabulary, and non-zero.
@@ -89,6 +89,9 @@ import tools.jackson.databind.json.JsonMapper;
  *   <li>{@code dargent_refunds_rejected_total{code=not_refundable|exceeds_remaining}}</li>
  *   <li>{@code dargent_ledger_proof_fail_total{scope=balance|projection}} (N8 — PRESENT at 0 on a
  *       healthy system; presence assertion, never a seeded failure)</li>
+ *   <li>{@code dargent_webhook_rejections_total{reason=rate_limited|body_too_large}} (E15 S1 —
+ *       PRESENT at 0: the abuse filter pre-registers both reasons; the S2 alert rule needs the
+ *       presence to evaluate)</li>
  *   <li>{@code http_server_requests_seconds_bucket{le="0.25"}} (N12 — SLO bucket line exists)</li>
  * </ol>
  */
@@ -238,7 +241,7 @@ class MetricsScrapeIT {
      * frozen series with its frozen tag vocabulary and non-zero values. One test = one atomic scrape.
      */
     @Test
-    void allEightFrozenSeries_present_nonZero_withFrozenTags_afterAllLegs() throws Exception {
+    void allTenFrozenSeries_present_nonZero_withFrozenTags_afterAllLegs() throws Exception {
         // ----------------------------------------------------------------- leg A: create + relay
         String txidMain = createPayment("idem-metrics-01", 10000, "Metrics leg A");
         createPayment("idem-metrics-01", 10000, "Metrics leg A"); // replayed
@@ -412,7 +415,13 @@ class MetricsScrapeIT {
         assertSeriesPresent(scrape, "dargent_ledger_proof_fail_total", "scope=\"balance\"", 0.0);
         assertSeriesPresent(scrape, "dargent_ledger_proof_fail_total", "scope=\"projection\"", 0.0);
 
-        // 10. N12 SLO buckets: the 0.25s bucket line exists (http_server_requests_seconds_bucket).
+        // 10. webhook abuse rejections (E15 S1): PRESENT at 0 — the filter pre-registers both frozen
+        //     reasons on boot (E12 N8 convention); presence is what lets the S2 alert rule evaluate.
+        //     The rejection paths themselves are carved (non-zero) by WebhookRateLimitIT/WebhookBodyCapIT.
+        assertSeriesPresent(scrape, "dargent_webhook_rejections_total", "reason=\"rate_limited\"", 0.0);
+        assertSeriesPresent(scrape, "dargent_webhook_rejections_total", "reason=\"body_too_large\"", 0.0);
+
+        // 11. N12 SLO buckets: the 0.25s bucket line exists (http_server_requests_seconds_bucket).
         assertThat(scrape).contains("http_server_requests_seconds_bucket{");
         assertThat(scrape).containsPattern("http_server_requests_seconds_bucket\\{[^}]*le=\"0.25\"[^}]*\\}");
     }
