@@ -182,8 +182,9 @@ release notes: [docs/releases/](docs/releases/).
 **`POST /v1/payments/{txid}/refunds` drives partial/total refunds with fee reversal and a ledger-backed**
 **merchant balance guard; concurrent refunds are DB-arbitrated (payments lock → one 201 / one 409;**
 **ledger drain → one POSTED / one IGNORED with `refund_skipped_balance`). The journal coverage auditor**
-**also detects refund-vs-POSTED discrepancies. M3 is ✅ (E9); M4 is ✅ (E11+E12+E13) — E14 cut v1.0.0**
-**(tag `v1.0.0` @ `601a669`, 2026-09-07). E15 (operational hardening) shipped 2026-09-08.**
+**also detects refund-vs-POSTED discrepancies. M3 is ✅ (E9); M4 is ✅ (E11+E12+E13) — E14 cut**
+**v1.0.0 (tag `v1.0.0` @ `601a669`, 2026-09-07). E15 (operational hardening) shipped 2026-09-08**
+**and cut `v1.1.0` (tag `v1.1.0` on main, 2026-09-08) — E16 (operational hygiene) is in progress.**
 
 | Milestone | Scope | Status |
 |---|---|---|
@@ -195,7 +196,8 @@ release notes: [docs/releases/](docs/releases/).
 | M3 — Suffering | Refunds (✓), expiration, resurrection, reconciler, settlement, DLQ/backoff/EXHAUSTED/requeue (E9 ✓) | ✅ |
 | M4 — Finish | Metrics (E11 ✓), blue-green deploy + runtime smoke in CI (E12 ✓), full quality/security gates (E13 ✓) — **✅**; E14 (tag release + SBOM + restore drill) cuts v1.0.0 as its own epic | ✅ |
 | M5 — Stretch | Card as second Strategy, k6 as hard gate, Redis read cache, webhook reprocessing | ☐ |
-| Post-1.0.0 (E15) — Operational hardening | Webhook abuse controls (429/413, DEBT-8 closed), tested alert rules (promtool in CI + bite-proof), load baseline (k6, 414 rps/0 err), restore at scale (RTO 23 s @ 50k), PITR rehearsal (RPO ≈ 6 s), DEBT-7 Path A | ✅ 2026-09-08 |
+| Post-1.0.0 (E15) — Operational hardening | Webhook abuse controls (429/413, DEBT-8 closed), tested alert rules (promtool in CI + bite-proof), load baseline (k6, 414 rps/0 err), restore at scale (RTO 23 s @ 50k), PITR rehearsal (RPO ≈ 6 s), DEBT-7 Path A — **cut `v1.1.0`** | ✅ 2026-09-08 |
+| Post-1.0.0 (E16) — Operational hygiene | Alertmanager (logging stub, no pager), PITR v2 (off-disk WAL), honest k6 (spine ON + default limits), limiter posture, dependabot | ◐ |
 
 ## License
 

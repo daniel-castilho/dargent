@@ -5,6 +5,16 @@ versioning: semantic, cut from annotated git tags (see [release-runbook](docs/re
 
 ## [Unreleased]
 
+(nothing yet — E16 lands here)
+
+## [1.1.0] - 2026-09-08
+
+Operational hardening release: the complete E15 epic. Webhook abuse controls close DEBT-8,
+alert rules become tested code, the load baseline is published, the restore drill is proven at
+production-like scale, PITR is rehearsed with a measured RPO, and the postJournal twins are
+consolidated (DEBT-7). No API contract changes; no schema changes; no new app env vars beyond
+the webhook abuse controls.
+
 ### Added (E15 S3 — k6 money-path baseline, published number)
 
 - `scripts/load/k6-money-path.js`: money-path load script (create → idempotent replay → pay →
