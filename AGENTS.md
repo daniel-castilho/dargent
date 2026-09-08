@@ -65,7 +65,16 @@ not in DB grants. Corrections are reversing entries. `Σ DR = Σ CR` per journal
 Cross-merchant access answers `404`, not `403`.
 
 3.8. **Forward-only migrations.** No rollback scripts. Every migration must keep release N+1 running against
-release N's schema (expand/contract). Blue and green share the database.
+release N's schema (expand/contract). Blue and green share the database. **Migration-content immutability
+rider:** once a migration ships, its file content is frozen for the life of the repository — a Flyway
+migration's identity is its checksum, and the recorded history of every deployed database is the house
+that pays it. Changing migration content after any database applied it is a history rewrite (checksum
+mismatch on boot). Discovering content drift in a migration that already shipped means: never edit the
+applied file forward-only style "back" to an old state (one file, one checksum — the new content broke
+everyone, the reverted content breaks the rest); instead record a **disposition** — a documented owner
+decision choosing between (a) declare the affected upgrade path unsupported if no such database exists
+and add additive migrations for anything genuinely missing, or (b) ship a new forward-only migration that
+repairs state in-place. Baseline for "ships in this release" is the most recent `v1.*` tag (annotated).
 
 3.9. **Mocks only mock the outside world.** Never the database, the queue, the outbox, or the ledger.
 

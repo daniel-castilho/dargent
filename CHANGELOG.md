@@ -47,9 +47,11 @@ schema-per-module, events-only cross-module communication, database-arbitrated r
 
 ### Known issues at release
 
-- Migration V301 was modified after v0.3.0 without a version bump — the v0.3.0→v1.0.0 upgrade
-  path is blocked (Flyway checksum mismatch); no v0.3.0 production DB exists. Details and remedy
-  options: `docs/releases/v1.0.0-migration-review.md` (owner decision pending at authorship).
+- F1 (two-release migration review): V301 content changed after v0.3.0 without a version bump;
+  resolved **by disposition** — V301 ships unchanged, direct v0.3.0→v1.0.0 migration is declared
+  UNSUPPORTED (no v0.3.0 production DB exists), supported upgrade = data-only dump → fresh v1.0.0
+  boot → load → verify (proven by rehearsal). Details:
+  `docs/releases/v1.0.0-migration-review.md`.
 - DEBT-7 (ledger store duplication, deferred), DEBT-8 (webhook route rate limit/body cap,
   accepted for v1), PITR shipped-not-drilled — see `docs/releases/v1.0.0.md` (accepted risks).
 
