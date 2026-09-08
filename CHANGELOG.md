@@ -5,6 +5,55 @@ versioning: semantic, cut from annotated git tags (see [release-runbook](docs/re
 
 ## [Unreleased]
 
+### Added (E15 S3 — k6 money-path baseline, published number)
+
+- `scripts/load/k6-money-path.js`: money-path load script (create → idempotent replay → pay →
+  confirm-poll), SLO thresholds asserted in-script. **Consultative — NOT a CI gate.**
+- `docs/load-test-baseline.md`: published run (2026-09-08) — **59 620 requests / 414 rps at
+  24 VUs, 0.00% checks failed, 0 HTTP errors**; p95 create 17.08 ms / replay 3.04 ms /
+  pay 1.0 ms / confirm 2.58 ms; e2e confirm roundtrip p95 56 ms. Hardware + date + commit +
+  k6 image digest disclosed; raw summary preserved (`k6-baseline-2026-09-08.raw.out`).
+  Webhook abuse limits raised for the run only (spec §4: tests tune explicitly).
+
+### Added (E15 S4 — restore drill at scale, the "36 KB seed" answer)
+
+- `restore-drill-scale` dispatch-only CI job (`DRILL_SCALE_SEED_TXNS=50000`): SQL bulk-seed
+  mirroring the consumer's real posting shape (balanced journals/postings/balances), then the
+  full backup → destroy → restore → verify drill. **Measured at scale (run `34244399134`):
+  50 000 txns / 150 000 postings, dump 5.6 MB, ΣDR=ΣCR=264 980 000, RTO 23 s**, post-restore
+  txn CONFIRMED. `scripts/ci-restore-drill.sh` default `0` keeps the E14 small drill intact.
+- `docs/drills/restore-scale-2026-09-08.md`: record with the measured three-point delta
+  (36 KB/3 txns → ~20 s; 2.28 MB/20k → 21 s; 5.6 MB/50k → 23 s — RTO flat, measured never
+  extrapolated).
+
+### Added (E15 S5 — PITR rehearsal, measured RPO)
+
+- `scripts/pitr-rehearsal.sh`: standalone Postgres 16 PITR harness (archive_mode → seed A →
+  `pg_basebackup -Ft -X stream` → post-base side effects → `recovery_target_lsn` → `pg_switch_wal`
+  → **kill -9** → base+WAL restore → replay to target, `recovery_target_action=pause` →
+  validation at the recovered state). **Measured: every post-base txn recovered via WAL replay,
+  ΣDR=ΣCR at the recovered state, achieved RPO ≈ 6 s** (bounded by `archive_timeout=5s`).
+- `docs/drills/pitr-2026-09-08.md`: procedure + measured RPO + honest limits (off-host archive
+  declared as the runbook §6 gap). Local-documented-only per Q-batch — the record says which.
+- AGENTS **amendment (f)**: research before trial-and-error (born from this rehearsal's three
+  silent failure causes — docker-library/postgres#146, PG docs §26.3.4 step 7, PG docs §20.5.6).
+
+### Changed (E15 S6 — DEBT-7 RESOLVED, Path A)
+
+- `JdbcLedgerStore`: the `postJournal`/`postJournalWithoutBalances` twins consolidated behind
+  one guarded implementation `postJournalCore(entry, updateBalances)` — payment path posts with
+  balance upserts, refund path posts with `false` (the E8 conditional drain owns the balance
+  writes atomically). Full suite green; coverage floors PASS (ledger 86.9 vs 87.3 same-tree
+  baseline); E8/E9 guarantee ITs re-evidenced green (RefundRaceIT 2/2, RefundBalanceGuardIT
+  2/2, RefundFlowIT 2/2, Scenario20NoDoubleJournalIT 1/1, JournalCoverageAuditorIT 6/6,
+  JournalBalanceDbBarrierIT 4/4).
+
+### Governance (E15)
+
+- BLOCK 1 (S0–S3) audited and approved with deviations declared: `docs/audit-e15-block1.md`
+  (bite-proof executed as a closed scratch PR — run `34228122177` red — per E13/E14 probe
+  precedent; S3 webhook-limit tuning per spec §4).
+
 ### Added (E15 S2 — Prometheus alert rules, tested in CI)
 
 - `docker/prometheus/rules/alert-rules.yml`: 7 rules (proof-fail → critical freeze-deploys;

@@ -76,7 +76,8 @@ curl -fs http://localhost:8080/actuator/health          # via NGINX (management 
 SMOKE_KEY=psp_test_…  scripts/smoke.sh http://localhost:8080 $SMOKE_KEY   # money path through NGINX
 ```
 
-Metrics glance: transitions ticking, outbox lag < 5 s, DLQ depth 0, no spike in signature failures.
+Metrics glance: transitions ticking, outbox lag < 5 s, DLQ depth 0, no spike in signature failures,
+`dargent_webhook_rejections_total` flat at zero (a 429/413 storm is §7's row, not noise).
 The standing full-spine check (ledger journal + ΣDR=ΣCR + projection==lines) is the **proof-daily**
 CI job (03:00 UTC + `workflow_dispatch`) — its exit status is the S7 source of truth.
 
