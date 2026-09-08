@@ -168,6 +168,8 @@ services:
       - --storage.tsdb.retention.time=15d
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      # E15 S2: alert rules mounted for check/tests parity (CI runs promtool on the same files).
+      - ./prometheus/rules:/etc/prometheus/rules:ro
     ports:
       - "9095:9090"
     restart: unless-stopped

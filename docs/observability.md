@@ -65,6 +65,21 @@ Naming follows Micrometer conventions (dots, lower-case); Prometheus exposition 
 ## 5. Scraping & dashboards
 
 - Prometheus scrapes `api-blue`/`api-green` management ports; job names carry the fleet color.
+- **Alert rules (E15 S2):** `docker/prometheus/rules/alert-rules.yml`, loaded by the `metrics`
+  profile Prometheus via `rule_files`. Every rule is **unit-tested firing AND quiet with
+  `promtool test rules`** (`docker/prometheus/rules-tests/alert-rules.test.yml`) and that test **runs
+  in CI on every push** — an untested or mis-evaluated rule is a red build. Thresholds are anchored
+  to [`slos.md`](slos.md); each rule's annotations carry the exact release-runbook §7 response line.
+- Alert set (name — trigger — severity — anchors):
+  | Rule | Trigger | Severity | Runbook anchor |
+  |---|---|---|---|
+  | `DWARF_LEDGER_PROOF_FAIL` | any `dargent_ledger_proof_fail_total` page (S7 invariant) | critical | §7 "Ledger proof failed" — freeze deploys |
+  | `DWARF_OUTBOX_LAG_ABOVE_SLO` | `dargent_outbox_lag_seconds > 300` sustained 5 min (S6) | warning | §7 "Outbox lag climbing / EXHAUSTED rows" |
+  | `DWARF_DLQ_DEPTH` | `dargent_dlq_messages > 0` sustained 5 min | warning | §7 "DLQ depth > 0" |
+  | `DWARF_WEBHOOK_SIGNATURE_STORM` | ≥ 10 HMAC failures in 15 min | warning | §7 "Webhooks rejected en masse" |
+  | `DWARF_OUTBOX_ROWS_EXHAUSTED` | any row `EXHAUSTED` in 15 min | warning | §7 "Outbox lag climbing / EXHAUSTED rows" |
+  | `DWARF_WEBHOOK_RATE_LIMITED_STORM` | ≥ 100 × 429 in 15 min (E15 S1 control) | warning | §7 "Webhook 429/413 storm" |
+  | `DWARF_WEBHOOK_BODY_TOO_LARGE_STORM` | ≥ 20 × 413 in 15 min (E15 S1 control) | warning | §7 "Webhook 429/413 storm" |
 - Grafana is optional/stretch; until then, the runbook's "quick diagnosis" table + `curl /actuator/prometheus | grep`
   recipes cover on-call needs.
 - Panels that matter, in order: outbox lag, DLQ depth, payments transitions (stacked), reconciler confirmations,

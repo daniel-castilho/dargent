@@ -1,0 +1,200 @@
+# Unit tests for docker/prometheus/rules/alert-rules.yml (E15 S2). Run by CI on every push via
+# `promtool test rules` — an untested rule is a red build. One FIRING case + one QUIET case per
+# rule (ops-e15-spec §6: negative paths proven at least once: rule-fires, rule-quiet).
+#
+# Annotation templates must render deterministically from the injected series (no `$value`-dependent
+# text): the exp_annotations below are the exact rendered strings the rule emits.
+rule_files:
+  - /etc/prometheus/rules/alert-rules.yml
+
+evaluation_interval: 1m
+
+tests:
+  # ---- dargent-money-integrity -----------------------------------------------
+  - name: DWARF_LEDGER_PROOF_FAIL fires on any page, stays quiet on a clean system
+    interval: 1m
+    input_series:
+      - series: dargent_ledger_proof_fail_total{scope="balance"}
+        values: "0 1"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: DWARF_LEDGER_PROOF_FAIL
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              scope: balance
+            exp_annotations:
+              summary: Ledger proof failed (scope=balance)
+              description: "The daily ledger proof (S7, slos.md) found an imbalance or projection drift. This is an invariant breach: freeze deploys, snapshot the DB, triage journal vs projection (append-only corrective entries with an ADR note)."
+              runbook: "release-runbook.md §7 — Ledger proof failed: FREEZE DEPLOYS, snapshot, triage"
+  - name: DWARF_LEDGER_PROOF_FAIL (quiet)
+    interval: 1m
+    input_series:
+      - series: dargent_ledger_proof_fail_total{scope="balance"}
+        values: "0 0"
+      - series: dargent_ledger_proof_fail_total{scope="projection"}
+        values: "0 0"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: DWARF_LEDGER_PROOF_FAIL
+        exp_alerts: []
+
+  - name: DWARF_OUTBOX_LAG_ABOVE_SLO fires after 5 min > 300 s, quiet under it
+    interval: 1m
+    input_series:
+      - series: dargent_outbox_lag_seconds
+        values: "600 600 600 600 600 600 600"
+    alert_rule_test:
+      - eval_time: 7m
+        alertname: DWARF_OUTBOX_LAG_ABOVE_SLO
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: Outbox lag above SLO
+              description: "The oldest unpublished outbox event is older than the 5 min SLO (S6, slos.md). Either the relay is failing or the events spine (SNS/SQS / LocalStack) is degraded — check the relay logs and LocalStack health, then verify the drain before repairing."
+              runbook: release-runbook.md §7 — Outbox lag climbing / EXHAUSTED rows
+  - name: DWARF_OUTBOX_LAG_ABOVE_SLO (quiet)
+    interval: 1m
+    input_series:
+      - series: dargent_outbox_lag_seconds
+        values: "40 40 40 40 40 40 40"
+    alert_rule_test:
+      - eval_time: 7m
+        alertname: DWARF_OUTBOX_LAG_ABOVE_SLO
+        exp_alerts: []
+
+  - name: DWARF_DLQ_DEPTH fires on non-empty DLQ, quiet at depth 0
+    interval: 1m
+    input_series:
+      - series: dargent_dlq_messages{queue="dargent-payments-ledger-dlq.fifo"}
+        values: "3 3 3 3 3 3 3"
+    alert_rule_test:
+      - eval_time: 7m
+        alertname: DWARF_DLQ_DEPTH
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              queue: dargent-payments-ledger-dlq.fifo
+            exp_annotations:
+              summary: Messages sitting on a DLQ (queue=dargent-payments-ledger-dlq.fifo)
+              description: "A poison-message queue is non-empty for 5 min. Read the message (compose exec into LocalStack aws cli), fix the poison cause, requeue; if unknown, snapshot and escalate. At-least-once delivery dedupe (eventId unique) makes this recoverable."
+              runbook: release-runbook.md §7 — DLQ depth > 0
+  - name: DWARF_DLQ_DEPTH (quiet)
+    interval: 1m
+    input_series:
+      - series: dargent_dlq_messages{queue="dargent-payments-ledger-dlq.fifo"}
+        values: "0 0 0 0 0 0 0"
+    alert_rule_test:
+      - eval_time: 7m
+        alertname: DWARF_DLQ_DEPTH
+        exp_alerts: []
+
+  - name: DWARF_WEBHOOK_SIGNATURE_STORM fires at >= 10 in 15 min, quiet under
+    interval: 1m
+    input_series:
+      # FIRING: 1 failure/min for 20 min → increase over last 15 min = 15 ≥ 10.
+      - series: dargent_webhook_signature_failures_total{reason="invalid"}
+        values: "0+1x20"
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: DWARF_WEBHOOK_SIGNATURE_STORM
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: Webhook signature-failure burst
+              description: "More than 10 HMAC verification failures in 15 min on the webhook route. Signature failures are attack noise (this is also our attack-audit window) or host clock drift. Verify simulator/host time (NTP); the reconciler catches legitimately lost webhooks regardless."
+              runbook: release-runbook.md §7 — Webhooks rejected en masse (signature_expired)
+  - name: DWARF_WEBHOOK_SIGNATURE_STORM (quiet)
+    interval: 1m
+    input_series:
+      # Healthy system: zero signature failures across both reasons.
+      - series: dargent_webhook_signature_failures_total{reason="invalid"}
+        values: "0+0x20"
+      - series: dargent_webhook_signature_failures_total{reason="expired"}
+        values: "0+0x20"
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: DWARF_WEBHOOK_SIGNATURE_STORM
+        exp_alerts: []
+
+  - name: DWARF_OUTBOX_ROWS_EXHAUSTED fires on any exhaustion, quiet when healthy
+    interval: 1m
+    input_series:
+      # FIRING: 1 exhausted attempt in the last 15 min.
+      - series: dargent_outbox_attempts_total{result="exhausted"}
+        values: "0 0 0 0 0 1"
+    alert_rule_test:
+      - eval_time: 16m
+        alertname: DWARF_OUTBOX_ROWS_EXHAUSTED
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: Outbox rows exhausted
+              description: "The relay exhausted at least one outbox row (backoff ladder completed) in the last 15 min. These rows will never self-publish — use the audited republish endpoint (OutboxAdmin) after fixing the root cause, and verify the drain."
+              runbook: release-runbook.md §7 — Outbox lag climbing / EXHAUSTED rows
+  - name: DWARF_OUTBOX_ROWS_EXHAUSTED (quiet)
+    interval: 1m
+    input_series:
+      - series: dargent_outbox_attempts_total{result="sent"}
+        values: "0+1x20"
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: DWARF_OUTBOX_ROWS_EXHAUSTED
+        exp_alerts: []
+
+  # ---- dargent-webhook-abuse ---------------------------------------------------
+  - name: DWARF_WEBHOOK_RATE_LIMITED_STORM fires at >= 100 429s in 15 min, quiet under
+    interval: 1m
+    input_series:
+      # FIRING: 10 rejections/min for 20 min → increase over last 15 min = 150 ≥ 100.
+      - series: dargent_webhook_rejections_total{reason="rate_limited"}
+        values: "0+10x20"
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: DWARF_WEBHOOK_RATE_LIMITED_STORM
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: Webhook rate-limited storm
+              description: "The per-IP rate limit returned 429 at least 100 times in 15 min on the webhook route. Check who the caller is and why it floods. Raising DARGENT_WEBHOOK_RATE_LIMIT_* is a deliberate capacity decision, not the first move — the control is the protection."
+              runbook: release-runbook.md §7 — Webhook 429/413 storm
+  - name: DWARF_WEBHOOK_RATE_LIMITED_STORM (quiet)
+    interval: 1m
+    input_series:
+      # Healthy system: zero rejections over a full 15 min SLO window.
+      - series: dargent_webhook_rejections_total{reason="rate_limited"}
+        values: "0+0x20"
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: DWARF_WEBHOOK_RATE_LIMITED_STORM
+        exp_alerts: []
+
+  - name: DWARF_WEBHOOK_BODY_TOO_LARGE_STORM fires at >= 20 in 15 min, quiet under
+    interval: 1m
+    input_series:
+      # FIRING: 2 rejections/min for 20 min → increase over last 15 min = 30 ≥ 20.
+      - series: dargent_webhook_rejections_total{reason="body_too_large"}
+        values: "0+2x20"
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: DWARF_WEBHOOK_BODY_TOO_LARGE_STORM
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: Webhook body-too-large storm
+              description: "More than 20 webhook payloads exceeded the 64 KiB body cap in 15 min. The caller (PSP integration) is likely broken — reconcile the payment flow, since these events are rejected before ingestion."
+              runbook: release-runbook.md §7 — Webhook 429/413 storm
+  - name: DWARF_WEBHOOK_BODY_TOO_LARGE_STORM (quiet)
+    interval: 1m
+    input_series:
+      - series: dargent_webhook_rejections_total{reason="body_too_large"}
+        values: "0+0x20"
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: DWARF_WEBHOOK_BODY_TOO_LARGE_STORM
+        exp_alerts: []

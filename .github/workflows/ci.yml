@@ -27,6 +27,17 @@ jobs:
       - name: Architecture boundary check (imports + domain purity)
         run: bash scripts/check-boundaries.sh
 
+      # E15 S2: alert rules are code — check config + check rules + unit-test every alert
+      # (one firing + one quiet case each) on every push. An untested rule is a red build.
+      - name: Promtool — config + alert rules + rule tests (E15 S2)
+        run: |
+          docker run --rm -v "$PWD/docker/prometheus:/etc/prometheus:ro" \
+            --entrypoint promtool prom/prometheus:v2.53.0 check config /etc/prometheus/prometheus.yml
+          docker run --rm -v "$PWD/docker/prometheus:/etc/prometheus:ro" \
+            --entrypoint promtool prom/prometheus:v2.53.0 check rules /etc/prometheus/rules/alert-rules.yml
+          docker run --rm -v "$PWD/docker/prometheus:/etc/prometheus:ro" \
+            --entrypoint promtool prom/prometheus:v2.53.0 test rules /etc/prometheus/rules-tests/alert-rules.test.yml
+
       # Migration gate (D16/TD-33): refined policy self-test — widening passes, destructive /
       # CHECK-narrowing / parse-unknown abort (fail-closed). Runs on scratch git trees.
       - name: Migration gate tests (TD-33)
