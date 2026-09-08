@@ -53,6 +53,26 @@ and webhook-rejections asserted PRESENT AT 0) — on a real `/actuator/prometheu
 
 Naming follows Micrometer conventions (dots, lower-case); Prometheus exposition renders `dargent.*` as `dargent_*`.
 
+### Webhook limiter posture (E16 S4 — declared, per-instance by design)
+
+- **Scope key:** first hop of `X-Forwarded-For` (set at the NGINX edge) falling back to
+  `getRemoteAddr()` — the real caller's IP, not the proxy's. One bucket per caller IP **per API
+  instance** (in-heap `ConcurrentHashMap`; no shared store — zero-dependency was the E15 S1
+  design decision).
+- **Quota math per replica:** with defaults (capacity 100, refill 0.5 rps) ONE instance admits
+  a single caller at 100 burst + 0.5 sustained; NGINX splits traffic by canary weight
+  (`deploy.sh --canary 10,30,100`), so **two hot colors ≈ double quota** for the same caller
+  (each color keeps its own bucket). Steady state (100/100) = 2× the printed defaults; a
+  canary window (10/90) = 1.1×. The honest k6 run (E16 S3) shows exactly this behavior at the
+  fleet level: the PSP burst exhausts the per-IP bucket and confirmations shift to the
+  reconciler — the control working as designed.
+- **When a shared-store limiter becomes warranted:** the moment a single legitimate caller
+  needs a fleet-wide quota ABOVE what `refill × replica-count` allows, or abuse must be
+  contained to ONE budget across replicas. That is a shared in-memory/Redis limiter —
+  **deferred to M5 with rationale** (M5 brings Redis; `tasks/m5-scoping.md` D3 — "cache is an
+  optimization, not a dependency" applies to the limiter store the same way). No silent
+  carry-over: this paragraph IS the disposition.
+
 ## 4. Health model
 
 - `GET /actuator/health/liveness` — JVM alive. Public on the management port.
