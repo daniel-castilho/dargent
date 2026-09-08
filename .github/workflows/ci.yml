@@ -310,3 +310,34 @@ jobs:
           path: |
             /tmp/restore-drill/**
           if-no-files-found: ignore
+
+  # E15 S4 — the restore drill AT SCALE (the "36 KB seed" answer). Dispatch-only; identical
+  # mechanics to restore-drill but DRILL_SCALE_SEED_TXNS bulk-seeds the journal/postings via
+  # SQL (default 0 keeps the small drill untouched). RTO at volume is printed by the script;
+  # artifacts (manifest + logs) are the record.
+  restore-drill-scale:
+    needs: build
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    env:
+      DARGENT_DRILL_BACKUP_DIR: /tmp/restore-drill-scale
+      DRILL_SCALE_SEED_TXNS: '50000'
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build compose images
+        run: |
+          docker build -t dargent-api:compose -f apps/api/Dockerfile .
+          docker build -t dargent-psp-simulator:compose -f apps/psp-simulator/Dockerfile .
+
+      - name: Scale restore drill — 50k seeded txns, backup → destroy → restore → verify (RTO measured at scale)
+        run: bash scripts/ci-restore-drill.sh
+
+      - name: Upload scale-drill artifacts (always — the record is the deliverable)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: restore-drill-scale
+          path: |
+            /tmp/restore-drill-scale/**
+          if-no-files-found: ignore

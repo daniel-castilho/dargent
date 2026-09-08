@@ -5,6 +5,10 @@
 # smoke path) → backup.sh → DESTROY THE CLUSTER (down -v) → restore.sh --fresh → assertions green.
 # The restore+verify section is wall-clocked; the measured RTO is printed and compared to ≤ 30 min.
 #
+# E15 S4 (`restore-drill-scale`, same script): set DRILL_SCALE_SEED_TXNS > 0 to bulk-seed that
+# many CONFIRMED payments + journal entries + postings via SQL (D1b) before the backup — the
+# "36 KB seed" answer: same drill mechanics at production-like volume, RTO measured at scale.
+#
 # This is the first repo job that destroys a database cluster on purpose: it runs on its own
 # compose project (isolated -p dargent-drill) so it can never touch a developer's running stack.
 #
@@ -105,6 +109,90 @@ N_TXNS="${DRILL_TXNS:-3}"
 for i in $(seq 1 "$N_TXNS"); do smoke_txn "$N_TXNS"; done
 note "D1 money path ok — $N_TXNS deterministic txns CONFIRMED"
 
+# ------------------------------------------------------------------ D1b: scale seed (E15 S4 — bulk journal + postings, SQL)
+# When DRILL_SCALE_SEED_TXNS > 0, bulk-load that many CONFIRMED payments + journal entries +
+# postings DIRECTLY via SQL (the "36 KB seed" answer). The seed is kept CONSISTENT with the
+# ledger invariants the restore must prove later (DEBT-5 barrier): every payment has exactly
+# one POSTED payment.confirmed event, one journal entry with 3 postings (DR processing =
+# amount, CR fees = fee, CR merchant available = net), and the balances projection matches
+# the journal lines (restore.sh §5 runs the same proof). Generated with generate_series —
+# deterministic txids (md5-based, [A-Z0-9]{25}, unique) so the seed is idempotent per run.
+DRILL_SCALE_SEED_TXNS="${DRILL_SCALE_SEED_TXNS:-0}"
+scale_seed() {
+    local n="$1" seed_start seed_end txid event_json idem
+    [[ "$n" =~ ^[0-9]+$ ]] && (( n > 0 )) || fail "D1b: invalid DRILL_SCALE_SEED_TXNS='$n'"
+    note "D1b bulk-seeding $n CONFIRMED payments + journal entries + postings (SQL)"
+    compose exec -T postgres psql -U dargent -d dargent -v ON_ERROR_STOP=1 -q <<SQL
+-- drop any prior run of the same seed (idempotent per drill)
+DROP TABLE IF EXISTS pg_temp.scale_seed_txns;
+CREATE TEMP TABLE scale_seed_txns AS
+SELECT g AS n,
+       substr(upper(md5('seed-' || g)), 1, 25)                                                       AS txid,
+       ('00000000-0000-0000-0000-' || lpad(to_hex(g), 12, '0'))::uuid                                      AS id,
+       'a0000000-0000-4000-8000-000000000001'::uuid                                                        AS merchant
+FROM generate_series(1, $n) AS g;
+-- payments rows (CONFIRMED, fee/net split mirroring EventIngestionUseCase postings)
+INSERT INTO payments.payments
+    (id, txid, merchant_id, description, amount_cents, status, version, expires_at, end_to_end_id,
+     fee_cents, net_cents, late_confirmation, refunded_cents, created_at, confirmed_at)
+SELECT id, txid, merchant, 'e15-scale-seed', ((n % 9000) + 1000) AS amount,
+       'CONFIRMED', 0, now() + interval '1 hour', 'E' || txid,
+       (((n % 9000) + 1000) / 100), (((n % 9000) + 1000) - (((n % 9000) + 1000) / 100)) AS net,
+       false, 0, now() - (n || ' milliseconds')::interval, now()
+FROM scale_seed_txns;
+-- ledger events (POSTED payment.confirmed, same payload shape the consumer parses)
+INSERT INTO ledger.events (event_id, type, txid, merchant_id, payload, status, note, received_at)
+SELECT id, 'payment.confirmed', txid, merchant,
+       jsonb_build_object('txid', txid,
+                          'merchantId', 'a0000000-0000-4000-8000-000000000001',
+                          'amountCents', (n % 9000) + 1000,
+                          'feeCents', ((n % 9000) + 1000) / 100,
+                          'netCents', ((n % 9000) + 1000) - (((n % 9000) + 1000) / 100)),
+       'POSTED', 'scale seed', now()
+FROM scale_seed_txns;
+-- journal entries (one per event)
+INSERT INTO ledger.journal_entries (id, event_id, txid, merchant_id, description, created_at)
+SELECT ('00000000-0000-0000-0001-' || lpad(to_hex(n), 12, '0'))::uuid, id, txid, merchant,
+       'Payment confirmed: ' || txid, now()
+FROM scale_seed_txns;
+-- postings (DR processing = amount; CR fees = fee; CR merchant available = net)
+INSERT INTO ledger.postings (id, entry_id, account, direction, amount_cents, created_at)
+SELECT ('00000000-0000-0000-0002-' || lpad(to_hex(n * 3 + d.off), 12, '0'))::uuid,
+       ('00000000-0000-0000-0001-' || lpad(to_hex(n), 12, '0'))::uuid,
+       CASE d.off WHEN 0 THEN 'payments:processing'
+                  WHEN 1 THEN 'fees:revenue'
+                  ELSE 'merchant:a0000000-0000-4000-8000-000000000001:available' END,
+       CASE d.off WHEN 0 THEN 'DEBIT' ELSE 'CREDIT' END,
+       CASE d.off WHEN 0 THEN (n % 9000) + 1000
+                  WHEN 1 THEN ((n % 9000) + 1000) / 100
+                  ELSE ((n % 9000) + 1000) - (((n % 9000) + 1000) / 100) END,
+       now()
+FROM scale_seed_txns
+CROSS JOIN (VALUES (0), (1), (2)) AS d(off);
+-- balances projection must equal the journal lines (restore.sh §5 re-proves exactly this)
+INSERT INTO ledger.balances (account, balance_cents, updated_at, last_event_id)
+SELECT 'payments:processing',
+       -COALESCE((SELECT SUM(amount_cents) FROM payments.payments WHERE description='e15-scale-seed'), 0),
+       now(), NULL
+ON CONFLICT (account) DO UPDATE SET balance_cents = EXCLUDED.balance_cents, updated_at = now();
+INSERT INTO ledger.balances (account, balance_cents, updated_at, last_event_id)
+SELECT 'fees:revenue',
+       COALESCE((SELECT SUM(fee_cents) FROM payments.payments WHERE description='e15-scale-seed'), 0),
+       now(), NULL
+ON CONFLICT (account) DO UPDATE SET balance_cents = EXCLUDED.balance_cents, updated_at = now();
+INSERT INTO ledger.balances (account, balance_cents, updated_at, last_event_id)
+SELECT 'merchant:a0000000-0000-4000-8000-000000000001:available',
+       COALESCE((SELECT SUM(net_cents) FROM payments.payments WHERE description='e15-scale-seed'), 0),
+       now(), NULL
+ON CONFLICT (account) DO UPDATE SET balance_cents = EXCLUDED.balance_cents, updated_at = now();
+SQL
+    local cnts
+    cnts=$(compose exec -T postgres psql -U dargent -d dargent -tAc \
+        "select (select count(*) from payments.payments where description='e15-scale-seed') || '/' || (select count(*) from ledger.journal_entries) || '/' || (select count(*) from ledger.postings) || '/' || (select count(*) from ledger.events where status='POSTED')")
+    note "D1b seed ok — payments/journal/postings/events = $cnts"
+}
+if (( DRILL_SCALE_SEED_TXNS > 0 )); then scale_seed "$DRILL_SCALE_SEED_TXNS"; fi
+
 # ------------------------------------------------------------------ D2: backup (dump + manifest)
 export DARGENT_BACKUP_DIR="$BACKUP_DIR"
 "$SCRIPT_DIR/backup.sh" || fail "D2: backup.sh failed"
@@ -156,4 +244,4 @@ note "D5 post-restore money path ok — restored cluster serves NEW traffic (txi
 # ------------------------------------------------------------------ D6: teardown
 compose down -v --remove-orphans >/dev/null 2>&1 || true
 note "D6 teardown ok"
-echo "DRILL RESULT: PASS — $N_TXNS txns seeded, backup→destroy→restore verified, RTO ${RTO_SECONDS}s (≤ ${RTO_BUDGET_S}s), post-restore txn CONFIRMED"
+echo "DRILL RESULT: PASS — $N_TXNS API txns + ${DRILL_SCALE_SEED_TXNS:-0} scale-seeded txns, backup→destroy→restore verified, RTO ${RTO_SECONDS}s (≤ ${RTO_BUDGET_S}s), post-restore txn CONFIRMED"
