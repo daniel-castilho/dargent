@@ -1,0 +1,50 @@
+# Dependabot (E16 S5) — early-warning dependency PRs. The ENFORCEMENT layer stays the
+# existing gates (OWASP NVD-keyed CVSS>=7 gate + Trivy 2-pass on the shipped image,
+# E13/E14); this only surfaces updates BEFORE the gates bite. Noise budget (spec):
+# weekly cadence, minor+patch grouped per ecosystem, one review — OWASP/Trivy stay the bites.
+version: 2
+updates:
+  # Maven — production deps (the API, its modules and the PSP simulator).
+  # Test-scope noise is grouped by the default rules; the OWASP gate remains the real
+  # security enforcement for anything Dependabot misses or defers.
+  - package-ecosystem: maven
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "12:00"
+      timezone: America/Sao_Paulo
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+
+  # GitHub Actions — SHA-pinned per design §11.1; updates arrive as version bumps
+  # (the pin comment carries the major version for review).
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      actions-minor-and-patch:
+        update-types: ["minor", "patch"]
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(ci)"
+
+  # Docker Compose image tags (postgres/prometheus/alertmanager in docker/compose.yaml;
+  # the built app images are local-only and out of scope).
+  - package-ecosystem: docker-compose
+    directory: /docker
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      compose-minor-and-patch:
+        update-types: ["minor", "patch"]
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(compose)"
