@@ -7,6 +7,12 @@ global:
 rule_files:
   - rules/*.yml
 
+# E16 S1: alerts route to Alertmanager (same metrics profile, compose DNS by service name).
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
 scrape_configs:
   - job_name: dargent-api-blue
     static_configs:

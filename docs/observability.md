@@ -80,6 +80,16 @@ Naming follows Micrometer conventions (dots, lower-case); Prometheus exposition 
   | `DWARF_OUTBOX_ROWS_EXHAUSTED` | any row `EXHAUSTED` in 15 min | warning | §7 "Outbox lag climbing / EXHAUSTED rows" |
   | `DWARF_WEBHOOK_RATE_LIMITED_STORM` | ≥ 100 × 429 in 15 min (E15 S1 control) | warning | §7 "Webhook 429/413 storm" |
   | `DWARF_WEBHOOK_BODY_TOO_LARGE_STORM` | ≥ 20 × 413 in 15 min (E15 S1 control) | warning | §7 "Webhook 429/413 storm" |
+- **Alertmanager (E16 S1):** the `metrics` profile also runs Alertmanager (`prom/alertmanager:v0.27.0`)
+  + a **webhook-logger stub** receiver (`docker/alertmanager/` — one-file stdlib HTTP sink that logs
+  every routed alert group; NO pager, NO external sink by fence). Prometheus `alerting:` points at it.
+  Routes: `critical` (repeat 5 m) and `warning` (repeat 4 h), both → the stub. The config is
+  **validated by `amtool check-config` in CI** on every push (additions-only beside promtool — a
+  broken route tree is a red build). To wire a real receiver later: edit the `webhook_configs`
+  url in `docker/alertmanager/alertmanager.yml` (or add email/slack/pager integrations), re-run
+  amtool locally, ship. Wiring evidence (2026-09-08, local): alert posted to the Alertmanager API
+  was routed and logged by the stub —
+  `{"stub": "webhook-logger", "alert": "DWARF_LEDGER_PROOF_FAIL", "severity": "critical", …}`.
 - Grafana is optional/stretch; until then, the runbook's "quick diagnosis" table + `curl /actuator/prometheus | grep`
   recipes cover on-call needs.
 - Panels that matter, in order: outbox lag, DLQ depth, payments transitions (stacked), reconciler confirmations,
