@@ -1,0 +1,107 @@
+# Dargent alert rules (E15 S2). Every rule is tested firing AND quiet by
+# `promtool test rules` (docker/prometheus/rules-tests/) and that test runs in CI on every push —
+# an untested rule is a red build (ops-e15-spec §2.2). Thresholds are anchored to slos.md:
+#   S6 (outbox lag: p95 < 30 s, no event PENDING > 5 min)     -> DWARF_OUTBOX_LAG_ABOVE_SLO
+#   S7/S8 (proof = invariant, freeze-deploys moment)           -> DWARF_LEDGER_PROOF_FAIL
+#   webhook intake surface (E15 S1)                            -> DWARF_WEBHOOK_* rules
+# Runbook anchors live in each rule's annotations (release-runbook.md §7 quick-reference).
+groups:
+  - name: dargent-money-integrity
+    rules:
+      - alert: DWARF_LEDGER_PROOF_FAIL
+        # S7: balance proof must pass 100%; a non-zero counter page is a freeze-deploys moment
+        # (runbook §7). `for: 0m` because a faked proof run must stop deploys immediately.
+        expr: dargent_ledger_proof_fail_total > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: Ledger proof failed (scope={{ $labels.scope }})
+          description: 'The daily ledger proof (S7, slos.md) found an imbalance or projection
+            drift. This is an invariant breach: freeze deploys, snapshot the DB, triage journal
+            vs projection (append-only corrective entries with an ADR note).'
+          runbook: 'release-runbook.md §7 — Ledger proof failed: FREEZE DEPLOYS, snapshot, triage'
+      - alert: DWARF_OUTBOX_LAG_ABOVE_SLO
+        # S6: no event PENDING > 5 min. The gauge is seconds of the oldest due unrelayed event.
+        # `for: 5m` = one SLO window of sustained breach before the alert fires (transient relay
+        # noise is normal; a class of customers is not).
+        expr: dargent_outbox_lag_seconds > 300
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Outbox lag above SLO
+          description: 'The oldest unpublished outbox event is older than the 5 min SLO (S6,
+            slos.md). Either the relay is failing or the events spine (SNS/SQS / LocalStack) is
+            degraded — check the relay logs and LocalStack health, then verify the drain before
+            repairing.'
+          runbook: release-runbook.md §7 — Outbox lag climbing / EXHAUSTED rows
+      - alert: DWARF_DLQ_DEPTH
+        expr: dargent_dlq_messages > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Messages sitting on a DLQ (queue={{ $labels.queue }})
+          description: 'A poison-message queue is non-empty for 5 min. Read the message (compose
+            exec into LocalStack aws cli), fix the poison cause, requeue; if unknown, snapshot
+            and escalate. At-least-once delivery dedupe (eventId unique) makes this recoverable.'
+          runbook: release-runbook.md §7 — DLQ depth > 0
+      - alert: DWARF_WEBHOOK_SIGNATURE_STORM
+        # Burst of HMAC failures = attack noise or clock drift on the caller (runbook §7).
+        # 10 failures in 15 min is well beyond any legit retry pattern.
+        expr: sum(increase(dargent_webhook_signature_failures_total[15m])) >= 10
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: Webhook signature-failure burst
+          description: 'More than 10 HMAC verification failures in 15 min on the webhook route.
+            Signature failures are attack noise (this is also our attack-audit window) or host
+            clock drift. Verify simulator/host time (NTP); the reconciler catches legitimately
+            lost webhooks regardless.'
+          runbook: release-runbook.md §7 — Webhooks rejected en masse (signature_expired)
+      - alert: DWARF_OUTBOX_ROWS_EXHAUSTED
+        # Relay gave up on rows (backoff ladder → EXHAUSTED, max-attempts). One exhausted row in
+        # 15 min means customers are waiting for an event that will never self-publish; the
+        # audited republish endpoint is the documented recovery.
+        expr: sum(increase(dargent_outbox_attempts_total{result="exhausted"}[15m])) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: Outbox rows exhausted
+          description: 'The relay exhausted at least one outbox row (backoff ladder completed) in
+            the last 15 min. These rows will never self-publish — use the audited republish
+            endpoint (OutboxAdmin) after fixing the root cause, and verify the drain.'
+          runbook: release-runbook.md §7 — Outbox lag climbing / EXHAUSTED rows
+  - name: dargent-webhook-abuse
+    rules:
+      - alert: DWARF_WEBHOOK_RATE_LIMITED_STORM
+        # E15 S1 (DEBT-8) in-app control: per-IP token bucket on POST /webhooks/psp. 100 429s in
+        # 15 min is a deliberate flood (≈ the bucket capacity) — someone is hammering the only
+        # permitAll route. Investigate the caller before tuning anything up.
+        expr: sum(increase(dargent_webhook_rejections_total{reason="rate_limited"}[15m])) >= 100
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: Webhook rate-limited storm
+          description: 'The per-IP rate limit returned 429 at least 100 times in 15 min on the
+            webhook route. Check who the caller is and why it floods. Raising
+            DARGENT_WEBHOOK_RATE_LIMIT_* is a deliberate capacity decision, not the first move —
+            the control is the protection.'
+          runbook: release-runbook.md §7 — Webhook 429/413 storm
+      - alert: DWARF_WEBHOOK_BODY_TOO_LARGE_STORM
+        # 413s are usually a misconfigured PSP callback integration (payload > 64 KiB cap), not
+        # an attack; 20 in 15 min means the integration is broken and the events silently stop.
+        expr: sum(increase(dargent_webhook_rejections_total{reason="body_too_large"}[15m])) >= 20
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: Webhook body-too-large storm
+          description: 'More than 20 webhook payloads exceeded the 64 KiB body cap in 15 min. The
+            caller (PSP integration) is likely broken — reconcile the payment flow, since these
+            events are rejected before ingestion.'
+          runbook: release-runbook.md §7 — Webhook 429/413 storm

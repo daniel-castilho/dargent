@@ -5,6 +5,20 @@ versioning: semantic, cut from annotated git tags (see [release-runbook](docs/re
 
 ## [Unreleased]
 
+### Added (E15 S2 — Prometheus alert rules, tested in CI)
+
+- `docker/prometheus/rules/alert-rules.yml`: 7 rules (proof-fail → critical freeze-deploys;
+  outbox lag > SLO / DLQ depth / signature storm / rows EXHAUSTED / 429-storm / 413-storm →
+  warning), each with a release-runbook §7 runbook anchor in annotations. Thresholds anchored to
+  `docs/slos.md` (S6/S7).
+- `docker/prometheus/rules-tests/alert-rules.test.yml`: `promtool test rules` covers EVERY rule
+  with one firing case (injected series) + one quiet case (healthy series) — rule-fires and
+  rule-quiet negative paths proven. Runs in CI on every push; an untested/red rule is a build
+  breaker.
+- CI: promtool `check config` + `check rules` + `test rules` step (docker `prom/prometheus:v2.53.0`);
+  compose `metrics`-profile Prometheus mounts the rules dir.
+- observability.md §5 alert table + anchors.
+
 ### Added (E15 S1 — webhook abuse controls, DEBT-8 real closure)
 
 - In-app abuse controls on the public webhook route (`POST /webhooks/psp`), the only `permitAll`
