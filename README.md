@@ -118,6 +118,12 @@ Prerequisites: JDK 25 (Temurin), Docker with Compose, GNU make (optional).
 # 1. Start the backing services (Postgres, LocalStack, psp-simulator)
 docker compose -f docker/compose.yaml up -d
 
+# 1b. Demo variant (E15 S0): same stack with the full payments spine ON — relay, ledger
+#     consumer, reconciler and expiration. A confirmed payment is journaled end-to-end
+#     (outbox → SNS/SQS → double-entry ledger) and a dropped webhook self-heals via the
+#     reconciler, with zero env vars exported by hand:
+#     docker compose -f docker/compose.yaml -f docker/compose.demo.yaml up -d
+
 # 2. Run the API (Flyway migrates, queues provision themselves at boot)
 ./mvnw spring-boot:run -pl apps/api
 
@@ -174,7 +180,8 @@ release notes: [docs/releases/](docs/releases/).
 **`POST /v1/payments/{txid}/refunds` drives partial/total refunds with fee reversal and a ledger-backed**
 **merchant balance guard; concurrent refunds are DB-arbitrated (payments lock → one 201 / one 409;**
 **ledger drain → one POSTED / one IGNORED with `refund_skipped_balance`). The journal coverage auditor**
-**also detects refund-vs-POSTED discrepancies. M3 is ✅ (E9); M4 is ✅ (E11+E12+E13) — E14 cuts v1.0.0.**
+**also detects refund-vs-POSTED discrepancies. M3 is ✅ (E9); M4 is ✅ (E11+E12+E13) — E14 cut v1.0.0**
+**(tag `v1.0.0` @ `601a669`, 2026-09-07). E15 (operational hardening) is in progress.**
 
 | Milestone | Scope | Status |
 |---|---|---|
@@ -186,6 +193,7 @@ release notes: [docs/releases/](docs/releases/).
 | M3 — Suffering | Refunds (✓), expiration, resurrection, reconciler, settlement, DLQ/backoff/EXHAUSTED/requeue (E9 ✓) | ✅ |
 | M4 — Finish | Metrics (E11 ✓), blue-green deploy + runtime smoke in CI (E12 ✓), full quality/security gates (E13 ✓) — **✅**; E14 (tag release + SBOM + restore drill) cuts v1.0.0 as its own epic | ✅ |
 | M5 — Stretch | Card as second Strategy, k6 as hard gate, Redis read cache, webhook reprocessing | ☐ |
+| Post-1.0.0 (E15) — Operational hardening | Webhook abuse controls (429/413), tested alert rules, load baseline, restore at scale, PITR | ◐ |
 
 ## License
 

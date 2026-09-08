@@ -3,6 +3,24 @@
 All notable changes to Dargent are documented here. Format: [Keep a Changelog](https://keepachangelog.com);
 versioning: semantic, cut from annotated git tags (see [release-runbook](docs/release-runbook.md) §1).
 
+## [Unreleased]
+
+### Added (E15 S0 — post-release truth pass)
+
+- `docker/compose.demo.yaml`: demo overlay booting the full payments spine ON (relay, ledger
+  consumer, reconciler, expiration) — `docker compose -f docker/compose.yaml -f docker/compose.demo.yaml up`
+  proves end-to-end journaling and reconciler self-heal with zero hand-exported env vars
+  (the E14 S6.5 rider, owner-adjudicated 3/3).
+- README demo line + cover tense fix: "E14 cuts v1.0.0" → "E14 cut v1.0.0 (tag `v1.0.0` @
+  `601a669`, 2026-09-07)".
+- `docs/epics.md`: E15 row minted (◐ operational hardening, post-1.0.0); the former "E15 Stretch
+  batch" renumbered to **E16** (dependency graph updated).
+- E15 commissioning package committed under `tasks/e15-ops/` (prompt, spec, backlog, sequence,
+  Block-1 execution prompt) with corrections carved from the Q-batch: route fixed to
+  `POST /webhooks/psp` (the `/v1/` prefix never existed), PR numbering adjusted to the merged
+  reorg PR (#13), and the "104 ids" claim resolved as unverifiable (PR #12 body scanned — zero
+  occurrences; true counts: 89 ids at E14 S0 relint, 105 ids at E15 start).
+
 ## [1.0.0] - 2026-09-07
 
 First full release: the complete payment lifecycle over the simulated PIX rail with

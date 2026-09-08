@@ -1,0 +1,25 @@
+# E15 S0 — demo overlay (the E14 S6.5 rider, owner-adjudicated 3/3 on 2026-09-07).
+#
+# Boots the full payments spine ON for demo purposes:
+#   docker compose -f docker/compose.yaml -f docker/compose.demo.yaml up -d
+#
+# What it proves vs the base file: with RELAY + LEDGER_CONSUMER + RECONCILER +
+# EXPIRATION on, a confirmed payment is journaled end-to-end (outbox → SNS/SQS →
+# double-entry ledger), a dropped webhook is self-healed by the reconciler, and
+# due payments expire — without exporting a single env var by hand.
+#
+# Everything else inherits from docker/compose.yaml (map merge, per key).
+services:
+  api-blue:
+    environment:
+      DARGENT_RELAY_ENABLED: "true"
+      DARGENT_LEDGER_CONSUMER_ENABLED: "true"
+      DARGENT_RECONCILER_ENABLED: "true"
+      DARGENT_EXPIRATION_ENABLED: "true"
+
+  api-green:
+    environment:
+      DARGENT_RELAY_ENABLED: "true"
+      DARGENT_LEDGER_CONSUMER_ENABLED: "true"
+      DARGENT_RECONCILER_ENABLED: "true"
+      DARGENT_EXPIRATION_ENABLED: "true"
