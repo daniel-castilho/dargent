@@ -17,8 +17,8 @@ single-host docker compose stack.
 | HTTP requests | 59 620 (414.29/s) |
 | Checks | 83 468 — **100.00% succeeded, 0 failed** |
 | HTTP errors | **0.00%** (`http_req_failed: 0.00% 0 out of 59620`) |
-| Commit | pending (this file ships it) |
-| Baseline commit | **5eeede0** (main, post-S1 merge) — stack built from that tree |
+| Commit | `7ad857f` (script + baseline doc); `39117c8` (raw summary preserved) |
+| Baseline tree built/tagged from | **5eeede0** (main, post-S1 merge) |
 
 ## Hardware (disclosed — mandatory)
 
