@@ -67,7 +67,8 @@ true in the same epic that exercises it.
 | S4 | restore-drill green + record w/ measured RTO | CI `restore-drill` job green: run `34155211811` (job `101847517958`), `DRILL RESULT: PASS — RTO 21s (≤ 1800s)`; record `docs/drills/restore-2026-09-07.md` (local 23s + CI 21s + negative paths) | ✅ |
 | S5 | two-release migration verdict | `docs/releases/v1.0.0-migration-review.md` — **PASS with two dispositions** (10/11 expand-only; F1 resolved by disposition: V301 unchanged, direct v0.3.0→v1.0.0 UNSUPPORTED, data-only path proven by rehearsal). Owner adjudicated "F1 round 2 — A'" (Emenda (e), evidence-over-will) | ✅ |
 | S6 | releases/v1.0.0.md + CHANGELOG + README | `docs/releases/v1.0.0.md` (capabilities M0–M4+E14, architecture, ops, risks incl. F1, artifact map), CHANGELOG `[1.0.0]` section, README truth pass (E14 live wording + drill), playbook §6.1 S7 regression map, lessons #16–#18 | ✅ |
-| S7 | RC regression all-green + freeze | | ☐ |
+| S7 | RC regression all-green + freeze | RC `601a669` (post-F1-A'): push CI run #206 `34178448326` green (build+image+Trivy+runtime-smoke); dispatch run #207 `34179487749` green incl. proof-daily + restore-drill | ✅ |
+| S8 | tag → release → verify → flip + citation | tag `v1.0.0` (annotated) @ `601a669`; release run #3 `34180455833` GREEN (gates+restore-drill+release); digest `sha256:9cc760dc…f291f46` == Release body == SBOM purl `pkg:oci/dargent-api@sha256:9cc760dc…`; asset jar `fadeb35e…` == image-extracted jar bit-for-bit; flip (epics E14 ◐→✅) + citation (release run id @ tag + flip run id) via PR | ✅ |
 | S8 | tag v1.0.0 → release run → flip → citation | | ☐ |
 
 ## §6 Evidence policy
