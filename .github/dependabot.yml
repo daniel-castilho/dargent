@@ -36,7 +36,10 @@ updates:
       prefix: "chore(ci)"
 
   # Docker Compose image tags (postgres/prometheus/alertmanager in docker/compose.yaml;
-  # the built app images are local-only and out of scope).
+  # the built app images are local-only and out of scope). Infra majors are IGNORED with
+  # reasons — they are infrastructure decisions, not routine bumps: postgres:16 is the
+  # project contract (design.md stack), prometheus v2 → v3 is a breaking major (config
+  # compat + the promtool CI step pins the same major).
   - package-ecosystem: docker-compose
     directory: /docker
     schedule:
@@ -45,6 +48,13 @@ updates:
     groups:
       compose-minor-and-patch:
         update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: postgres
+        update-types: ["version-update:semver-major"]
+      - dependency-name: prom/prometheus
+        update-types: ["version-update:semver-major"]
+      - dependency-name: prom/alertmanager
+        update-types: ["version-update:semver-major"]
     open-pull-requests-limit: 3
     commit-message:
       prefix: "chore(compose)"

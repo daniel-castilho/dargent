@@ -5,6 +5,18 @@ versioning: semantic, cut from annotated git tags (see [release-runbook](docs/re
 
 ## [Unreleased]
 
+### Changed (E16 S5 — dependabot live: weekly, grouped, noise-budgeted)
+
+- `.github/dependabot.yml`: three ecosystems (maven production deps, github-actions SHA-pin
+  bumps, docker-compose image tags), weekly Monday cadence, **minor+patch grouped** per
+  ecosystem (one review per batch), `open-pull-requests-limit` 5/3/3. Enforcement stays with
+  the existing gates (OWASP NVD-keyed CVSS≥7 + Trivy 2-pass) — dependabot is early warning only.
+- **Live same-day:** the first grouped PRs opened within minutes of merging (maven group with
+  11 updates, compose group, actions pin bumps — PRs #34–#38). **Infra majors fenced:**
+  postgres/prometheus/alertmanager semver-major updates are ignored with reasons (stack
+  contract, promtool CI pins the same major) — the two major PRs dependabot opened before the
+  ignore landed (#35 postgres 18, #36 prometheus v3) were closed deferred, reasons on record.
+
 ### Changed (E16 S4 — limiter posture declared: per-instance by design, M5-Redis deferral explicit)
 
 - observability.md §3 gains the posture block: scope key (`X-Forwarded-For` first hop →
