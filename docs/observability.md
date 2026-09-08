@@ -33,10 +33,10 @@ healthy"), distributed tracing deliberately out (a modular monolith with correla
 
 ## 3. Metrics (Micrometer → Prometheus at `/actuator/prometheus`)
 
-**Status: live (E11; proof counter + SLO buckets added in E12).** All 9 series below are wired end-to-end and
-asserted — with their frozen tag vocabularies and non-zero values (proof-fail asserted PRESENT AT 0) — on a
-real `/actuator/prometheus` scrape of a prod-profile boot by `MetricsScrapeIT` (CI). Names are FROZEN:
-renaming any series is a contract break.
+**Status: live (E11; proof counter + SLO buckets added in E12; webhook abuse rejections added in E15 S1).** All 10
+series below are wired end-to-end and asserted — with their frozen tag vocabularies and non-zero values (proof-fail
+and webhook-rejections asserted PRESENT AT 0) — on a real `/actuator/prometheus` scrape of a prod-profile boot by
+`MetricsScrapeIT` (CI). Names are FROZEN: renaming any series is a contract break.
 
 | Metric | Type | Labels | Question it answers |
 |---|---|---|---|
@@ -49,6 +49,7 @@ renaming any series is a contract break.
 | `dargent_idempotency_events_total` | counter | `kind` (replayed, conflict, in_flight) | Client retry behavior pressure |
 | `dargent_refunds_rejected_total` | counter | `code` | Money-guard trips (exceeds remaining, not refundable) |
 | `dargent_ledger_proof_fail_total` | counter | `scope` (balance, projection) | Ledger proof failures (N8) — 0 is the only good value; a non-zero page is a freeze-deploys moment |
+| `dargent_webhook_rejections_total` | counter | `reason` (rate_limited, body_too_large) | Webhook abuse-control trips (E15 S1, DEBT-8) — 429/413 verdicts; feeds the abuse alert rule |
 
 Naming follows Micrometer conventions (dots, lower-case); Prometheus exposition renders `dargent.*` as `dargent_*`.
 

@@ -28,7 +28,7 @@ Surfaces:
 | **T**ampering — body mutated after signing | Signature is over the RAW body; raw payload persisted verbatim even on invalid signature (attack audit) — `WebhookIntakeIT` tamper legs; AGENTS §4.4 | mitigated |
 | **R**epudiation — "PSP never sent / we never received" | `payments.webhook_events` dedupe on `provider_event_id` unique + raw persistence + `payments.audit_log` (`WebhookIntakeIT` duplicate leg; playbook scenario 8) | mitigated |
 | **I**nformation disclosure — signature oracle errors | Fail-closed uniform `401` body via the canonical error contract (`ErrorCode.SIGNATURE_INVALID`; no oracle distinction) | mitigated |
-| **D**enial of service — webhook flood | Raw-payload persistence is bounded per event; no unbounded queues on the intake path. No explicit rate limit on the webhook route | **gap → DEBT-8** (accepted for v1: route is PSP-only in prod topology; NGINX edge can rate-limit when deployed) |
+| **D**enial of service — webhook flood | **In-app `WebhookAbuseControlFilter` (E15 S1, DEBT-8 resolved): per-IP token-bucket rate limit (429, zero side effects — nothing persisted) + request body cap (413, decided on `Content-Length` before the body/HMAC is consumed)**; raw-payload persistence bounded per event; no unbounded queues on the intake path. NGINX edge rate-limiting remains defense-in-depth for a public deployment | mitigated in-app (NGINX = defense-in-depth) |
 | **E**levation — webhook payload becomes a domain entity directly | Anti-corruption layer at the boundary (`WebhookController` → `WebhookIntakeUseCase`; AGENTS §3.6) | mitigated |
 
 ## 2. Merchant API + API keys (`/v1/**`)
@@ -102,6 +102,8 @@ the testing-playbook matrix row carries the link since E11; re-verified in E13 S
 
 ## Gaps → debt
 
-- **DEBT-8**: no rate limit on the public webhook route. Disposition: accepted for v1 (PSP-only
-  topology; NGINX edge rate-limiting when a public deployment exists). Register in AGENTS §8.
+- **DEBT-8 (RESOLVED 2026-09-08, E15 S1)**: ~~no rate limit on the public webhook route~~ closed
+  in-app: `WebhookAbuseControlFilter` — 429 per-IP token bucket + 413 body cap on `POST /webhooks/psp`
+  only, control order and zero-side-effect contracts carved by `WebhookRateLimitIT` /
+  `WebhookBodyCapIT`. AGENTS §8 row → RESOLVED with the commit.
 - All other cells: mitigated by cited, test-enforced controls.

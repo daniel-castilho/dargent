@@ -5,6 +5,28 @@ versioning: semantic, cut from annotated git tags (see [release-runbook](docs/re
 
 ## [Unreleased]
 
+### Added (E15 S1 — webhook abuse controls, DEBT-8 real closure)
+
+- In-app abuse controls on the public webhook route (`POST /webhooks/psp`), the only `permitAll`
+  route: `WebhookAbuseControlFilter` — per-IP token-bucket **rate limit → 429** (zero side
+  effects: nothing persisted, no use case invoked) and **body cap → 413** (decided on
+  `Content-Length` before the body/HMAC is consumed; bounded read guards chunked/lying headers).
+  Valid traffic under limit flows byte-identically (regression-proven by `WebhookIntakeIT`).
+- New canonical error codes `payload_too_large` (413) and `rate_limited` (429).
+- New env surface (defaults generous, never trip demo/smoke): `DARGENT_WEBHOOK_RATE_LIMIT_CAPACITY`
+  (100), `DARGENT_WEBHOOK_RATE_LIMIT_REFILL_PER_SECOND` (0.5), `DARGENT_WEBHOOK_BODY_CAP_BYTES`
+  (65536).
+- New ITs: `WebhookRateLimitIT` (burst → 429 → recovery window via injected clock; zero
+  money-path side effects) and `WebhookBodyCapIT` (413 before HMAC; exact-cap boundary flows;
+  chunked capped by bounded read).
+- 10th frozen metric series `dargent_webhook_rejections_total{reason=rate_limited|body_too_large}`
+  (pre-registered at 0, E12 N8 convention) — feeds the E15 S2 abuse alert rule.
+
+### Changed (E15 S1)
+
+- **DEBT-8 RESOLVED** (AGENTS §8): threat-model surface-1 DoS row now mitigated in-app with NGINX
+  as defense-in-depth; runbook §7 incidents table gains the 429/413 storm row.
+
 ### Added (E15 S0 — post-release truth pass)
 
 - `docker/compose.demo.yaml`: demo overlay booting the full payments spine ON (relay, ledger
