@@ -21,7 +21,7 @@ If a procedure here is wrong, fix it in the same PR that discovered the fact.
    release N+1's migrations keep release N runnable, and vice versa. Blue and green share the database.
 4. Restore drill current (quarterly, §6) — a backup chain you haven't restored is a hope, not a backup.
 
-**v1.0.0 execution (E14 S5, 2026-09-07):** 1 ✅ matrices evidenced per epic (`tasks/*-spec.md` §10 rows,
+**v1.0.0 execution (E14 S5, 2026-09-07):** 1 ✅ matrices evidenced per epic (`tasks/<epic>/*-spec.md` §10 rows,
 epics.md E0–E14 ✅ rows); 2 ✅ `docs/releases/v1.0.0.md` + CHANGELOG `[1.0.0]` + lessons #16–#18 (E14
 findings); 3 ✅ two-release review executed against the real V-table — verdict recorded in the release doc:
 **PASS with two dispositions** — 10/11 migrations expand-only (TD-33 ALLOW-with-log for the three

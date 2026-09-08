@@ -3,7 +3,7 @@
 # E13 R1 — evidence-lint: every cited CI run id must be real and must carry its run number.
 #
 # Sources (contract §3 R1): docs/epics.md (whole) + the §10 acceptance-matrix section of each
-# tasks/*-spec.md. For each source, assert:
+# tasks/<epic>/*-spec.md. For each source, assert:
 #   (a) every backtick-quoted `3[0-9]{9,}` run id resolves via `gh api repos/<repo>/actions/runs/<id>` (200),
 #   (b) every id has a run-number reference (`run #N` / `runs #N` / bare `#N`) ADJACENT, i.e. within
 #       ±1 line of the id's line.
@@ -101,7 +101,7 @@ scan_file() {
     echo "SKIP (no §10 matrix) $file"
 }
 
-for f in docs/epics.md tasks/*-spec.md; do
+for f in docs/epics.md tasks/*/*-spec.md; do
     [[ "$f" == *.md ]] || continue
     scan_file "$f"
 done
