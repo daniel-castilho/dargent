@@ -70,6 +70,17 @@ public final class JdbcLedgerStore implements LedgerStore {
 
     @Override
     public void postJournal(JournalEntry entry) {
+        postJournalCore(entry, true);
+    }
+
+    /**
+     * Single guarded implementation behind the former postJournal/postJournalWithoutBalances
+     * twins (DEBT-7 Path A, E15 S6): journal entry + postings, plus balance projection upserts
+     * when {@code updateBalances}. Refund flow drains/updates balances itself inside the same
+     * transaction (E8 conditional-drain guarantee) and therefore posts with {@code false} —
+     * the E8/E9 guarantees are unchanged: the ladder/property/concurrent ITs prove both paths.
+     */
+    private void postJournalCore(JournalEntry entry, boolean updateBalances) {
         txTemplate.execute(status -> {
             // 1) Journal entry
             jdbc.sql("""
@@ -101,21 +112,23 @@ public final class JdbcLedgerStore implements LedgerStore {
                         .update();
             }
 
-            // 3) Balance upserts
-            for (Posting p : entry.postings()) {
-                long delta = p.direction() == io.dargent.ledger.domain.model.EntryDirection.CREDIT
-                        ? p.amountCents()
-                        : -p.amountCents();
-                jdbc.sql("""
-                        INSERT INTO ledger.balances (account, balance_cents, updated_at, last_event_id)
-                        VALUES (?, ?, ?, ?)
-                        ON CONFLICT (account) DO UPDATE SET
-                            balance_cents = ledger.balances.balance_cents + EXCLUDED.balance_cents,
-                            updated_at = EXCLUDED.updated_at,
-                            last_event_id = EXCLUDED.last_event_id
-                        """)
-                        .params(p.account(), delta, Timestamp.from(entry.createdAt()), entry.eventId())
-                        .update();
+            // 3) Balance upserts (skipped when the caller owns the balance writes — refund path)
+            if (updateBalances) {
+                for (Posting p : entry.postings()) {
+                    long delta = p.direction() == io.dargent.ledger.domain.model.EntryDirection.CREDIT
+                            ? p.amountCents()
+                            : -p.amountCents();
+                    jdbc.sql("""
+                            INSERT INTO ledger.balances (account, balance_cents, updated_at, last_event_id)
+                            VALUES (?, ?, ?, ?)
+                            ON CONFLICT (account) DO UPDATE SET
+                                balance_cents = ledger.balances.balance_cents + EXCLUDED.balance_cents,
+                                updated_at = EXCLUDED.updated_at,
+                                last_event_id = EXCLUDED.last_event_id
+                            """)
+                            .params(p.account(), delta, Timestamp.from(entry.createdAt()), entry.eventId())
+                            .update();
+                }
             }
             return null;
         });
@@ -436,48 +449,10 @@ public final class JdbcLedgerStore implements LedgerStore {
 
             var entry = new JournalEntry(entryId, eventId, txid, merchantId, description, createdAt, postings);
 
-            // Write journal + postings WITHOUT balance updates (already done above)
-            postJournalWithoutBalances(entry);
+            // Write journal + postings WITHOUT balance updates (the drain above owns the
+            // balance writes atomically with the conditional guard — E8 guarantee preserved)
+            postJournalCore(entry, false);
             return true;
-        });
-    }
-
-    /**
-     * Posts journal entry and postings without updating balances.
-     * Used by postRefund where balances are updated atomically with the conditional drain.
-     */
-    private void postJournalWithoutBalances(JournalEntry entry) {
-        txTemplate.execute(status -> {
-            // 1) Journal entry
-            jdbc.sql("""
-                    INSERT INTO ledger.journal_entries (id, event_id, txid, merchant_id, description, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                    """)
-                    .params(
-                            entry.id(),
-                            entry.eventId(),
-                            entry.txid(),
-                            entry.merchantId(),
-                            entry.description(),
-                            Timestamp.from(entry.createdAt()))
-                    .update();
-
-            // 2) Postings only (no balance upserts)
-            for (Posting p : entry.postings()) {
-                jdbc.sql("""
-                        INSERT INTO ledger.postings (id, entry_id, account, direction, amount_cents, created_at)
-                        VALUES (?, ?, ?, ?::text, ?, ?)
-                        """)
-                        .params(
-                                p.id(),
-                                p.entryId(),
-                                p.account(),
-                                p.direction().name(),
-                                p.amountCents(),
-                                Timestamp.from(p.createdAt()))
-                        .update();
-            }
-            return null;
         });
     }
 
