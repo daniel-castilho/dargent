@@ -5,6 +5,15 @@ versioning: semantic, cut from annotated git tags (see [release-runbook](docs/re
 
 ## [Unreleased]
 
+### Changed (E16 S4 — limiter posture declared: per-instance by design, M5-Redis deferral explicit)
+
+- observability.md §3 gains the posture block: scope key (`X-Forwarded-For` first hop →
+  real caller IP), **per-instance in-heap buckets**, quota math per replica (**canary doubles
+  the quota for the same caller** — steady state ≈ 2× defaults; 10/90 window ≈ 1.1×), and the
+  exact trigger for a shared-store limiter (fleet-wide budget need) — **deferred to M5 with
+  rationale** (`tasks/m5-scoping.md` D3). runbook §7 row updated to match. Path A per the
+  Q-batch leaning; no silent carry-over — this entry IS the disposition.
+
 ### Added (E16 S3 — honest k6 run: spine ON + default limiter, published beside the baseline)
 
 - Same `scripts/load/k6-money-path.js`, same 24 VUs / 2m30s — but the **production-shaped

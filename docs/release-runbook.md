@@ -191,7 +191,7 @@ Findings from the S2 replicate (+ lessons for design.md §11.2 / lessons):
 | Outbox lag climbing / `EXHAUSTED` rows | Check relay logs + LocalStack health | Fix cause; audited requeue endpoint for `EXHAUSTED`; verify drain |
 | DLQ depth > 0 | Read the message (compose exec into LocalStack aws cli) | Fix the poison cause; requeue; if unknown, snapshot and escalate |
 | Webhooks rejected en masse (`signature_expired`) | Clock drift check on simulator/host | NTP fix; reconciler catches the gap — verify it did |
-| Webhook 429/413 storm (`dargent_webhook_rejections_total`) | Check who the caller is (per-IP token bucket / 64 KiB body cap — E15 S1) | A flood from the PSP host = investigate the caller; raise `DARGENT_WEBHOOK_RATE_LIMIT_*`/`DARGENT_WEBHOOK_BODY_CAP_BYTES` only by deliberate decision — the control is the protection, not the problem |
+| Webhook 429/413 storm (`dargent_webhook_rejections_total`) | Check who the caller is (per-IP token bucket, **per-instance** — quota ≈ defaults × hot-replica count; 64 KiB body cap — E15 S1, posture declared E16 S4) | A flood from the PSP host = investigate the caller; raise `DARGENT_WEBHOOK_RATE_LIMIT_*`/`DARGENT_WEBHOOK_BODY_CAP_BYTES` only by deliberate decision — the control is the protection, not the problem. A single caller needing a fleet-wide budget above `refill × replicas` = the M5 Redis-limiter trigger (observability §3 posture) |
 | Ledger proof failed | **Freeze deploys** | Snapshot DB; triage journal vs projection; correcting entries (append-only) with ADR note |
 | Blue-green canary abort | Automatic — confirm traffic 100% old | Read new-fleet logs; fix forward; redeploy by the book |
 
