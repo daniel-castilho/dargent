@@ -159,8 +159,12 @@ reconciliation chaos + graceful shutdown under load). k6 performance stays consu
 [docs/ci-vulnerability-gates.md](docs/ci-vulnerability-gates.md).
 
 An annotated tag `vX.Y.Z` produces the semver image + GitHub Release with the jar and the SBOM of the exact
-shipped image (E14). Deployment is **blue-green by immutable tag** with a 10%/30s canary and instant rollback
-(`deploy.sh`, live since E12). Procedures: [release runbook](docs/release-runbook.md).
+shipped image (E14 — live: GHCR `dargent-api` receives `sha-<short7>` + `:edge` on every main commit;
+rehearsal releases `v1.0.0-rc1/rc2` cut and verified end-to-end — digest, jar and SBOM assets checked).
+Deployment is **blue-green by immutable tag** with a 10%/30s canary and instant rollback
+(`deploy.sh`, live since E12). The release gates include the **restore drill** (backup → destroy →
+restore → verify, RTO wall-clocked — `docs/drills/`). Procedures: [release runbook](docs/release-runbook.md);
+release notes: [docs/releases/](docs/releases/).
 
 ## Current state
 

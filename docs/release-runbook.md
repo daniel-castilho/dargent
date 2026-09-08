@@ -21,6 +21,14 @@ If a procedure here is wrong, fix it in the same PR that discovered the fact.
    release N+1's migrations keep release N runnable, and vice versa. Blue and green share the database.
 4. Restore drill current (quarterly, §6) — a backup chain you haven't restored is a hope, not a backup.
 
+**v1.0.0 execution (E14 S5, 2026-09-07):** 1 ✅ matrices evidenced per epic (`tasks/*-spec.md` §10 rows,
+epics.md E0–E14 ✅ rows); 2 ✅ `docs/releases/v1.0.0.md` + CHANGELOG `[1.0.0]` + lessons #16–#18 (E14
+findings); 3 ✅ two-release review executed against the real V-table — verdict recorded in the release
+doc, **one contract violation found (V301 content changed post-v0.3.0; upgrade path blocked, no v0.3.0
+production DB exists)** — full audit `docs/releases/v1.0.0-migration-review.md`, remedy pending owner
+decision (Amendment (d) class); 4 ✅ restore drill current: `restore-drill` CI job green on run
+`34155211811` (RTO 21 s), record `docs/drills/restore-2026-09-07.md`.
+
 ```bash
 git checkout main && git pull
 ./mvnw clean verify                     # local gate before tagging; CI re-runs everything anyway
