@@ -10,6 +10,51 @@ When a lesson repeats three times, promote it to [coding-standards.md](coding-st
 
 ---
 
+## 16. GitHub Actions expressions have no string slicing — `${{ github.sha[0:7] }}` is a parse error that silently suppresses the whole workflow (2026-09-07, E14 S1)
+
+The S1 ci.yml push produced a **0-second, zero-job, logless "failure" run** and PR #6 got no CI
+at all. GitHub's workflow parser (stricter than any YAML tool) rejected `${{ github.sha[0:7] }}`
+— the expression grammar has no `[start:end]` slicing — and when a workflow file fails
+preprocessing, the run entry appears but no jobs are ever scheduled, on ANY event. actionlint
+(local binary) reproduced the exact lexer error in seconds: `got unexpected character ':' while
+lexing expression`. Fix: slice in shell (`short7="${GITHUB_SHA:0:7}"`), never in the expression.
+
+**Golden rules:**
+- A 0s run with zero jobs and no logs = workflow-level parse failure — suspect the expression
+  grammar, not YAML validity (PyYAML accepts what GitHub rejects).
+- Run actionlint before pushing workflow changes; it mirrors GitHub's parser.
+- Prefer shell (`${VAR:0:7}`) over expression syntax for string manipulation inside `run:` blocks.
+
+## 17. `$GITHUB_OUTPUT` heredocs need the delimiter ALONE on its line — a value without a trailing newline glues the terminator (2026-09-07, E14 S2)
+
+The rc1 release failed at "Compose release notes": `printf '%s' "$body" > notes.md` wrote the
+body without a trailing newline, so `cat notes.md` + `echo "EOF"` produced `…digest."EOF` on ONE
+line. GitHub's file-command parser then reported `Invalid value. Matching delimiter not found
+'EOF'` and the step (hence the release) failed — after the image was already pushed. Fix: stop
+routing multiline values through `$GITHUB_OUTPUT` entirely; write a file in one step and `cat`
+it into a shell variable in the next. Multiline outputs are a footgun; the filesystem is not.
+
+**Golden rules:**
+- If a step must emit multiline data for a later step, prefer a workspace file over
+  `$GITHUB_OUTPUT` heredocs.
+- If you must use the heredoc form, guarantee the content ends with a newline before the
+  delimiter line (`printf '%s\n'`, never `printf '%s'`).
+
+## 18. An endpoint that copies without consuming its input window cannot be "just re-run" — tools above it must count the full window (2026-09-07, E14 S3)
+
+`republishSent` (E9) selects `status='SENT' … order by published_at limit 500` and inserts
+PENDING copies — the ORIGINALS STAY SENT and nothing marks the window as processed. Re-running
+the same >500-row window re-matches the same first 500 rows forever, and a single call reports
+`matched=500 republished=500` which looks perfectly healthy. The wrapper script therefore counts
+the full window directly and fails (with split instructions) whenever any row would be silently
+left behind. General shape: **a bounded tool over non-consuming selection needs an external
+completeness check — its own success metric can't see the tail.**
+
+**Golden rules:**
+- Before building a "just re-run it" story around a batch tool, verify whether the tool consumes
+  its input; if it doesn't, the wrapper must measure the remainder itself.
+- A matched==republished report is only meaningful together with a window-size count.
+
 ## 15. A test that "hangs" on 100% CPU is usually your own non-terminating loop, not the framework — and a constant prefix can make a "re-generate until different" loop permanent (2026-09-04)
 
 `ProductionLockdownIT` (E11 S3) seemed to hang during context startup — no Spring banner, no container logs, timeouts up to 600–900 s. The suspect was the management port setup (`management.server.port=9090` fixed vs `=0` + `@LocalManagementPort`, RestAssured), and the fix was copied from `spotpobre-api`. Minutes of stabbing at it got nowhere.

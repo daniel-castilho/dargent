@@ -3,49 +3,57 @@
 All notable changes to Dargent are documented here. Format: [Keep a Changelog](https://keepachangelog.com);
 versioning: semantic, cut from annotated git tags (see [release-runbook](docs/release-runbook.md) §1).
 
+## [1.0.0] - 2026-09-07
+
+First full release: the complete payment lifecycle over the simulated PIX rail with
+double-entry ledger, delivery hardening, blue-green deployment, and full CI quality/security
+gates. Architecture: modular monolith (payments / ledger / notifications / shared),
+schema-per-module, events-only cross-module communication, database-arbitrated races.
+
+### Milestone summary (E0→E14)
+
+- **M0 Foundations (E0):** multi-module Maven skeleton (Java 25, Spring Boot 4.1), ArchUnit
+  boundary gates, compose stack (PostgreSQL 16, LocalStack SNS/SQS FIFO, NGINX), Flyway
+  per-schema migrations, CI from day one.
+- **M1 Create path (E1–E4):** PIX BR Code creation with request-level idempotency (byte-equal
+  replays), API-key auth (SHA-256 + constant-time), canonical errors; PSP simulator with chaos
+  levers; fail-closed signed webhook intake (HMAC-SHA256, 5-min anti-replay, dedupe,
+  attack-audit persistence).
+- **M2 Events & ledger (E6/E7/E10):** transactional outbox → SNS/SQS FIFO (at-least-once, DLQ);
+  append-only double-entry ledger (`ΣDR=ΣCR` journals, balances projection, daily proof +
+  rebuild, D+1 settlement); notifications consumer + read API.
+- **M3 Suffering (E5/E8/E9):** expiration + exactly-once resurrection; live reconciler
+  (webhook-less confirmation — the signature guarantee); partial/total refunds with fee
+  reversal, DB-arbitrated concurrency and ledger-backed balance guard; outbox backoff → FAILED →
+  EXHAUSTED with audited requeue + admin republish; journal-coverage auditor.
+- **M4 Production shape (E11/E12/E13):** JSON logs with ECS correlation + frozen metrics +
+  prod lockdown IT; blue-green deploy by immutable tag (canary 10/30/100, instant rollback,
+  runtime-smoke + shutdown-under-load gates); quality gates (SpotBugs, Spotless, JaCoCo floors
+  on combined data, OWASP NVD-keyed CVSS≥7, Trivy 2-pass + SBOM, CodeQL, Dependency Review,
+  evidence-lint).
+- **Release engineering (E14):** GHCR images per main commit (`sha-<short7>` + `:edge`);
+  tag-triggered release workflow (gates re-run on the tagged commit, semver push, SBOM of the
+  exact digest, Release with the shipped jar); backup/restore with manifest-verified restores;
+  CI restore drill (destroy→restore→verify, RTO wall-clocked); outbox republish tooling with
+  fail-closed preconditions.
+
+### Notable guarantees (proven in CI, not asserted)
+
+- No double charge: idempotency keys + webhook dedupe + consumer `eventId` dedupe.
+- No lost confirmation without a webhook: reconciler self-heal (CI-proven chaos scenario).
+- Every cent traceable: `ΣDR=ΣCR` per journal + property tests + daily proof job.
+- Database arbitrates races: conditional UPDATEs; concurrent refunds one-201/one-409.
+- Traffic never returns over an unverified restore: manifest counts + balance proof gate.
+
+### Known issues at release
+
+- Migration V301 was modified after v0.3.0 without a version bump — the v0.3.0→v1.0.0 upgrade
+  path is blocked (Flyway checksum mismatch); no v0.3.0 production DB exists. Details and remedy
+  options: `docs/releases/v1.0.0-migration-review.md` (owner decision pending at authorship).
+- DEBT-7 (ledger store duplication, deferred), DEBT-8 (webhook route rate limit/body cap,
+  accepted for v1), PITR shipped-not-drilled — see `docs/releases/v1.0.0.md` (accepted risks).
+
 ## [Unreleased]
-
-### Added — E14 Release Engineering, Block 1 (S0–S4) (2026-09-07)
-
-- **S1 — GHCR push on main**: ci.yml image job pushes `ghcr.io/daniel-castilho/dargent-api:sha-<short7>`
-  (immutable) + `:edge` (moving) on every main commit (Trivy-clean first, `packages: write`
-  job-scoped, GITHUB_TOKEN only, main-only gating). Runbook §1 `<org>` → literal. First images:
-  `sha-6c2e7a4`, `sha-f6d0303`+`edge`.
-- **S2 — Release workflow** (`.github/workflows/release.yml`, tag `v*` only): gates re-run the
-  full suite on the tagged commit (boundaries, migration gate, `./mvnw -B verify`, OWASP cached,
-  floors) → image → non-root gate → Trivy pass 2 → GHCR push `<semver>` (v stripped) → CycloneDX
-  SBOM scanned BY DIGEST (the exact pushed image) → jar extracted FROM the shipped image (not a
-  sibling build) → GitHub Release with tag annotation + auto-generated changelog + digest in
-  body. Rehearsals: `v1.0.0-rc1` failed at notes composition (GITHUB_OUTPUT heredoc newline bug —
-  fixed, tag never moved per contract), `v1.0.0-rc2` GREEN end-to-end (run `34148023947`):
-  `matched` digest `sha256:344a4f0bf9bf90562010261f48ca33e7afd976df2f49f0d6e3b86e5b483f6c7f` ==
-  Release body digest; asset jar sha256 `9b412908bceb9eabdc30088eeefdc7b280ab79732e7cfd9b4bd4a7650834711d`
-  == jar extracted from the image (bit-for-bit).
-- **S3 — Backup/restore machinery** (runbook §6): `scripts/backup.sh` (pg_dump -Fc + manifest:
-  per-table counts, ΣDR/ΣCR, size, pg version, timestamp; `dargent-YYYYMMDD-HHMMSS.dump`),
-  `scripts/restore.sh <dump>` (fresh cluster → pg_restore → Flyway no-op check (history H0==H1,
-  else dump/code mismatch) → per-table counts vs manifest → balance proof → GO/NO-GO line;
-  non-zero on ANY mismatch; never starts traffic). `deploy/systemd/dargent-backup.{service,timer}`
-  + `postgres-wal-archival.conf` (15-min WAL, rotation 8) shipped-as-files, honestly declared
-  not-CI-drilled. Compose line `DARGENT_OUTBOX_ADMIN_KEY` (default EMPTY = 404-hidden).
-- **S3 — Outbox republish tool** `scripts/republish-outbox.sh --from <ts> [--to] [--types]`
-  (Q2 Proposal A, owner-adjudicated): wraps `POST /v1/outbox/republish`; fail-closed preconditions
-  (key unset / key without `api_keys` row → actionable message); relay OFF → WARN + proceed (404
-  reported with reason); counts the FULL window directly and fails when the 500/call cap leaves
-  rows — `matched=500 republished=500 window_rows=501` → split-window instruction (the endpoint
-  does not consume the window; the tool never silently under-republishes). All four paths proven
-  (exit codes 0/1 recorded in the drill record).
-- **S4 — THE DRILL**: `scripts/ci-restore-drill.sh` + CI `restore-drill` job (workflow_dispatch;
-  also a release gate in release.yml): seeded stack (3 money-path txns) → backup → **destroy the
-  cluster (down -v)** → restore + verify → post-restore money path CONFIRMED → teardown; wall-clocked
-  RTO. Isolated compose project (`dargent-drill`, ports 18xxx) — the first repo job that destroys
-  a cluster on purpose, never touching the dev stack. First record
-  `docs/drills/restore-2026-09-07.md`: **RTO 23 s** (≤ 30 min stated), negative path tampered
-  manifest → `exit 1`.
-- **S0 — Governance sync**: epics E9 row corrected to **23/23** executable `@Test$` (TD-34 channel
-  arithmetic fix), E14 cell → `post-M4 (cuts v1.0.0)`; governance guide + handoff-dod corrected
-  copies landed in `docs/`; AGENTS §8 DEBT-8 "and request body cap"; E14 task package
-  (`tasks/release-e14-*.md`) landed.
 
 ### Added — E13 Quality & Security Gates, Block 2 (S4–S5) (2026-09-07)
 

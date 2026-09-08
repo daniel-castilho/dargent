@@ -110,6 +110,23 @@ Executed before cutting a tag (documented in release-runbook §2), with **read-o
 5. SQL proofs (read-only): payment counts by status match expectations; `Σ DR = Σ CR` for the smoke journals;
    no `outbox` rows `PENDING` older than 1 min; DLQ depth 0.
 
+### 6.1 The S7 pre-release regression (E14) — which scenarios run, where
+
+The RC commit (runbook §2 / E14 S7) re-runs these concretely, by CI job — nothing is re-derived
+by hand at release time:
+
+| Leg | CI job (dispatch on the RC commit) | Scenarios covered |
+|---|---|---|
+| Full suite + ITs (scenarios 1–28 by taxonomy) | `build` (PR/push gates on the RC head; `./mvnw -B verify`) | 1–15 (idempotency/webhooks/races), 16–24 (outbox/ledger incl. jqwik property), 25–27 (PSP chaos + reconciler), 28 (prod lockdown) |
+| Money path + chaos + shutdown-under-load | `runtime-smoke` | happy path legs, reconciler self-heal (26), drain-window probe |
+| Full spine proof | `proof-daily` (workflow_dispatch on RC) | 21 (ΣDR=ΣCR + projection==lines over a real journaled payment) |
+| Backup chain | `restore-drill` (workflow_dispatch on RC) | restore procedure + manifest verification + balance proof post-restore (§6 legs above, replayed against a destroyed-then-restored cluster) |
+| Evidence integrity | `evidence-lint` (PR run on the RC PR) | cited run ids resolve — the release doc's numbers are checkable |
+| Image security | `image` (Trivy 2-pass, SBOM) + non-root gate | the artifact being shipped is scanned clean |
+
+The tag-triggered release workflow (release.yml) re-runs the full gate suite + the restore drill
+on the tagged commit itself — the regression is bound to the exact tree that ships.
+
 ## 7. Flaky policy
 
 - **No permanent flakes.** A test that fails once reruns once locally: green ⇒ investigate timing; red ⇒ triage
