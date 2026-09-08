@@ -143,7 +143,7 @@ services:
     restart: unless-stopped
 
   nginx:
-    image: nginx:1.29-alpine
+    image: nginx:1.31-alpine
     command: nginx -c /etc/nginx/runtime/nginx.conf -g "daemon off;"
     ports:
       - "8080:80"
@@ -177,7 +177,7 @@ services:
   # E16 S1: Alertmanager — severity routes to a webhook-logger stub (NO pager, NO external
   # sink; spec §2 non-goal). The stub is a real HTTP target so "alerts flowing" is provable.
   alertmanager:
-    image: prom/alertmanager:v0.27.0
+    image: prom/alertmanager:v0.34.0
     profiles: ["metrics"]
     volumes:
       - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
