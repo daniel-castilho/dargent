@@ -148,6 +148,15 @@ with an owner and a target milestone.
 
 **Amendment (e):** Pre-push message self-check: every message bullet re-verified against the diff (born TD-11 — three instances: TD-5, TD-10, TD-11).
 
+**Amendment (f) — Research before trial-and-error:** When a build, tool or runtime problem is not immediately
+obvious, the agent researches the authoritative source (official docs, upstream issues, spec) BEFORE iterating
+on speculative fixes. Symptom → probable cause → doc lookup → one surgical fix. Blind try-fix-rerun loops are a
+defect: they waste compute, hide the real cause, and produce unreviewable history. Born E15 S5 (PITR): three
+silent failure causes — the docker-library postgres entrypoint's throwaway socket-only server on readiness
+probes (docker-library/postgres#146), PG16's mandatory `recovery.signal` marker (PG docs §26.3.4 step 7), and a
+recovery target earlier than the last archived commit — each answered in seconds by the manual after minutes of
+failed iteration.
+
 ## 10. Release history conventions
 
 Releases are annotated tags `vX.Y.Z` cut when a milestone meets its DoD (coding-standards §10).
