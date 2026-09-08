@@ -349,3 +349,16 @@ jobs:
           path: |
             /tmp/restore-drill-scale/**
           if-no-files-found: ignore
+
+  # E16 S2 — PITR v2 rehearsal as a dispatch-only job (Q-batch 2026-09-08: CI-ified as dispatch;
+  # NOT wired into release.yml — the dump-restore drill stays THE release gate, PITR remains an
+  # RPO rehearsal; disposition recorded in docs/drills/pitr-v2-2026-09-08.md). The harness runs
+  # standalone postgres:16 containers on named volumes — no compose images needed.
+  pitr-drill:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: PITR v2 — off-disk WAL rehearsal (base volume + wal volume, pgdata volume destroyed)
+        run: bash scripts/pitr-rehearsal-v2.sh

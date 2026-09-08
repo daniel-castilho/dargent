@@ -1,0 +1,16 @@
+PITR-V2 16:15:41: P0 creating off-disk topology (separate volumes: pgdata / wal-archive / base)
+PITR-V2 16:15:45: P0 primary up — pgdata and wal-archive on SEPARATE volumes
+PITR-V2 16:15:45: P1 schema + seed A (3000 balanced payments/journal/postings)
+PITR-V2 16:15:45: P1 seed A ok
+PITR-V2 16:15:45: P2 pg_basebackup -> base volume (off the pgdata volume)
+total 4656
+-rw------- 1 root root 4709630 Sep  8 20:16 base.tar.gz
+-rw------- 1 root root   56137 Sep  8 20:16 pg_wal.tar.gz
+PITR-V2 16:16:33: P3 post-base side effects: +1500 payments
+PITR-V2 16:16:36: P3 side effects ok — target lsn=0/528B640 (ts 2026-09-08 20:16:34.312730)
+PITR-V2 16:16:36: P4 disaster: kill -9 primary AND DESTROY the pgdata volume (only base+wal volumes survive)
+PITR-V2 16:16:37: P4 pgdata volume DESTROYED — survivors: base + wal volumes (separate spindles)
+PITR-V2 16:16:37: P5 recovery cluster from base volume + wal volume (replay to 0/528B640)
+PITR-V2 16:16:41: P5 recovered (in-recovery=t, paused at target) — wall-clock 2s
+PITR-V2 16:16:42: P6 PASS — A=3000 B=1500, ΣDR=ΣCR=10127250, projection==lines, RPO ~8s (target lsn 0/528B640)
+PITR-V2 16:16:42: PITR-V2 PASS — off-disk replay verified: pgdata volume destroyed, base+wal volumes carried the recovery, RPO ~8s
