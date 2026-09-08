@@ -161,7 +161,7 @@ services:
   # E12 S6 (optional convenience, not a contract): single Prometheus scraping both colors'
   # management ports. Opt-in via `docker compose --profile metrics up -d`.
   prometheus:
-    image: prom/prometheus:v2.53.0
+    image: prom/prometheus:v3.14.0
     profiles: ["metrics"]
     command:
       - --config.file=/etc/prometheus/prometheus.yml
