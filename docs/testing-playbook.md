@@ -117,7 +117,9 @@ by hand at release time:
 
 | Leg | CI job (dispatch on the RC commit) | Scenarios covered |
 |---|---|---|
-| Full suite + ITs (scenarios 1–28 by taxonomy) | `build` (PR/push gates on the RC head; `./mvnw -B verify`) | 1–15 (idempotency/webhooks/races), 16–24 (outbox/ledger incl. jqwik property), 25–27 (PSP chaos + reconciler), 28 (prod lockdown) |
+| Full suite + ITs (scenarios 1–28 by taxonomy) | `build` (PR/push gates on the RC head; `./mvnw -B verify`) | 1–15 (idempotency/webhooks/races, incl. **429 burst/413 cap** — `WebhookRateLimitIT`/`WebhookBodyCapIT`), 16–24 (outbox/ledger incl. jqwik property), 25–27 (PSP chaos + reconciler), 28 (prod lockdown) |
+| Alert rules tested firing/quiet | `build` — promtool step (E15 S2) | the 7 operational rules parse, fire and stay quiet as specified (bite-proof on record: run `34228122177` red) |
+| Restore at scale (E15 S4) | `restore-drill-scale` (workflow_dispatch, `DRILL_SCALE_SEED_TXNS=50000`) | §6 legs replayed against a 50k-txn / 150k-posting cluster — measured RTO 23 s (run `34244399134`) |
 | Money path + chaos + shutdown-under-load | `runtime-smoke` | happy path legs, reconciler self-heal (26), drain-window probe |
 | Full spine proof | `proof-daily` (workflow_dispatch on RC) | 21 (ΣDR=ΣCR + projection==lines over a real journaled payment) |
 | Backup chain | `restore-drill` (workflow_dispatch on RC) | restore procedure + manifest verification + balance proof post-restore (§6 legs above, replayed against a destroyed-then-restored cluster) |

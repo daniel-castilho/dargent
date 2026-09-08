@@ -24,6 +24,8 @@ as its milestone closes — see *Current state* and the per-milestone acceptance
 | Every cent is traceable and balanced | Append-only **double-entry ledger** + daily balance proof + property tests |
 | Invalid states are impossible | State machine guarded by the entity **and** imposed by conditional `UPDATE`s (the database arbitrates races) |
 | No downtime deploys on bare metal | NGINX **blue-green with canary** (E12), instant rollback, shutdown-under-load gate in CI |
+| Webhook floods cannot take the money path down | In-app **429/413 abuse controls** on the webhook route only (E15 S1, DEBT-8 closed) — NGINX edge remains defense-in-depth |
+| Operational posture is measured, not assumed | Tested alert rules (promtool firing/quiet in CI, E15 S2), published k6 baseline (414 rps / 0 errors, E15 S3), restore drill at scale (RTO 23 s @ 50k txns, E15 S4), PITR rehearsal (RPO ≈ 6 s, E15 S5) |
 | Quality is auditable | Acceptance matrix per milestone, security gates in CI (SpotBugs/OWASP/coverage/Trivy/CodeQL/evidence-lint, E13), executable documentation as tests |
 
 ## Architecture
@@ -181,7 +183,7 @@ release notes: [docs/releases/](docs/releases/).
 **merchant balance guard; concurrent refunds are DB-arbitrated (payments lock → one 201 / one 409;**
 **ledger drain → one POSTED / one IGNORED with `refund_skipped_balance`). The journal coverage auditor**
 **also detects refund-vs-POSTED discrepancies. M3 is ✅ (E9); M4 is ✅ (E11+E12+E13) — E14 cut v1.0.0**
-**(tag `v1.0.0` @ `601a669`, 2026-09-07). E15 (operational hardening) is in progress.**
+**(tag `v1.0.0` @ `601a669`, 2026-09-07). E15 (operational hardening) shipped 2026-09-08.**
 
 | Milestone | Scope | Status |
 |---|---|---|
@@ -193,7 +195,7 @@ release notes: [docs/releases/](docs/releases/).
 | M3 — Suffering | Refunds (✓), expiration, resurrection, reconciler, settlement, DLQ/backoff/EXHAUSTED/requeue (E9 ✓) | ✅ |
 | M4 — Finish | Metrics (E11 ✓), blue-green deploy + runtime smoke in CI (E12 ✓), full quality/security gates (E13 ✓) — **✅**; E14 (tag release + SBOM + restore drill) cuts v1.0.0 as its own epic | ✅ |
 | M5 — Stretch | Card as second Strategy, k6 as hard gate, Redis read cache, webhook reprocessing | ☐ |
-| Post-1.0.0 (E15) — Operational hardening | Webhook abuse controls (429/413), tested alert rules, load baseline, restore at scale, PITR | ◐ |
+| Post-1.0.0 (E15) — Operational hardening | Webhook abuse controls (429/413, DEBT-8 closed), tested alert rules (promtool in CI + bite-proof), load baseline (k6, 414 rps/0 err), restore at scale (RTO 23 s @ 50k), PITR rehearsal (RPO ≈ 6 s), DEBT-7 Path A | ✅ 2026-09-08 |
 
 ## License
 
