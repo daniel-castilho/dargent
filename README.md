@@ -223,7 +223,7 @@ shipped on `main` 2026-09-08. See [CHANGELOG.md](CHANGELOG.md).
 | M2 (E7/E10) — Events ledger/consumer | Ledger journaling + balance proof/rebuild + settlement (E7 S1–S5 ✓); notifications consumer + `GET /v1/notifications` read API (E10 S0–S7 ✓) | ✅ |
 | M3 — Suffering | Refunds (✓), expiration, resurrection, reconciler, settlement, DLQ/backoff/EXHAUSTED/requeue (E9 ✓) | ✅ |
 | M4 — Finish | Metrics (E11 ✓), blue-green deploy + runtime smoke in CI (E12 ✓), full quality/security gates (E13 ✓) — **✅**; E14 (tag release + SBOM + restore drill) cuts v1.0.0 as its own epic | ✅ |
-| M5 — Stretch | Card as second Strategy, k6 as hard gate, Redis read cache, webhook reprocessing | ☐ |
+| M5 — Stretch | Card as second Strategy, k6 as hard gate, Redis read cache, webhook reprocessing | ◐ |
 | Post-1.0.0 (E15) — Operational hardening | Webhook abuse controls (429/413, DEBT-8 closed), tested alert rules (promtool in CI + bite-proof), load baseline (k6, 414 rps/0 err), restore at scale (RTO 23 s @ 50k), PITR rehearsal (RPO ≈ 6 s), DEBT-7 Path A — **cut `v1.1.0`** | ✅ 2026-09-08 |
 | Post-1.0.0 (E16) — Operational hygiene | Alertmanager (amtool-validated in CI, logging stub — no pager), PITR v2 (off-disk WAL, pgdata-volume destruction survives), honest k6 (spine ON + defaults: 440 rps/0 err, webhook→reconciler shift), limiter posture declared, dependabot | ✅ 2026-09-08 |
 

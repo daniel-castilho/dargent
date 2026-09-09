@@ -637,7 +637,7 @@ Each milestone closes with: green tests in the full pipeline, **filled acceptanc
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| Scope creep (card/Redis/k8s early) | Eternally unfinished project | Non-goals §1.2; card/Redis locked at M5 |
+| Scope creep (card/Redis/k8s early) | Eternally unfinished project | Non-goals §1.2; card/Redis were locked at M5 — the lock BROKE 2026-09-09 (M5 commissioned, E17): the second rail, read cache and load gate now land as the proven abstraction + ops arc (§M5, tasks/m5-*.md); k8s stays out |
 | LocalStack quirks (SNS→SQS FIFO, signatures) | Integration surprises | Testcontainers from M0; idempotent provisioning at startup; own envelope shrinks the contact area |
 | Slow CI (Testcontainers + many jobs) | Slow PRs, avoided suite | Singleton containers; fast gates first; chaos/stress tagged separately; NVD/Trivy caches |
 | Migrations breaking blue-green | Downtime deploys | Expand/contract mandatory (D16); migration smoke in runtime-smoke |
