@@ -87,7 +87,21 @@ After the fix, `exists=1 updated=1` and `railOf(txid)` returns `"card"`.
 Legs 5–7 added for card rail:
 - **Leg 5 (card create):** `POST /v1/payments` with `method:"card"` → 201 PENDING + `brcode:null` + `X-Request-Id`.
 - **Leg 6 (card confirm poll):** deadline-poll GET → CONFIRMED (webhook fires during the create PSP call — no explicit pay step).
-- **Leg 7 (card GET detail):** amount echoed, `fee` field present.
+- **Leg 7 (card GET detail):** amount echoed + explicit-null `brcode` retained.
+
+> **Smoke leg 7 correction (M5 B1 hotfix):** the first shipped leg 7 asserted `fee`, which the
+> GET contract never emits (design §6.2 has no `fee` — E12 deviation). That single assertion
+> reddened runtime-smoke twice (PR CI + main push #286). Corrected to assert `amount` + `brcode:null`.
+
+**Masking extension of FINDING-S1-3 (post-hotfix re-check):** the rail-column no-op masked
+**two further runtime behaviors**, all from the same root cause (now fixed by the flush):
+1. **Controller presentment** (`PaymentController.presentmentFor`) — a card GET would have
+   presented a PIX BR Code, because `railOf` defaulted to `"pix"`.
+2. **Reconciler routing** (`ReconciliationUseCase.reconcileOne`) — card rows were polled via
+   the PIX cob endpoint (404 → ladder advance → card never reconciled).
+
+Both are pinned by green tests: `CardPaymentIT.card_reconciler_*` (1) and smoke leg 7 `brcode:null`
+on a confirmed card GET (2). No additional code change was required — the flush fix removed all three.
 
 ## 9. Test taxonomy alignment
 
