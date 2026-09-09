@@ -7,6 +7,17 @@ spring:
     name: dargent-api
   lifecycle:
     timeout-per-shutdown-phase: 30s
+  # M5 S2: the Redis cache is an OPT-IN optimization (DARGENT_CACHE_REDIS_ENABLED=false by default →
+  # fail-open trivially, DB direct, zero Redis beans). Boot's Spring Data Redis auto-config runs on
+  # classpath presence alone, so it is excluded here; the cache's own conditional config
+  # (CacheConfiguration) provides the client ONLY when the cache is enabled.
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration
+      - org.springframework.boot.data.redis.autoconfigure.DataRedisReactiveAutoConfiguration
+      - org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration
+      - org.springframework.boot.data.redis.autoconfigure.health.DataRedisHealthContributorAutoConfiguration
+      - org.springframework.boot.data.redis.autoconfigure.health.DataRedisReactiveHealthContributorAutoConfiguration
   datasource:
     url: jdbc:postgresql://${DARGENT_DB_HOST:localhost}:${DARGENT_DB_PORT:5432}/${DARGENT_DB_NAME:dargent}
     username: ${DARGENT_DB_USER:dargent}
@@ -34,6 +45,13 @@ dargent:
       pix-key: ${DARGENT_PIX_KEY:dargent-dev-receber@example.com}
       receiver-name: ${DARGENT_RECEIVER_NAME:Dargent Dev LTDA}
       receiver-city: ${DARGENT_RECEIVER_CITY:SAO PAULO}
+  # M5 S2 (m5-spec §4): Redis read cache for the idempotent-replay path. CARVED DEFAULTS — default
+  # OFF (DB direct, fail-open trivially); URI and TTL are connection/ttl surface only.
+  cache:
+    redis:
+      enabled: ${DARGENT_CACHE_REDIS_ENABLED:false}
+      uri: ${DARGENT_CACHE_REDIS_URI:redis://localhost:6379}
+      ttl: ${DARGENT_CACHE_REDIS_TTL:PT5M}
 
 management:
   server:

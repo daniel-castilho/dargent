@@ -230,7 +230,13 @@ public final class CreatePaymentUseCase {
                     expiresIn,
                     rail.presentment(psp.txid(), input.amount().cents()));
             idempotencyStore.markCompleted(
-                    input.merchantId(), input.idempotencyKey(), input.endpoint(), psp.txid(), 201, snapshot);
+                    input.merchantId(),
+                    input.idempotencyKey(),
+                    input.endpoint(),
+                    psp.txid(),
+                    201,
+                    snapshot,
+                    input.requestFingerprint());
         });
     }
 
