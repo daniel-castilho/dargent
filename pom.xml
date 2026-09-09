@@ -29,16 +29,16 @@
 
   <properties>
     <java.version>25</java.version>
-    <archunit.version>1.4.1</archunit.version>
+    <archunit.version>1.5.0</archunit.version>
     <!-- E13 S1: OWASP Dependency-Check flagged tomcat-embed-core 11.0.24 (Boot 4.1.1 management)
          with 9 CVEs CVSS 7.5-9.8 (CVE-2026-65183/65905/65927/66422/68763/68525/68569/65182/65637).
          Bump to the latest stable 11.0.x via the Boot property — the gate's finding gets a
          dependency fix, never a suppression. -->
     <tomcat.version>11.0.25</tomcat.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <!-- 4.9.8.5, not 4.10.x: the 4.10 line requires Maven >= 3.8.9; the wrapper is pinned to
-         3.8.7 (the version CI ran since M0 — wrapper bump is a separate owner decision). -->
-    <spotbugs.version>4.9.8.5</spotbugs.version>
+    <!-- 4.10.x line (wrapper bumped to Maven 3.9.16 by the same update batch — the 3.8.7 pin
+         constraint is gone; see .mvn/wrapper/maven-wrapper.properties). -->
+    <spotbugs.version>4.10.4.1</spotbugs.version>
     <spotless.version>3.10.2</spotless.version>
     <jacoco.version>0.8.15</jacoco.version>
     <dependency-check.version>13.0.0</dependency-check.version>
@@ -93,9 +93,18 @@
       <dependency>
         <groupId>org.testcontainers</groupId>
         <artifactId>testcontainers-bom</artifactId>
-        <version>2.0.1</version>
+        <version>2.0.5</version>
         <type>pom</type>
         <scope>import</scope>
+      </dependency>
+      <!-- Jackson pair alignment (dependabot #37 companion): tools.jackson 3.2.2 (databind/core)
+           requires com.fasterxml jackson-annotations 2.22 — JsonApplyView et al. live there; the
+           Boot 4.1.1 BOM still manages 2.21, which left Flyway with a NoClassDefFound on the #37
+           bump. Pin the matching annotations version so the pair moves together. -->
+      <dependency>
+        <groupId>com.fasterxml.jackson.core</groupId>
+        <artifactId>jackson-annotations</artifactId>
+        <version>2.22</version>
       </dependency>
     </dependencies>
   </dependencyManagement>

@@ -26,7 +26,10 @@ public final class OutboxLagGauge {
     }
 
     private double queryLagSeconds() {
-        Long lag = jdbc.sql("""
+        // coalesce(...,0) over the scanned rows guarantees exactly one row, and JdbcClient.single()
+        // never returns null (empty → EmptyResultDataAccessException) — the null guard the SpotBugs
+        // 4.10 line correctly flags as redundant is gone; a missing row fails loudly, not silently.
+        long lag = jdbc.sql("""
                 select coalesce(max(extract(epoch from (:now - next_attempt_at))::bigint), 0)
                 from payments.outbox
                 where status in ('PENDING', 'EXHAUSTED') and next_attempt_at <= :now
@@ -34,6 +37,6 @@ public final class OutboxLagGauge {
                 .param("now", Timestamp.from(clock.instant()))
                 .query(Long.class)
                 .single();
-        return lag == null ? 0 : lag.doubleValue();
+        return (double) lag;
     }
 }

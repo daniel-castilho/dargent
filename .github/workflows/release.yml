@@ -47,6 +47,9 @@ jobs:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         run: |
           set -euo pipefail
+          # E16 S5 fix (mirrors ci.yml): never pass an EMPTY key string to the NVD client —
+          # export only when non-empty; keyless runs stay in the documented throttled mode.
+          if [[ -n "${NVD_API_KEY:-}" ]]; then export NVD_API_KEY; else unset NVD_API_KEY; fi
           attempt() { ./mvnw -B dependency-check:aggregate -DskipTests "$@"; }
           if ! attempt; then
             echo "OWASP attempt 1 failed — retrying once in 60s (NVD sync flakiness, documented P2 policy)"
