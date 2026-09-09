@@ -1,6 +1,5 @@
 package io.dargent.payments.application;
 
-import io.dargent.payments.domain.br.BrCode;
 import io.dargent.payments.domain.model.Payment;
 import io.dargent.payments.domain.model.PaymentStatus;
 import io.dargent.payments.domain.model.Txid;
@@ -9,10 +8,11 @@ import io.dargent.payments.domain.port.out.DuplicatePaymentTxidException;
 import io.dargent.payments.domain.port.out.IdempotencyRecord;
 import io.dargent.payments.domain.port.out.IdempotencyStore;
 import io.dargent.payments.domain.port.out.OutboxWriter;
+import io.dargent.payments.domain.port.out.PaymentRail;
 import io.dargent.payments.domain.port.out.PaymentRepository;
-import io.dargent.payments.domain.port.out.PspPort;
 import io.dargent.payments.domain.port.out.PspPort.ChargeResult;
 import io.dargent.payments.domain.port.out.PspPort.CreateChargeInput;
+import io.dargent.payments.domain.port.out.RailAssignmentPort;
 import io.dargent.payments.domain.port.out.TxidGenerator;
 import io.dargent.shared.money.Money;
 import java.time.Clock;
@@ -49,13 +49,11 @@ public final class CreatePaymentUseCase {
     private final IdempotencyStore idempotencyStore;
     private final OutboxWriter outboxWriter;
     private final AuditWriter auditWriter;
-    private final PspPort pspPort;
+    private final PaymentRail rail;
     private final TxidGenerator txidGenerator;
     private final TransactionTemplate txTemplate;
     private final EventEnvelopeFactory envelopeFactory;
-    private final String pixKey;
-    private final String receiverName;
-    private final String receiverCity;
+    private final RailAssignmentPort railAssignment;
     private final String pspCallbackUrl;
     private final Clock clock;
     private final Duration firstReconcileBackoff;
@@ -66,13 +64,11 @@ public final class CreatePaymentUseCase {
             IdempotencyStore idempotencyStore,
             OutboxWriter outboxWriter,
             AuditWriter auditWriter,
-            PspPort pspPort,
+            PaymentRail rail,
             TxidGenerator txidGenerator,
             TransactionTemplate txTemplate,
             EventEnvelopeFactory envelopeFactory,
-            String pixKey,
-            String receiverName,
-            String receiverCity,
+            RailAssignmentPort railAssignment,
             String pspCallbackUrl,
             Clock clock,
             Duration firstReconcileBackoff,
@@ -81,13 +77,11 @@ public final class CreatePaymentUseCase {
         this.idempotencyStore = idempotencyStore;
         this.outboxWriter = outboxWriter;
         this.auditWriter = auditWriter;
-        this.pspPort = pspPort;
+        this.rail = rail;
         this.txidGenerator = txidGenerator;
         this.txTemplate = txTemplate;
         this.envelopeFactory = envelopeFactory;
-        this.pixKey = pixKey;
-        this.receiverName = receiverName;
-        this.receiverCity = receiverCity;
+        this.railAssignment = railAssignment;
         this.pspCallbackUrl = pspCallbackUrl;
         this.clock = clock;
         this.firstReconcileBackoff = firstReconcileBackoff;
@@ -108,7 +102,7 @@ public final class CreatePaymentUseCase {
         // 2. PSP phase, strictly after commit (BD-4). "First call" - no replay.
         ChargeResult psp;
         try {
-            psp = pspPort.createCharge(new CreateChargeInput(
+            psp = rail.createCharge(new CreateChargeInput(
                     payment.txid(), input.amount().cents(), expiresAtRequested, pspCallbackUrl, input.description()));
         } catch (RuntimeException e) {
             runExhaustion(payment, input, now);
@@ -119,7 +113,11 @@ public final class CreatePaymentUseCase {
         runSuccess(payment, psp, input, now);
 
         return new Output(
-                psp.txid(), PaymentStatus.PENDING, psp.expiresAt(), composeBrCode(psp.txid(), input.amount()), false);
+                psp.txid(),
+                PaymentStatus.PENDING,
+                psp.expiresAt(),
+                rail.presentment(psp.txid(), input.amount().cents()),
+                false);
     }
 
     // ------------------------------------------------------------------ core
@@ -131,6 +129,7 @@ public final class CreatePaymentUseCase {
             return CoreOutcome.existing(existing.get()); // PK race loser: never creates a payment
         }
         Payment payment = createAndPersistPayment(input, now, expiresAtRequested);
+        railAssignment.assign(payment.txid(), rail.rail());
         metrics.transition("none", "PENDING", "create");
         appendCreatedOutbox(payment, input, now);
         auditWriter.record(
@@ -211,7 +210,11 @@ public final class CreatePaymentUseCase {
             }
             String expiresIn = Duration.between(now, psp.expiresAt()).toString();
             Map<String, Object> snapshot = snapshotBody(
-                    psp.txid(), input.amount(), psp.expiresAt(), expiresIn, composeBrCode(psp.txid(), input.amount()));
+                    psp.txid(),
+                    input.amount(),
+                    psp.expiresAt(),
+                    expiresIn,
+                    rail.presentment(psp.txid(), input.amount().cents()));
             idempotencyStore.markCompleted(
                     input.merchantId(), input.idempotencyKey(), input.endpoint(), psp.txid(), 201, snapshot);
         });
@@ -265,10 +268,6 @@ public final class CreatePaymentUseCase {
         snapshot.put("brcode", brcode);
         snapshot.put("expiresIn", expiresIn);
         return snapshot;
-    }
-
-    private String composeBrCode(Txid txid, Money amount) {
-        return BrCode.of(pixKey, receiverName, receiverCity, amount.cents(), txid);
     }
 
     // ----------------------------------------------------------------- models

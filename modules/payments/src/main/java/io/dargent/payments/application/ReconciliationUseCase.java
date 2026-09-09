@@ -5,9 +5,10 @@ import io.dargent.payments.domain.model.Payment;
 import io.dargent.payments.domain.model.PaymentStatus;
 import io.dargent.payments.domain.port.out.AuditWriter;
 import io.dargent.payments.domain.port.out.OutboxWriter;
+import io.dargent.payments.domain.port.out.PaymentRail;
 import io.dargent.payments.domain.port.out.PaymentRepository;
-import io.dargent.payments.domain.port.out.PspPort;
 import io.dargent.payments.domain.port.out.PspPort.CobStatus;
+import io.dargent.payments.domain.port.out.RailAssignmentPort;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -41,7 +42,8 @@ public final class ReconciliationUseCase {
     private static final String BRL = "BRL";
 
     private final PaymentRepository paymentRepository;
-    private final PspPort pspPort;
+    private final Map<String, PaymentRail> rails;
+    private final RailAssignmentPort railAssignment;
     private final OutboxWriter outboxWriter;
     private final AuditWriter auditWriter;
     private final EventEnvelopeFactory envelopeFactory;
@@ -53,7 +55,8 @@ public final class ReconciliationUseCase {
 
     public ReconciliationUseCase(
             PaymentRepository paymentRepository,
-            PspPort pspPort,
+            Map<String, PaymentRail> rails,
+            RailAssignmentPort railAssignment,
             OutboxWriter outboxWriter,
             AuditWriter auditWriter,
             EventEnvelopeFactory envelopeFactory,
@@ -63,7 +66,8 @@ public final class ReconciliationUseCase {
             Duration giveUpWindow,
             PaymentsMetrics metrics) {
         this.paymentRepository = paymentRepository;
-        this.pspPort = pspPort;
+        this.rails = rails;
+        this.railAssignment = railAssignment;
         this.outboxWriter = outboxWriter;
         this.auditWriter = auditWriter;
         this.envelopeFactory = envelopeFactory;
@@ -106,7 +110,8 @@ public final class ReconciliationUseCase {
             }
             CobStatus cob;
             try {
-                cob = pspPort.getCob(current.txid());
+                PaymentRail rail = rails.getOrDefault(railAssignment.railOf(current.txid()), rails.get("pix"));
+                cob = rail.getCob(current.txid());
             } catch (RuntimeException e) {
                 // PSP unreachable → keep scheduled; next attempt advances the ladder.
                 return advanceLadder(current, now);

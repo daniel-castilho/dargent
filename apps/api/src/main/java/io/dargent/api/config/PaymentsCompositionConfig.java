@@ -12,9 +12,11 @@ import io.dargent.payments.adapter.out.persistence.JdbcIdempotencyStore;
 import io.dargent.payments.adapter.out.persistence.JdbcOutboxEventStore;
 import io.dargent.payments.adapter.out.persistence.JdbcOutboxWriter;
 import io.dargent.payments.adapter.out.persistence.JdbcPaymentQueryPort;
+import io.dargent.payments.adapter.out.persistence.JdbcRailAssignmentPort;
 import io.dargent.payments.adapter.out.persistence.JdbcWebhookEventStore;
 import io.dargent.payments.adapter.out.persistence.OutboxLagGauge;
 import io.dargent.payments.adapter.out.persistence.PaymentJpaAdapter;
+import io.dargent.payments.adapter.out.psp.PixRail;
 import io.dargent.payments.adapter.out.psp.SimulatorChargeAdapter;
 import io.dargent.payments.application.CreatePaymentUseCase;
 import io.dargent.payments.application.EventEnvelopeFactory;
@@ -33,8 +35,10 @@ import io.dargent.payments.domain.port.out.MerchantBalancePort;
 import io.dargent.payments.domain.port.out.OutboxEventStore;
 import io.dargent.payments.domain.port.out.OutboxWriter;
 import io.dargent.payments.domain.port.out.PaymentQueryPort;
+import io.dargent.payments.domain.port.out.PaymentRail;
 import io.dargent.payments.domain.port.out.PaymentRepository;
 import io.dargent.payments.domain.port.out.PspPort;
+import io.dargent.payments.domain.port.out.RailAssignmentPort;
 import io.dargent.payments.domain.port.out.SecureRandomTxidGenerator;
 import io.dargent.payments.domain.port.out.TxidGenerator;
 import io.dargent.payments.domain.port.out.WebhookEventStore;
@@ -42,6 +46,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.net.URI;
 import java.time.Clock;
 import java.time.Duration;
+import java.util.Map;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -213,20 +218,32 @@ public class PaymentsCompositionConfig {
     }
 
     @Bean
+    PaymentRail pixRail(
+            PspPort pspPort,
+            @Value("${dargent.pix.profile.pix-key}") String pixKey,
+            @Value("${dargent.pix.profile.receiver-name}") String receiverName,
+            @Value("${dargent.pix.profile.receiver-city}") String receiverCity) {
+        return new PixRail(pspPort, pixKey, receiverName, receiverCity);
+    }
+
+    @Bean
+    RailAssignmentPort railAssignmentPort(JdbcClient jdbc) {
+        return new JdbcRailAssignmentPort(jdbc);
+    }
+
+    @Bean
     CreatePaymentUseCase createPaymentUseCase(
             PaymentRepository paymentRepository,
             IdempotencyStore idempotencyStore,
             OutboxWriter outboxWriter,
             AuditWriter auditWriter,
-            PspPort pspPort,
+            PaymentRail rail,
             TxidGenerator txidGenerator,
             TransactionTemplate transactionTemplate,
             EventEnvelopeFactory envelopeFactory,
+            RailAssignmentPort railAssignment,
             Clock clock,
             PaymentsMetrics paymentsMetrics,
-            @Value("${dargent.pix.profile.pix-key}") String pixKey,
-            @Value("${dargent.pix.profile.receiver-name}") String receiverName,
-            @Value("${dargent.pix.profile.receiver-city}") String receiverCity,
             @Value("${dargent.psp.callback-url}") String pspCallbackUrl,
             @Value("${DARGENT_RECONCILER_BACKOFF_MS:60000,300000,900000,3600000}") String backoffRungs) {
         return new CreatePaymentUseCase(
@@ -234,13 +251,11 @@ public class PaymentsCompositionConfig {
                 idempotencyStore,
                 outboxWriter,
                 auditWriter,
-                pspPort,
+                rail,
                 txidGenerator,
                 transactionTemplate,
                 envelopeFactory,
-                pixKey,
-                receiverName,
-                receiverCity,
+                railAssignment,
                 pspCallbackUrl,
                 clock,
                 Duration.ofMillis(parseBackoffRungs(backoffRungs).get(0)),
@@ -425,7 +440,8 @@ public class PaymentsCompositionConfig {
     @ConditionalOnProperty(name = "DARGENT_RECONCILER_ENABLED", havingValue = "true", matchIfMissing = false)
     ReconciliationUseCase reconciliationUseCase(
             PaymentRepository paymentRepository,
-            PspPort pspPort,
+            PaymentRail pixRail,
+            RailAssignmentPort railAssignment,
             OutboxWriter outboxWriter,
             AuditWriter auditWriter,
             EventEnvelopeFactory envelopeFactory,
@@ -436,7 +452,8 @@ public class PaymentsCompositionConfig {
             @Value("${DARGENT_RECONCILER_GIVE_UP_HOURS:72}") long giveUpHours) {
         return new ReconciliationUseCase(
                 paymentRepository,
-                pspPort,
+                Map.of("pix", pixRail),
+                railAssignment,
                 outboxWriter,
                 auditWriter,
                 envelopeFactory,
