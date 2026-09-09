@@ -5,10 +5,10 @@ import io.dargent.api.web.CursorCodec;
 import io.dargent.api.web.RequestIdFilter;
 import io.dargent.payments.application.CreatePaymentUseCase;
 import io.dargent.payments.application.RefundPaymentUseCase;
-import io.dargent.payments.domain.br.BrCode;
 import io.dargent.payments.domain.model.Payment;
 import io.dargent.payments.domain.model.Txid;
 import io.dargent.payments.domain.port.out.PaymentQueryPort;
+import io.dargent.payments.domain.port.out.PaymentRail;
 import io.dargent.shared.money.Money;
 import jakarta.servlet.http.HttpServletRequest;
 import java.security.MessageDigest;
@@ -23,7 +23,6 @@ import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -37,7 +36,8 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * Payment HTTP surface (E3 spec §5.1–§5.3; E3R R3): {@code POST /v1/payments} (idempotent create) plus the
  * read side. Authenticated via API key (SecurityConfig); tenant derived from principal (AGENTS §3.7).
- * BD-10: the BR Code and PIX profile come from the configured values, {@code Clock} is injected (never
+ * BD-10: the BR Code presentment comes from the payment rail (PIX profile from configured values),
+ * {@code Clock} is injected (never
  * {@code Instant.now()} in request paths), and the list cursor is decoded once to a keyset before
  * {@code findPage}.
  */
@@ -52,29 +52,23 @@ class PaymentController {
     private final PaymentQueryPort queryPort;
     private final CreatePaymentUseCase createUseCase;
     private final RefundPaymentUseCase refundUseCase;
+    private final PaymentRail rail;
     private final Clock clock;
     private final tools.jackson.databind.ObjectMapper objectMapper;
-    private final String pixKey;
-    private final String receiverName;
-    private final String receiverCity;
 
     PaymentController(
             PaymentQueryPort queryPort,
             CreatePaymentUseCase createUseCase,
             RefundPaymentUseCase refundUseCase,
+            PaymentRail rail,
             Clock clock,
-            tools.jackson.databind.ObjectMapper objectMapper,
-            @Value("${dargent.pix.profile.pix-key}") String pixKey,
-            @Value("${dargent.pix.profile.receiver-name}") String receiverName,
-            @Value("${dargent.pix.profile.receiver-city}") String receiverCity) {
+            tools.jackson.databind.ObjectMapper objectMapper) {
         this.queryPort = queryPort;
         this.createUseCase = createUseCase;
         this.refundUseCase = refundUseCase;
+        this.rail = rail;
         this.clock = clock;
         this.objectMapper = objectMapper;
-        this.pixKey = pixKey;
-        this.receiverName = receiverName;
-        this.receiverCity = receiverCity;
     }
 
     @PostMapping
@@ -145,7 +139,7 @@ class PaymentController {
                 p.amount().cents(),
                 BRL,
                 p.expiresAt(),
-                BrCode.of(pixKey, receiverName, receiverCity, p.amount().cents(), p.txid()),
+                rail.presentment(p.txid(), p.amount().cents()),
                 Duration.between(clock.instant(), p.expiresAt())));
     }
 

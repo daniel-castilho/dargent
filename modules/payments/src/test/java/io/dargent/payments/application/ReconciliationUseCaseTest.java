@@ -7,9 +7,10 @@ import io.dargent.payments.domain.model.PaymentStatus;
 import io.dargent.payments.domain.model.Txid;
 import io.dargent.payments.domain.port.out.AuditWriter;
 import io.dargent.payments.domain.port.out.OutboxWriter;
-import io.dargent.payments.domain.port.out.PspPort;
+import io.dargent.payments.domain.port.out.PaymentRail;
 import io.dargent.payments.domain.port.out.PspPort.CobState;
 import io.dargent.payments.domain.port.out.PspPort.CobStatus;
+import io.dargent.payments.domain.port.out.RailAssignmentPort;
 import io.dargent.payments.persistence.InMemoryPaymentRepository;
 import io.dargent.shared.money.Money;
 import java.time.Clock;
@@ -17,6 +18,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.support.TransactionCallback;
@@ -42,12 +44,14 @@ class ReconciliationUseCaseTest {
     private final FakeOutboxWriter outbox = new FakeOutboxWriter();
     private final FakeAuditWriter audit = new FakeAuditWriter();
     private final FakePspPort psp = new FakePspPort();
+    private final InMemoryRailAssignment rails = new InMemoryRailAssignment();
     private final InMemoryPaymentRepository repo = new InMemoryPaymentRepository();
 
     private ReconciliationUseCase useCase() {
         return new ReconciliationUseCase(
                 repo,
-                psp,
+                Map.of("pix", psp),
+                rails,
                 outbox,
                 audit,
                 new EventEnvelopeFactory(new EventSerializer()),
@@ -214,7 +218,7 @@ class ReconciliationUseCaseTest {
 
     // ------------------------------------------------------------------ fakes
 
-    static class FakePspPort implements PspPort {
+    static class FakePspPort implements PaymentRail {
         CobState state = CobState.PAID;
         long amountCents = 10_000;
         String endToEndId = "E00416968202009221504E2345678910";
@@ -229,6 +233,26 @@ class ReconciliationUseCaseTest {
         public CobStatus getCob(Txid txid) {
             return new CobStatus(txid, state, amountCents, Instant.parse("2026-09-03T10:00:00Z"), endToEndId, paidAt);
         }
+
+        @Override
+        public String rail() {
+            return "pix";
+        }
+
+        @Override
+        public String presentment(Txid txid, long amountCents) {
+            return null; // presentment is not used by the reconciler
+        }
+    }
+
+    static class InMemoryRailAssignment implements RailAssignmentPort {
+        @Override
+        public String railOf(Txid txid) {
+            return "pix"; // every seeded payment rides the pix rail
+        }
+
+        @Override
+        public void assign(Txid txid, String rail) {}
     }
 
     static class FakeOutboxWriter implements OutboxWriter {

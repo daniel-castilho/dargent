@@ -13,6 +13,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.dargent.payments.adapter.out.psp.PixRail;
 import io.dargent.payments.application.CreatePaymentUseCase.Input;
 import io.dargent.payments.application.CreatePaymentUseCase.Output;
 import io.dargent.payments.domain.model.Payment;
@@ -27,6 +28,7 @@ import io.dargent.payments.domain.port.out.PaymentRepository;
 import io.dargent.payments.domain.port.out.PspPort;
 import io.dargent.payments.domain.port.out.PspPort.ChargeResult;
 import io.dargent.payments.domain.port.out.PspPort.CreateChargeInput;
+import io.dargent.payments.domain.port.out.RailAssignmentPort;
 import io.dargent.payments.domain.port.out.TxidGenerator;
 import io.dargent.shared.money.Money;
 import java.time.Clock;
@@ -79,6 +81,7 @@ class CreatePaymentUseCaseTest {
     private OutboxWriter outboxWriter;
     private AuditWriter auditWriter;
     private PspPort pspPort;
+    private RailAssignmentPort railAssignment;
     private TxidGenerator txidGenerator;
     private CreatePaymentUseCase useCase;
 
@@ -89,6 +92,7 @@ class CreatePaymentUseCaseTest {
         outboxWriter = mock(OutboxWriter.class);
         auditWriter = mock(AuditWriter.class);
         pspPort = mock(PspPort.class);
+        railAssignment = mock(RailAssignmentPort.class);
         txidGenerator = mock(TxidGenerator.class);
         TransactionTemplate txTemplate = new TransactionTemplate(new NoopTransactionManager());
         when(txidGenerator.generate()).thenReturn(TXID);
@@ -99,13 +103,11 @@ class CreatePaymentUseCaseTest {
                 idempotencyStore,
                 outboxWriter,
                 auditWriter,
-                pspPort,
+                new PixRail(pspPort, PIX_KEY, RECEIVER_NAME, RECEIVER_CITY),
                 txidGenerator,
                 txTemplate,
                 new EventEnvelopeFactory(new EventSerializer(mapper)),
-                PIX_KEY,
-                RECEIVER_NAME,
-                RECEIVER_CITY,
+                railAssignment,
                 CALLBACK_URL,
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 Duration.ofSeconds(60),
@@ -137,6 +139,16 @@ class CreatePaymentUseCaseTest {
         assertThat(out.replay()).isFalse();
 
         verify(idempotencyStore).markCompleted(any(), any(), any(), any(), anyInt(), any());
+    }
+
+    @Test
+    void core_persists_the_pix_rail_assignment_for_the_created_payment() {
+        when(idempotencyStore.insertIfAbsent(any(), any(), any(), any())).thenReturn(Optional.empty());
+        when(pspPort.createCharge(any())).thenReturn(new ChargeResult(TXID, PSP_EXPIRES, "E2E-1", "br"));
+
+        useCase.execute(input());
+
+        verify(railAssignment).assign(TXID, "pix"); // M5 S0: routing seam joined to the create transaction
     }
 
     @Test
