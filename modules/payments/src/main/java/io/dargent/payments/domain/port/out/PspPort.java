@@ -12,8 +12,16 @@ public interface PspPort {
     /** Queries the PSP for the current state of a charge (E5 spec §4). */
     CobStatus getCob(Txid txid);
 
-    /** Input for creating a PIX charge. */
-    record CreateChargeInput(Txid txid, long amountCents, Instant expiresAt, String callbackUrl, String description) {}
+    /** Input for creating a charge. {@code cardToken} is the card rail's credential — null for PIX. */
+    record CreateChargeInput(
+            Txid txid, long amountCents, Instant expiresAt, String callbackUrl, String description, String cardToken) {
+
+        /** PIX construction (no card credential). */
+        public CreateChargeInput(
+                Txid txid, long amountCents, Instant expiresAt, String callbackUrl, String description) {
+            this(txid, amountCents, expiresAt, callbackUrl, description, null);
+        }
+    }
 
     /** Result of a successful charge creation. */
     record ChargeResult(Txid txid, Instant expiresAt, String endToEndId, String brcodePayload) {}

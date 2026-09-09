@@ -5,6 +5,28 @@ versioning: semantic, cut from annotated git tags (see [release-runbook](docs/re
 
 ## [Unreleased]
 
+### Added (M5 S1 — card as second rail, PR #B)
+
+- **Card payment rail (S1).** A new `CardChargeAdapter` implements the `PaymentRail`
+  seam as a second strategy alongside PIX: the same `CreatePaymentUseCase` routes
+  `method:"card"` to the card adapter, which returns a PENDING payment with
+  `brcode:null` (FINDING-S1-2); the PSP simulator fires the HMAC-signed webhook
+  synchronously during the create call, so confirmation follows the identical
+  PIX-signed intake path (zero domain edits). Card 402 `card_declined` → FAILED +
+  idempotency key deleted + retry as fresh attempt. Cards are reconciled via
+  `GET /card-charges/{txid}`.
+- **Rail-seam persistence fix (FINDING-S1-3).** `PaymentJpaAdapter.save` now calls
+  `em.flush()` after `em.persist()` so that the same-transaction JDBC rail assignment
+  sees the inserted row. Without the flush, the assign UPDATE silently matched zero
+  rows and the column kept the DDL default `'pix'` — invisible for S0 (PIX default
+  masked it), exposed by S1 (card needs `'card'`).
+- **Error handling:** `CARD_DECLINED` error code (HTTP 402 `payment_required`) and
+  `GlobalExceptionHandler` mapping for `PspDeclinedException`.
+- **Smoke script legs 5–7:** card create → 201 PENDING + `brcode:null`, poll confirm
+  → CONFIRMED, GET detail → amount + fee echoed.
+- **Docs:** `docs/audit-m5-s1.md` — full S1 diff audit disclosing the PspPort contract
+  change, rail-seam flush fix (FINDING-S1-3), wiring, tests, and smoke coverage.
+
 ### Fixed (E16 queue triage — dependabot updates landed green)
 
 - **OWASP dependency-check pinned 13.0.0 → 12.2.2.** The 13.0.0 line is broken in keyless

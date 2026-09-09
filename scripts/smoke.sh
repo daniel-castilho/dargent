@@ -79,4 +79,43 @@ GET_HDR=$(command curl -sSI -H "Authorization: Bearer ${API_KEY}" "$API_BASE/v1/
 [[ -n "$GET_HDR" ]] || fail "leg 4: X-Request-Id header absent on GET detail"
 note "leg 4 ok — CONFIRMED ($(echo "$GET_HDR" | cut -d' ' -f2))"
 
+# ------------------------------------------------------------------- card rail
+# Legs 5-7 (M5 S1): the card PSP fires the webhook synchronously during the approve
+# create, so there is no explicit pay step — confirm is a poll (same as PIX leg 4).
+
+CARD_KEY="smoke-card-$(date +%s%N)"
+CARD_BODY='{"amount":100,"description":"deploy smoke card","method":"card","cardToken":"smoke-card-tok"}'
+CARD_HDRS=(-H "Idempotency-Key: ${CARD_KEY}" -H "Content-Type: application/json")
+
+note "leg 5/7 card create"
+CARD_CREATE=$(curl -w $'\n%{http_code}' -D /tmp/smoke.card.create.hdr "${CARD_HDRS[@]}" -d "$CARD_BODY" "$API_BASE/v1/payments")
+CARD_HTTP=${CARD_CREATE##*$'\n'}
+CARD_BODY_RESP=${CARD_CREATE%$'\n'*}
+[[ "$CARD_HTTP" == "201" ]] || fail "leg 5: card create expected 201, got $CARD_HTTP"
+CARD_TXID=$(extract_txid "$CARD_BODY_RESP")
+[[ -n "$CARD_TXID" ]] || fail "leg 5: no txid in card create response: $CARD_BODY_RESP"
+grep -q '"status":"PENDING"' <<<"$CARD_BODY_RESP" || fail "leg 5: not PENDING: $CARD_BODY_RESP"
+grep -qi '^x-request-id:' /tmp/smoke.card.create.hdr || fail "leg 5: X-Request-Id header absent on card create"
+grep -q '"brcode":null' <<<"$CARD_BODY_RESP" || fail "leg 5: brcode not null for card: $CARD_BODY_RESP"
+note "leg 5 ok — txid=$CARD_TXID"
+
+note "leg 6/7 card confirm (deadline poll)"
+CARD_DEADLINE=$(( $(date +%s) + 90 ))
+CARD_FINAL=""
+while (( $(date +%s) < CARD_DEADLINE )); do
+    G=$(command curl -sS -H "Authorization: Bearer ${API_KEY}" "$API_BASE/v1/payments/$CARD_TXID" 2>/dev/null || true)
+    if grep -q '"status":"CONFIRMED"' <<<"$G"; then CARD_FINAL="$G"; break; fi
+    sleep 1
+done
+[[ -n "$CARD_FINAL" ]] || fail "leg 6: card not CONFIRMED within 90s (last body: $G)"
+[[ "$(extract_txid "$CARD_FINAL")" == "$CARD_TXID" ]] || fail "leg 6: txid mismatch: $CARD_FINAL"
+CARD_GET_HDR=$(command curl -sSI -H "Authorization: Bearer ${API_KEY}" "$API_BASE/v1/payments/$CARD_TXID" | grep -i '^x-request-id:' | head -1 | tr -d '\r')
+[[ -n "$CARD_GET_HDR" ]] || fail "leg 6: X-Request-Id header absent on card GET"
+note "leg 6 ok — CONFIRMED ($(echo "$CARD_GET_HDR" | cut -d' ' -f2))"
+
+note "leg 7/7 card GET detail echoes amount and includes fee"
+grep -q '"amount":100' <<<"$CARD_FINAL" || fail "leg 7: amount not echoed: $CARD_FINAL"
+grep -q '"fee"' <<<"$CARD_FINAL" || fail "leg 7: fee field missing: $CARD_FINAL"
+note "leg 7 ok"
+
 note "SMOKE PASS"

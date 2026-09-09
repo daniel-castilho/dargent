@@ -16,6 +16,7 @@ import io.dargent.payments.adapter.out.persistence.JdbcRailAssignmentPort;
 import io.dargent.payments.adapter.out.persistence.JdbcWebhookEventStore;
 import io.dargent.payments.adapter.out.persistence.OutboxLagGauge;
 import io.dargent.payments.adapter.out.persistence.PaymentJpaAdapter;
+import io.dargent.payments.adapter.out.psp.CardChargeAdapter;
 import io.dargent.payments.adapter.out.psp.PixRail;
 import io.dargent.payments.adapter.out.psp.SimulatorChargeAdapter;
 import io.dargent.payments.application.CreatePaymentUseCase;
@@ -227,6 +228,14 @@ public class PaymentsCompositionConfig {
     }
 
     @Bean
+    PaymentRail cardRail(
+            @Value("${dargent.psp.base-url}") String baseUrl,
+            @Value("${dargent.psp.create-max-attempts}") int maxAttempts,
+            @Value("${dargent.psp.create-backoff-base-ms}") long backoffBaseMs) {
+        return new CardChargeAdapter(baseUrl, maxAttempts, Duration.ofMillis(backoffBaseMs), () -> backoffBaseMs);
+    }
+
+    @Bean
     RailAssignmentPort railAssignmentPort(JdbcClient jdbc) {
         return new JdbcRailAssignmentPort(jdbc);
     }
@@ -237,7 +246,8 @@ public class PaymentsCompositionConfig {
             IdempotencyStore idempotencyStore,
             OutboxWriter outboxWriter,
             AuditWriter auditWriter,
-            PaymentRail rail,
+            PaymentRail pixRail,
+            PaymentRail cardRail,
             TxidGenerator txidGenerator,
             TransactionTemplate transactionTemplate,
             EventEnvelopeFactory envelopeFactory,
@@ -251,7 +261,7 @@ public class PaymentsCompositionConfig {
                 idempotencyStore,
                 outboxWriter,
                 auditWriter,
-                rail,
+                Map.of("pix", pixRail, "card", cardRail),
                 txidGenerator,
                 transactionTemplate,
                 envelopeFactory,
@@ -441,6 +451,7 @@ public class PaymentsCompositionConfig {
     ReconciliationUseCase reconciliationUseCase(
             PaymentRepository paymentRepository,
             PaymentRail pixRail,
+            PaymentRail cardRail,
             RailAssignmentPort railAssignment,
             OutboxWriter outboxWriter,
             AuditWriter auditWriter,
@@ -452,7 +463,7 @@ public class PaymentsCompositionConfig {
             @Value("${DARGENT_RECONCILER_GIVE_UP_HOURS:72}") long giveUpHours) {
         return new ReconciliationUseCase(
                 paymentRepository,
-                Map.of("pix", pixRail),
+                Map.of("pix", pixRail, "card", cardRail),
                 railAssignment,
                 outboxWriter,
                 auditWriter,

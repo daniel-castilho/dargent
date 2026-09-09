@@ -24,6 +24,7 @@ import io.dargent.payments.domain.port.out.DuplicatePaymentTxidException;
 import io.dargent.payments.domain.port.out.IdempotencyRecord;
 import io.dargent.payments.domain.port.out.IdempotencyStore;
 import io.dargent.payments.domain.port.out.OutboxWriter;
+import io.dargent.payments.domain.port.out.PaymentRail;
 import io.dargent.payments.domain.port.out.PaymentRepository;
 import io.dargent.payments.domain.port.out.PspPort;
 import io.dargent.payments.domain.port.out.PspPort.ChargeResult;
@@ -81,6 +82,7 @@ class CreatePaymentUseCaseTest {
     private OutboxWriter outboxWriter;
     private AuditWriter auditWriter;
     private PspPort pspPort;
+    private PaymentRail cardRail;
     private RailAssignmentPort railAssignment;
     private TxidGenerator txidGenerator;
     private CreatePaymentUseCase useCase;
@@ -92,6 +94,7 @@ class CreatePaymentUseCaseTest {
         outboxWriter = mock(OutboxWriter.class);
         auditWriter = mock(AuditWriter.class);
         pspPort = mock(PspPort.class);
+        cardRail = mock(PaymentRail.class);
         railAssignment = mock(RailAssignmentPort.class);
         txidGenerator = mock(TxidGenerator.class);
         TransactionTemplate txTemplate = new TransactionTemplate(new NoopTransactionManager());
@@ -103,7 +106,7 @@ class CreatePaymentUseCaseTest {
                 idempotencyStore,
                 outboxWriter,
                 auditWriter,
-                new PixRail(pspPort, PIX_KEY, RECEIVER_NAME, RECEIVER_CITY),
+                Map.of("pix", new PixRail(pspPort, PIX_KEY, RECEIVER_NAME, RECEIVER_CITY), "card", cardRail),
                 txidGenerator,
                 txTemplate,
                 new EventEnvelopeFactory(new EventSerializer(mapper)),
@@ -115,8 +118,22 @@ class CreatePaymentUseCaseTest {
     }
 
     private Input input() {
+        return input("pix", null);
+    }
+
+    private Input input(String method, String cardToken) {
         return new Input(
-                MERCHANT, KEY_ID, "idem-key", ENDPOINT, FINGERPRINT_SAME, REQUEST_ID, AMOUNT, "Order #1", EXPIRES_IN);
+                MERCHANT,
+                KEY_ID,
+                "idem-key",
+                ENDPOINT,
+                FINGERPRINT_SAME,
+                REQUEST_ID,
+                AMOUNT,
+                "Order #1",
+                EXPIRES_IN,
+                method,
+                cardToken);
     }
 
     private Payment savedPayment(Instant expiresAt) {
@@ -249,7 +266,17 @@ class CreatePaymentUseCaseTest {
     void same_key_different_fingerprint_conflicts() {
         when(idempotencyStore.insertIfAbsent(any(), any(), any(), any())).thenReturn(Optional.of(completedRecord()));
         Input conflicting = new Input(
-                MERCHANT, KEY_ID, "idem-key", ENDPOINT, "sha256-other", REQUEST_ID, AMOUNT, "Order #1", EXPIRES_IN);
+                MERCHANT,
+                KEY_ID,
+                "idem-key",
+                ENDPOINT,
+                "sha256-other",
+                REQUEST_ID,
+                AMOUNT,
+                "Order #1",
+                EXPIRES_IN,
+                "pix",
+                null);
 
         assertThatThrownBy(() -> useCase.execute(conflicting)).isInstanceOf(IdempotencyKeyConflictException.class);
 
@@ -301,6 +328,47 @@ class CreatePaymentUseCaseTest {
         assertThatThrownBy(() -> useCase.execute(input())).isInstanceOf(PspUnavailableException.class);
 
         verify(paymentRepo, times(2)).updateIfVersionMatches(any(), anyInt()); // re-read + decide (BD-3)
+    }
+
+    // --- M5 S1: card decline mirrors the exhaustion path ---------------------
+
+    @Test
+    void card_decline_marks_failed_card_declined_deletes_idempotency_and_rethrows() {
+        when(idempotencyStore.insertIfAbsent(any(), any(), any(), any())).thenReturn(Optional.empty());
+        when(cardRail.rail()).thenReturn("card");
+        when(cardRail.createCharge(any())).thenThrow(new PspDeclinedException("card_declined"));
+
+        assertThatThrownBy(() -> useCase.execute(input("card", "tok_1")))
+                .isInstanceOf(PspDeclinedException.class)
+                .hasMessage("card_declined");
+
+        ArgumentCaptor<CreateChargeInput> chargeCaptor = ArgumentCaptor.forClass(CreateChargeInput.class);
+        verify(cardRail).createCharge(chargeCaptor.capture());
+        assertThat(chargeCaptor.getValue().cardToken()).isEqualTo("tok_1"); // credential rides the create charge
+
+        ArgumentCaptor<Payment> failedCaptor = ArgumentCaptor.forClass(Payment.class);
+        verify(paymentRepo).updateIfVersionMatches(failedCaptor.capture(), eq(0));
+        assertThat(failedCaptor.getValue().status()).isEqualTo(PaymentStatus.FAILED); // BD-3/BD-4
+        ArgumentCaptor<String> envelopeCaptor = ArgumentCaptor.forClass(String.class);
+        verify(outboxWriter)
+                .append(eq(TXID.value()), eq("payment.failed"), eq(1), envelopeCaptor.capture(), eq(REQUEST_ID));
+        assertThat(envelopeCaptor.getValue()).contains("card_declined");
+        verify(idempotencyStore).delete(eq(MERCHANT), eq("idem-key"), eq(ENDPOINT)); // delete, so a retry re-attempts
+        verify(idempotencyStore, never())
+                .markCompleted(any(), any(), any(), any(), anyInt(), any()); // no fake snapshot
+    }
+
+    @Test
+    void card_create_returns_pending_with_null_presentment() {
+        when(idempotencyStore.insertIfAbsent(any(), any(), any(), any())).thenReturn(Optional.empty());
+        when(cardRail.rail()).thenReturn("card");
+        when(cardRail.createCharge(any())).thenReturn(new ChargeResult(TXID, PSP_EXPIRES, "E2E-1", null));
+
+        Output out = useCase.execute(input("card", "tok_1"));
+
+        assertThat(out.brcode()).isNull(); // card presentment is null, never a PIX BR Code
+        assertThat(out.status()).isEqualTo(PaymentStatus.PENDING);
+        verify(railAssignment).assign(eq(TXID), eq("card"));
     }
 
     // --- BD-3: PSP truth conditional update ---------------------------------

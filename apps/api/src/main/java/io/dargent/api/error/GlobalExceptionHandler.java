@@ -2,6 +2,7 @@ package io.dargent.api.error;
 
 import io.dargent.payments.application.IdempotencyKeyConflictException;
 import io.dargent.payments.application.IdempotencyKeyInFlightException;
+import io.dargent.payments.application.PspDeclinedException;
 import io.dargent.payments.application.PspUnavailableException;
 import io.dargent.payments.application.RefundPaymentUseCase;
 import io.dargent.payments.domain.exception.InvalidTransitionException;
@@ -97,6 +98,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(PspUnavailableException.class)
     public void pspUnavailable(HttpServletRequest request, HttpServletResponse response, PspUnavailableException e) {
         writer.write(request, response, ErrorCode.PSP_UNAVAILABLE, "Payment provider unavailable", e);
+    }
+
+    @ExceptionHandler(PspDeclinedException.class)
+    public void cardDeclined(HttpServletRequest request, HttpServletResponse response, PspDeclinedException e) {
+        writer.write(request, response, ErrorCode.CARD_DECLINED, e.getMessage());
     }
 
     @ExceptionHandler(RefundPaymentUseCase.PaymentNotFoundException.class)

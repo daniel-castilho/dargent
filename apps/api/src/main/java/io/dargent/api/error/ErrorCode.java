@@ -32,6 +32,7 @@ public enum ErrorCode {
     RATE_LIMITED("rate_limited", HttpStatus.TOO_MANY_REQUESTS, "Too many requests"),
     IDEMPOTENCY_KEY_IN_FLIGHT("idempotency_key_in_flight", HttpStatus.TOO_EARLY, "Idempotency key in flight"),
     PSP_UNAVAILABLE("psp_unavailable", HttpStatus.BAD_GATEWAY, "Payment provider unavailable"),
+    CARD_DECLINED("card_declined", HttpStatus.PAYMENT_REQUIRED, "Card declined by the PSP"),
     INTERNAL("internal", HttpStatus.INTERNAL_SERVER_ERROR, "Internal error");
 
     private final String code;

@@ -183,6 +183,7 @@ Domain is **pure where the money lives** (`payments`, `ledger`); pragmatism at t
 | `PENDING → CONFIRMED` | Valid `payment.confirmed` webhook (HMAC ok, dedupe ok) **or** reconciler **or** resurrection | accepts from `PENDING` **or** `EXPIRED` |
 | `PENDING → EXPIRED` | Expiration scheduler | `expires_at < now()` |
 | `PENDING → FAILED` | PSP unavailable after creation retries exhausted (D19) | attempts ≥ max |
+| `PENDING → FAILED` | Card PSP 402 `card_declined` (instant, no retries) | `card_declined` from PSP |
 | `CONFIRMED → PARTIALLY_REFUNDED` | Partial refund created | after refund: `Σ refunds < amount` |
 | `CONFIRMED → REFUNDED` | Refund consuming the remainder | `Σ refunds = amount` |
 | `PARTIALLY_REFUNDED → PARTIALLY_REFUNDED` | Another partial refund | same |
@@ -203,6 +204,7 @@ Domain is **pure where the money lives** (`payments`, `ledger`); pragmatism at t
 | Policy | Decision |
 |---|---|
 | **Retryable creation (D19)** | `POST /payments` persists `PENDING` + idempotency, calls the PSP with retry/backoff; exhausted → `FAILED`. A down PSP never "loses" the merchant's request |
+| **Card instant decline** | `method:"card"` PSP 402 `card_declined` → immediate `FAILED` (no retry); idempotency key deleted so the client can retry with a fresh attempt. Same state machine as D19 but zero-delay |
 | **Resurrection (D6)** | Confirmation webhook for an expired charge: accept (trust the PSP — rejecting valid money is worse), `late` flag, audit. A webhook beyond the **5-min anti-replay window** is rejected — and the reconciler saves the day |
 | **Reconciliation** | Job scans `PENDING`/`EXPIRED` due rows (`next_reconcile_at <= now()`, conditional `UPDATE ... WHERE status IN (PENDING,EXPIRED)` — the DB arbitrates the race) → `GET /cob/{txid}` at the PSP → acts on its truth. Covers lost/delayed/rejected webhooks. Past `expires_at + DARGENT_RECONCILER_GIVE_UP_HOURS` (default 72) it **gives up** (clears `next_reconcile_at`, audits `reconciliation_window_expired`) — no endless resurrection (DARRGENT-003) |
 | **Expiration** | Scheduler with partial index (`WHERE status='PENDING' AND expires_at < now()`), conditional UPDATE. No delayed SQS messages (15-min max delay can't cover hour-long charges) |
@@ -327,8 +329,8 @@ Base: `/v1` (path versioning, pragmatic). Auth: `Authorization: Bearer psp_test_
 
 | Method & path | Auth | Description |
 |---|---|---|
-| `POST /v1/payments` | API key | Creates PIX charge. `201` + `Location` |
-| `GET /v1/payments/{txid}` | API key | Detail + status + BR Code. Another merchant's → **404** (not 403) |
+| `POST /v1/payments` | API key | Creates a payment. `method:"pix"` (default) → PIX BR Code in response; `method:"card"` + `cardToken` → PENDING + `brcode:null`, PSP webhook confirms. `201` + `Location` |
+| `GET /v1/payments/{txid}` | API key | Detail + status + BR Code (PIX) or amount/fee (card). Another merchant's → **404** (not 403) |
 | `GET /v1/payments?cursor=&limit=` | API key | History, cursor pagination (default 20, max 100) |
 | `POST /v1/payments/{txid}/refunds` | API key | Partial (amount in body) or total (empty body) refund |
 | `GET /v1/payments/{txid}/events` | API key | Aggregate event trail |
@@ -345,6 +347,33 @@ Idempotency-Key: 4e7a2c10-…
 Content-Type: application/json
 
 { "amount": 10000, "description": "Order #123", "expiresIn": "PT30M" }
+```
+
+Card create (M5 S1):
+
+```http
+POST /v1/payments
+Authorization: Bearer psp_test_9f2c…
+Idempotency-Key: 4e7a2c10-…
+Content-Type: application/json
+
+{ "amount": 10000, "description": "Order #456", "method": "card", "cardToken": "tok_sandbox_…" }
+```
+
+```http
+HTTP/1.1 201 Created
+Location: /v1/payments/8KD4Z9X2Q7W1M5T3R6Y0A1B2C
+X-Request-Id: 7c1e…
+
+{
+  "txid": "8KD4Z9X2Q7W1M5T3R6Y0A1B2C",
+  "status": "PENDING",
+  "amount": 10000,
+  "currency": "BRL",
+  "expiresAt": "2026-08-28T15:30:00Z",
+  "brcode": null,                       ← card: explicit null (FINDING-S1-2)
+  "expiresIn": "PT30M"
+}
 ```
 
 ```http
@@ -393,6 +422,7 @@ Clients branch on `code`, never on messages. **A single `ErrorResponseWriter` em
 | `invalid_transition` | 409 | Illegal state transition |
 | `idempotency_key_in_flight` | **425** + `Retry-After` | Retry arrived while the 1st request processes (D18) |
 | `psp_unavailable` | 502 | PSP unreachable/unhealthy after creation retries; payment persisted as FAILED |
+| `card_declined` | 402 | PSP declined the card (402); payment persisted as FAILED, idempotency key deleted (retry is a fresh attempt) |
 | `internal` | 500 | Logs method+URI+exception; **never leaks internal message** |
 
 Protocol detail: `NoResourceFoundException` → canonical 404 (never 500).

@@ -37,6 +37,9 @@ public class PaymentJpaAdapter implements PaymentRepository {
         }
         PaymentEntity entity = PaymentMapper.toEntity(payment);
         em.persist(entity);
+        // Flush now: the create transaction performs same-transaction raw JDBC work on this row
+        // (rail assignment, JdbcClient back inside runCore) and must see it before commit.
+        em.flush();
     }
 
     @Override
