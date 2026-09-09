@@ -90,7 +90,8 @@ public class JdbcIdempotencyStore implements IdempotencyStore {
             String endpoint,
             Txid paymentTxid,
             int responseStatus,
-            Map<String, Object> responseBody) {
+            Map<String, Object> responseBody,
+            String requestFingerprint) {
         String bodyJson;
         try {
             bodyJson = responseBody != null

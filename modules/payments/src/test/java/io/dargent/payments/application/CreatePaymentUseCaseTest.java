@@ -155,7 +155,7 @@ class CreatePaymentUseCaseTest {
         assertThat(out.brcode()).contains(PIX_KEY);
         assertThat(out.replay()).isFalse();
 
-        verify(idempotencyStore).markCompleted(any(), any(), any(), any(), anyInt(), any());
+        verify(idempotencyStore).markCompleted(any(), any(), any(), any(), anyInt(), any(), any());
     }
 
     @Test
@@ -355,7 +355,7 @@ class CreatePaymentUseCaseTest {
         assertThat(envelopeCaptor.getValue()).contains("card_declined");
         verify(idempotencyStore).delete(eq(MERCHANT), eq("idem-key"), eq(ENDPOINT)); // delete, so a retry re-attempts
         verify(idempotencyStore, never())
-                .markCompleted(any(), any(), any(), any(), anyInt(), any()); // no fake snapshot
+                .markCompleted(any(), any(), any(), any(), anyInt(), any(), any()); // no fake snapshot
     }
 
     @Test

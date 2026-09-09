@@ -5,6 +5,27 @@ versioning: semantic, cut from annotated git tags (see [release-runbook](docs/re
 
 ## [Unreleased]
 
+### Added (M5 S2 — Redis read cache, D3 idempotent-replay)
+
+- **Idempotent-replay read cache (the ONE hot read path, D3).** `CachedIdempotencyStore`
+  decorates the JDBC idempotency store: completed replay snapshots are cached in Redis
+  (TTL-bounded, write-through on `markCompleted`, read-through on completed DB reads,
+  evicted on key delete). Only COMPLETED rows are cached — IN_FLIGHT arbitration stays
+  DB-owned; cached records carry the request fingerprint so 409-conflict semantics are
+  identical from cache or DB. `IdempotencyStore.markCompleted` gained the fingerprint
+  parameter (the JDBC store ignores it for SQL — insert wrote it).
+- **Fail-open by contract.** Every cache interaction is guarded: Redis failure → DB
+  fallback, correctness unchanged, counted in `dargent_cache_failopen_total`, never
+  surfaced to the money path. Proven by `ReplayCacheIT` stopping the Redis container
+  mid-test (byte-equal replay from the DB fallback). Command timeout capped at 1s.
+- **Default OFF (carved):** `DARGENT_CACHE_REDIS_ENABLED=false` → zero Redis beans, DB
+  direct (Boot's Spring Data Redis auto-config excluded in application.yaml; the cache's
+  own conditional `CacheConfiguration` provides the client only when enabled). Surface:
+  `DARGENT_CACHE_REDIS_ENABLED` / `DARGENT_CACHE_REDIS_URI` / `DARGENT_CACHE_REDIS_TTL`
+  (default PT5M). Compose: `redis` service behind opt-in profile `cache`.
+- **Metrics:** `dargent_cache_hits_total` / `dargent_cache_misses_total` /
+  `dargent_cache_failopen_total` (label `path=idempotency-replay`) + observability.md §3.
+
 ### Fixed (M5 B1 selo — runtime-smoke leg 7 red ×2, hotfix smoke)
 
 - **smoke.sh leg 7 asserted a `fee` field the GET contract never emits** (design §6.2

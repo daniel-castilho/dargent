@@ -85,6 +85,11 @@ services:
       # scripts/republish-outbox.sh exports the operator's key here.
       DARGENT_OUTBOX_ADMIN_KEY: ${DARGENT_OUTBOX_ADMIN_KEY:-}
       DARGENT_EXPIRATION_ENABLED: ${DARGENT_EXPIRATION_ENABLED:-false}
+      # M5 S2 (D3): Redis read cache — opt-in (compose profile `cache` + enabled=true). Default
+      # false → zero Redis beans, DB direct (fail-open trivially).
+      DARGENT_CACHE_REDIS_ENABLED: ${DARGENT_CACHE_REDIS_ENABLED:-false}
+      DARGENT_CACHE_REDIS_URI: ${DARGENT_CACHE_REDIS_URI:-redis://redis:6379}
+      DARGENT_CACHE_REDIS_TTL: ${DARGENT_CACHE_REDIS_TTL:-PT5M}
     ports:
       - "8081:8080"
     depends_on:
@@ -139,6 +144,22 @@ services:
       interval: 10s
       timeout: 3s
       start_period: 20s
+      retries: 10
+    restart: unless-stopped
+
+  # M5 S2 (D3): Redis read cache for the idempotent-replay path. Opt-in via `--profile cache` —
+  # the cache is an optimization, not a dependency (fail-open reads; the app defaults to DB direct,
+  # DARGENT_CACHE_REDIS_ENABLED=false). Enable together: `DARGENT_CACHE_REDIS_ENABLED=true` +
+  # `DARGENT_CACHE_REDIS_URI=redis://redis:6379`.
+  redis:
+    image: redis:7-alpine
+    profiles: ["cache"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
       retries: 10
     restart: unless-stopped
 

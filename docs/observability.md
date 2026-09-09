@@ -50,6 +50,9 @@ and webhook-rejections asserted PRESENT AT 0) — on a real `/actuator/prometheu
 | `dargent_refunds_rejected_total` | counter | `code` | Money-guard trips (exceeds remaining, not refundable) |
 | `dargent_ledger_proof_fail_total` | counter | `scope` (balance, projection) | Ledger proof failures (N8) — 0 is the only good value; a non-zero page is a freeze-deploys moment |
 | `dargent_webhook_rejections_total` | counter | `reason` (rate_limited, body_too_large) | Webhook abuse-control trips (E15 S1, DEBT-8) — 429/413 verdicts; feeds the abuse alert rule |
+| `dargent_cache_hits_total` | counter | `path` (idempotency-replay) | Replay-cache reads served from Redis (M5 S2) — is the cache paying for itself? |
+| `dargent_cache_misses_total` | counter | `path` (idempotency-replay) | Cache reads that fell to the DB (first-touch / TTL expiry) |
+| `dargent_cache_failopen_total` | counter | `path` (idempotency-replay) | Cache failures absorbed (Redis down/unhealthy) — the cache is fail-open by contract; sustained growth = Redis needs attention, the money path does NOT |
 
 Naming follows Micrometer conventions (dots, lower-case); Prometheus exposition renders `dargent.*` as `dargent_*`.
 
@@ -72,6 +75,27 @@ Naming follows Micrometer conventions (dots, lower-case); Prometheus exposition 
   **deferred to M5 with rationale** (M5 brings Redis; `tasks/m5-scoping.md` D3 — "cache is an
   optimization, not a dependency" applies to the limiter store the same way). No silent
   carry-over: this paragraph IS the disposition.
+
+### Replay cache posture (M5 S2 — one path, opt-in, fail-open)
+
+- **What caches:** the idempotent-replay lookup only (D3 adjudication — the ONE hot read path).
+  Completed snapshots (`idempotency_keys`) are immutable and never deleted once completed, so a
+  TTL-bounded cache can never contradict the DB; IN_FLIGHT rows are never cached (425 arbitration
+  stays DB-owned). Cached records carry the request fingerprint, so 409-conflict semantics are
+  identical from cache or DB.
+- **Fail-open by contract:** Redis down/unhealthy → DB fallback, correctness unchanged, the
+  failure counted in `dargent_cache_failopen_total` and absorbed — never surfaced to the money
+  path. Command timeout capped at 1s so a dead cache cannot lag requests. Proven by
+  `ReplayCacheIT` (Redis container stopped mid-test).
+- **Lifecycle:** default OFF (`DARGENT_CACHE_REDIS_ENABLED=false` → zero Redis beans, DB direct,
+  Boot's Redis auto-config excluded). ON: enable + `DARGENT_CACHE_REDIS_URI` + TTL via
+  `DARGENT_CACHE_REDIS_TTL` (default 5m; entries are also evicted when a key row is deleted).
+  Compose: `redis` service, opt-in profile `cache`.
+- **Eviction vs the revoked-key rule:** a completed key row is never deleted in the current
+  surface (only IN_FLIGHT rows are, on PSP exhaustion) — so "revoked key must never outlive TTL"
+  maps to evict-on-delete + TTL bound; both are IT-pinned.
+- **Health:** deliberately NOT in the health model — the cache is an optimization; a down cache
+  must never fail readiness (fail-open posture above).
 
 ## 4. Health model
 

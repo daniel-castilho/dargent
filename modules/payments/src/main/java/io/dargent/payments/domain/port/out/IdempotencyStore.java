@@ -19,14 +19,19 @@ public interface IdempotencyStore {
     Optional<IdempotencyRecord> insertIfAbsent(
             UUID merchantId, String idempotencyKey, String endpoint, String requestFingerprint);
 
-    /** Marks the key as COMPLETED with response snapshot (called after core + PSP success). */
+    /**
+     * Marks the key as COMPLETED with response snapshot (called after core + PSP success).
+     * The request fingerprint is carried so replay caches preserve the 409-conflict decision on
+     * cached snapshots (M5 S2); the JDBC store does not rewrite the fingerprint (insert wrote it).
+     */
     void markCompleted(
             UUID merchantId,
             String idempotencyKey,
             String endpoint,
             Txid paymentTxid,
             int responseStatus,
-            Map<String, Object> responseBody);
+            Map<String, Object> responseBody,
+            String requestFingerprint);
 
     /** Deletes the key row (called on PSP exhaustion — no snapshot, caller retries fresh). */
     void delete(UUID merchantId, String idempotencyKey, String endpoint);

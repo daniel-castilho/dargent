@@ -48,6 +48,12 @@
       <groupId>io.micrometer</groupId>
       <artifactId>micrometer-core</artifactId>
     </dependency>
+    <!-- M5 S2 (D3): Redis read cache for the idempotent-replay path (Lettuce via Spring Data Redis).
+         Off by default (DARGENT_CACHE_REDIS_ENABLED=false) — fail-open reads, DB stays the arbiter. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-redis</artifactId>
+    </dependency>
     <!-- Jackson for adapter JSON serialization (compile scope needed for adapter) -->
     <dependency>
       <groupId>tools.jackson.core</groupId>

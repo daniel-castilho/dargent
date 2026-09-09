@@ -5,6 +5,8 @@ import io.dargent.api.error.ErrorResponseWriter;
 import io.dargent.api.security.ApiKeyAuthenticationFilter;
 import io.dargent.api.security.ApiKeyRepository;
 import io.dargent.ledger.domain.port.out.LedgerStore;
+import io.dargent.payments.adapter.out.cache.CachedIdempotencyStore;
+import io.dargent.payments.adapter.out.cache.ReplayCacheClient;
 import io.dargent.payments.adapter.out.messaging.DlqDepthPoller;
 import io.dargent.payments.adapter.out.messaging.SnsEventPublisher;
 import io.dargent.payments.adapter.out.persistence.JdbcAuditWriter;
@@ -48,6 +50,7 @@ import java.net.URI;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.Map;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -101,8 +104,18 @@ public class PaymentsCompositionConfig {
     }
 
     @Bean
-    IdempotencyStore idempotencyStore(JdbcClient jdbc) {
-        return new JdbcIdempotencyStore(jdbc);
+    IdempotencyStore idempotencyStore(
+            JdbcClient jdbc,
+            ObjectProvider<ReplayCacheClient> replayCache,
+            ObjectMapper objectMapper,
+            MeterRegistry meterRegistry,
+            @Value("${dargent.cache.redis.ttl:PT5M}") Duration ttl) {
+        JdbcIdempotencyStore store = new JdbcIdempotencyStore(jdbc);
+        // M5 S2 (D3): when the Redis replay cache is enabled (CacheConfiguration), decorate the JDBC
+        // store with the fail-open replay cache; otherwise the money path goes straight to the DB
+        // (carved default — the cache is an optimization, never a dependency, STOP 3).
+        ReplayCacheClient cache = replayCache.getIfAvailable();
+        return cache == null ? store : new CachedIdempotencyStore(store, cache, objectMapper, ttl, meterRegistry);
     }
 
     @Bean
