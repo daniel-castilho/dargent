@@ -70,21 +70,20 @@ jobs:
           key: owasp-nvd-v1
           restore-keys: owasp-nvd-
 
-      # E13 S1: OWASP Dependency-Check — fail CVSS >= 7. NVD API key rides the repository secret
-      # NVD_API_KEY (no key → throttled-but-working sync); data dir cached across runs; 2 documented
-      # retries (P2: a tool outage MUST fail the job — this gate never silently passes).
-      # E16 S5 fix: dependabot PRs do not receive repo secrets — an EMPTY key string is worse
-      # than none (the client rejects a 0-length masked key). Export only when non-empty so
-      # keyless runs stay in the documented throttled-but-working mode.
+      # E13 S1 + E16 S5 fix: OWASP Dependency-Check — fail CVSS >= 7. NVD data dir cached across
+      # runs; 2 documented retries (P2: a tool outage MUST fail the job — never silent-pass).
+      # Key handling: dependabot PRs do NOT receive repo secrets, and dependency-check 13 treats
+      # an EMPTY key string as invalid ("length of 0"). The key is therefore passed as
+      # -DnvdApiKey ONLY when the secret exists — keyless runs (dependabot queue, forks) stay in
+      # the documented throttled-but-working mode.
       - name: OWASP Dependency-Check (NVD keyed, cached)
         env:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         run: |
           set -euo pipefail
-          # Only export a real key; never pass an empty string to the NVD client (E16 S5 fix:
-          # dependabot PRs get secrets withheld → "" key fails with "Invalid API Key, length of 0").
-          if [[ -n "${NVD_API_KEY:-}" ]]; then export NVD_API_KEY; else unset NVD_API_KEY; fi
-          attempt() { ./mvnw -B dependency-check:aggregate -DskipTests "$@"; }
+          KEY_ARGS=()
+          if [[ -n "${NVD_API_KEY:-}" ]]; then KEY_ARGS+=(-DnvdApiKey="$NVD_API_KEY"); fi
+          attempt() { ./mvnw -B dependency-check:aggregate -DskipTests "${KEY_ARGS[@]}" "$@"; }
           if ! attempt; then
             echo "OWASP attempt 1 failed — retrying once in 60s (NVD sync flakiness, documented P2 policy)"
             sleep 60
