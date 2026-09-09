@@ -41,7 +41,12 @@
     <spotbugs.version>4.10.4.1</spotbugs.version>
     <spotless.version>3.10.2</spotless.version>
     <jacoco.version>0.8.15</jacoco.version>
-    <dependency-check.version>13.0.0</dependency-check.version>
+    <!-- 12.2.2, not 13.0.0: dependency-check 13 keyless mode is BROKEN (upstream bug — empty
+         string is passed as the NVD key instead of null, dependency-check#8715, regression from
+         #8549; fix merged upstream but unreleased). Dependabot PRs receive NO repo secrets, so
+         the gate must genuinely work keyless (throttled-but-working, the E13 design). Pin the
+         last 12.x until the fixed 13.x ships; the NVD data cache keys stay compatible. -->
+    <dependency-check.version>12.2.2</dependency-check.version>
     <!-- Per-module LINE coverage floors (owner-fixed, testing-playbook §5). The parent is pom
          packaging (no classes): jacoco.skip=true here is inherited as the DEFAULT-OFF, and every
          floored module opts back in explicitly with jacoco.skip=false + its floor number — a
@@ -221,11 +226,12 @@
         <configuration>
           <failBuildOnCVSS>7</failBuildOnCVSS>
           <suppressionFile>${maven.multiModuleProjectDirectory}/owasp-suppressions.xml</suppressionFile>
-          <!-- NVD API key rides the repository secret NVD_API_KEY (CI passes it as env — same
-               pattern as the other local systems). Without a key the sync degrades to slow
-               throttled downloads but still WORKS; a tool error still fails the build (P2). -->
+          <!-- NVD API key: passed ONLY when it exists (dependency-check 13 rejects an EMPTY
+               string as "Invalid API Key, length of 0" — keyless mode must mean the property is
+               ABSENT, not blank). CI exports NVD_API_KEY only when non-empty and feeds it via
+               -DnvdApiKey; without a key the sync degrades to slow throttled downloads but
+               still WORKS; a tool error still fails the build (P2, never silent-pass). -->
           <dataDirectory>${user.home}/.m2/dependency-check-data</dataDirectory>
-          <nvdApiKey>${env.NVD_API_KEY}</nvdApiKey>
           <nvdApiDelay>6000</nvdApiDelay>
           <!-- Retention keeps the cache bounded; formats give CI the summary + the full evidence. -->
           <retentionJsHours>24</retentionJsHours>
