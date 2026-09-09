@@ -54,19 +54,19 @@ as its milestone closes — see *Current state* and the per-milestone acceptance
 ## Architecture
 
 ```
-                     ┌────────────────────────── on-premises host ─────────────────────────┐
-                     │                                                                      │
- merchant ──HTTP──▶ NGINX :8080 ──▶ api-blue :8081  ┐  same JVM, modules:                  │
- payer app ──▶   (canary, DNS       api-green :8082 ┘   [ payments | ledger | notifications]│
-                    re-resolution)                       │        ▲                        │
-                                                         │ outbox │ events                 │
-                                                         ▼        │ (SNS → SQS FIFO)       │
-                                              ┌─────────────────────────┐                       │
-                                              │ LocalStack :4566        │                       │
-                                              │  payment-events.fifo    │                       │
-                                              └─────────────────────────┘                       │
-                                                         ▲                                      │
-                                      HTTP (cob/webhook) │                                      │
+                     ┌────────────────────────── on-premises host ───────────────────────────────┐
+                     │                                                                           │
+ merchant ──HTTP──▶ NGINX :8080 ──▶ api-blue :8081  ┐  same JVM, modules:                       │
+ payer app ──▶   (canary, DNS       api-green :8082  ┘   [ payments | ledger | notifications]    │
+                    re-resolution)                       │        ▲                              │
+                                                         │ outbox │ events                       │
+                                                         ▼        │ (SNS → SQS FIFO)             │
+                                              ┌─────────────────────────┐                        │
+                                              │ LocalStack :4566        │                        │
+                                              │  payment-events.fifo    │                        │
+                                              └─────────────────────────┘                        │
+                                                         ▲                                       │
+                                      HTTP (cob/webhook) │                                       │
                                               psp-simulator :8090 ───────────────────────────────┘
                                               (merchant-side PSP + payer bank + chaos knobs)
                                                          │
