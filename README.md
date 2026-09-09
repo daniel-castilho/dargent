@@ -1,5 +1,11 @@
 # Dargent — PIX Payment Processing & Transaction System
 
+![Java](https://img.shields.io/badge/Java-25-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/Spring_Boot-4.1-6DB33F?style=for-the-badge&logo=spring&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
+![CI](https://img.shields.io/badge/CI-GitHub_Actions-2088FF?style=for-the-badge&logo=github-actions&logoColor=white)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 > *d'argent* (French) — "of silver, of money", from Latin *argentum*.
 > The system is where the money lives.
 
@@ -7,6 +13,23 @@
 Modular monolith on **Java 25 + Spring Boot 4.1**, engineered from day one to be extracted into microservices.
 
 `Java 25` · `Spring Boot 4.1` · `PostgreSQL 16` · `SNS/SQS FIFO (LocalStack)` · `NGINX blue-green` · `MIT`
+
+---
+
+## Table of Contents
+
+- [What is Dargent?](#what-is-dargent)
+- [Architecture](#architecture)
+- [Modules](#modules)
+- [The money flow](#the-money-flow)
+- [Documentation](#documentation)
+- [Tech stack](#tech-stack)
+- [Getting started](#getting-started)
+- [Testing](#testing)
+- [CI/CD & deployment](#cicd--deployment)
+- [Current state](#current-state)
+- [Contributing](#contributing)
+- [License](#license)
 
 ---
 
@@ -66,7 +89,9 @@ communication flows through the outbox → SNS → SQS, and each consumer has it
 | `apps/api` | Boot application wiring the modules: REST, security, schedulers, messaging adapters |
 | `apps/psp-simulator` | **Separate app** — the fake Stripe: merchant-side PSP + payer bank + configurable chaos |
 
-## The money flow (TARGET STATE — narrates what will exist at M3/M5)
+## The money flow
+
+> TARGET STATE — narrates what will exist at M3/M5 (most of it is already live; see *Current state*).
 
 ```
 POST /v1/payments (Idempotency-Key) → PENDING + dynamic QR (BR Code, EMV + CRC16)
@@ -176,6 +201,9 @@ release notes: [docs/releases/](docs/releases/).
 
 ## Current state
 
+**Latest tagged release: `v1.1.0`** (E15 operational hardening, 2026-09-08) · E16 (operational hygiene)
+shipped on `main` 2026-09-08. See [CHANGELOG.md](CHANGELOG.md).
+
 **E6 + E7 ledger (S1–S5) + E10 notifications (S0–S7) + E8 refunds (S2–S7) + E9 delivery hardening complete**
 **on `main`. Ledger consumes `payment.confirmed`, journals double-entry postings, maintains balance proof +**
 **rebuild, and settles behind `DARGENT_LEDGER_ADMIN_KEY` (admin-gated, default 404-hidden).**
@@ -199,6 +227,15 @@ release notes: [docs/releases/](docs/releases/).
 | Post-1.0.0 (E15) — Operational hardening | Webhook abuse controls (429/413, DEBT-8 closed), tested alert rules (promtool in CI + bite-proof), load baseline (k6, 414 rps/0 err), restore at scale (RTO 23 s @ 50k), PITR rehearsal (RPO ≈ 6 s), DEBT-7 Path A — **cut `v1.1.0`** | ✅ 2026-09-08 |
 | Post-1.0.0 (E16) — Operational hygiene | Alertmanager (amtool-validated in CI, logging stub — no pager), PITR v2 (off-disk WAL, pgdata-volume destruction survives), honest k6 (spine ON + defaults: 440 rps/0 err, webhook→reconciler shift), limiter posture declared, dependabot | ✅ 2026-09-08 |
 
+## Contributing
+
+Dargent is engineered by humans and AI agents together, and the rules in
+[`AGENTS.md`](AGENTS.md) are **binding for both** — they exist because each one guards a money, race or
+boundary guarantee. Before contributing, read the [design document](docs/design.md), the
+[coding standards](docs/coding-standards.md) and the [testing playbook](docs/testing-playbook.md)
+(the scenario catalog is the executable definition of "correct"). Keep `./mvnw verify` green locally
+(unit + IT) and sync `CHANGELOG.md` in the same change set (Definition of Done in AGENTS.md §6).
+
 ## License
 
-MIT (LICENSE file added at M0).
+[MIT](LICENSE) © 2026 daniel-castilho.
