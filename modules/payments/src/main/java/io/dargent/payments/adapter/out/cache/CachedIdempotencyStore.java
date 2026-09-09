@@ -70,7 +70,8 @@ public final class CachedIdempotencyStore implements IdempotencyStore {
             counter(MISSES).increment();
         } catch (RuntimeException e) {
             counter(FAIL_OPEN).increment();
-            log.warn("replay cache read failed for key {} — falling back to DB (fail-open)", idempotencyKey, e);
+            log.warn(
+                    "replay cache read failed for key {} — falling back to DB (fail-open)", logSafe(idempotencyKey), e);
         }
         Optional<IdempotencyRecord> existing =
                 delegate.insertIfAbsent(merchantId, idempotencyKey, endpoint, requestFingerprint);
@@ -114,7 +115,7 @@ public final class CachedIdempotencyStore implements IdempotencyStore {
             counter(FAIL_OPEN).increment();
             log.warn(
                     "replay cache evict failed for key {} — TTL bounds the stale window (fail-open)",
-                    idempotencyKey,
+                    logSafe(idempotencyKey),
                     e);
         }
     }
@@ -125,14 +126,20 @@ public final class CachedIdempotencyStore implements IdempotencyStore {
             encoded = json.writeValueAsString(record);
         } catch (Exception e) {
             counter(FAIL_OPEN).increment();
-            log.warn("replay cache encode failed for key {} — DB remains authoritative (fail-open)", cacheKey, e);
+            log.warn(
+                    "replay cache encode failed for key {} — DB remains authoritative (fail-open)",
+                    logSafe(cacheKey),
+                    e);
             return;
         }
         try {
             cache.put(cacheKey, encoded, ttl);
         } catch (RuntimeException e) {
             counter(FAIL_OPEN).increment();
-            log.warn("replay cache write failed for key {} — DB remains authoritative (fail-open)", cacheKey, e);
+            log.warn(
+                    "replay cache write failed for key {} — DB remains authoritative (fail-open)",
+                    logSafe(cacheKey),
+                    e);
         }
     }
 
@@ -146,6 +153,16 @@ public final class CachedIdempotencyStore implements IdempotencyStore {
 
     private String cacheKey(UUID merchantId, String idempotencyKey, String endpoint) {
         return "dargent:idempotency-replay:" + merchantId + ":" + endpoint + ":" + idempotencyKey;
+    }
+
+    /**
+     * Log-safe form of a client-controlled value (the Idempotency-Key header is validated for
+     * length only, so line breaks are admissible input). Cuts \n and \r so a forged key cannot
+     * split the warn entry into multiple lines (CWE-117) — CodeQL recognizes this replace pair
+     * as a sanitizer.
+     */
+    private static String logSafe(String value) {
+        return value.replace('\n', '_').replace('\r', '_');
     }
 
     private Counter counter(String name) {

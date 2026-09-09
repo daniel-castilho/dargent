@@ -10,6 +10,46 @@ When a lesson repeats three times, promote it to [coding-standards.md](coding-st
 
 ---
 
+## 20. CodeQL's log-injection sanitizer must sit AT the sink — upstream charset validation does not flow down (2026-09-09, M5 S2 — the ReplayCache annotations)
+
+GitHub Advanced Security annotated 5 `log.warn(...)` sites in `CachedIdempotencyStore` with
+**Log Injection (CWE-117, security-severity 6.1)**: the `Idempotency-Key` header is
+client-controlled and the create endpoint validates it for **length only** (8–200 chars, no
+charset rule) — so `\n`/`\r` are admissible input, and a forged key like
+`idem-a\r2026-09-09 ERROR payment reversed` could forge log lines in the fail-open warn path.
+
+The instinctive fixes are all wrong, and the query model says why (read `LogInjection.qll`
+before iterating — Amendment (f)):
+
+- **"Validate the charset at the controller" does not clear the finding.** CodeQL's taint
+  analysis is per-method-path, not architectural: a `matches()` guard in `PaymentController`
+  is a barrier for flows *through that method*, never for the adapter's own log sinks. Tightening
+  the header contract (e.g. `[A-Za-z0-9-]` only, like `X-Request-Id`) would shrink the *risk*
+  but not the *finding* — and would be a wire-contract change smuggled inside a security fix.
+- **"My keys are UUIDs" is irrelevant** — the header accepts whatever the validation admits,
+  and the finding tracks the declared input domain, not the happy path.
+- **`replaceAll("\\s", "_")` is NOT a recognized sanitizer.** The model recognizes exactly:
+  `String.replace(char, char)` / `replace(CharSequence, …)` cutting `'\n'`/`'\r'` (10/13),
+  `replaceAll` with the **literal** patterns `"\n"`, `"\r"`, `"\\n"`, `"\\r"`, `"\\R"` (an
+  allow-list `[^…]` form exists but is fragile), or a barrier guard (`contains("\n")`
+  branch / `matches()` allow-list) **in the same method as the sink**.
+
+**Fix shipped:** a private `logSafe(String)` at the sink class —
+`value.replace('\n', '_').replace('\r', '_')` — applied to every client-controlled argument of
+every `log.warn` in the adapter (4 sites; 2 annotations were double-flagged on one site).
+
+**Golden rules:**
+- A taint-analysis finding is answered at the SINK with a sanitizer the analyzer recognizes,
+  never at the source with an argument about the happy path. Read the `.qll` model first; the
+  accepted sanitizer list is short and literal (Amendment (f) applied to security findings).
+- Client-controlled values reaching logs (`Idempotency-Key`, request bodies, PSP responses)
+  get a local `logSafe()` twin at the logging site — the same discipline as rule 3.7's
+  "tenant comes from the credential": defense at the boundary that consumes, not the one that
+  produced.
+- Length-only validation on a header that later flows into logs is a latent CWE-117; either
+  add a charset rule to the wire contract (owner call — it breaks clients) or sanitize at every
+  sink. Silent trust in "keys look like UUIDs" is the bug.
+
 ## 19. One migration file has exactly one checksum — reverting a modified migration fixes the hypothetical DB and breaks every real one (2026-09-07, E14 S5 — the F1 story)
 
 The two-release migration review (v0.3.0 ↔ v1.0.0) found `V301__create_notifications_schema.sql`

@@ -25,6 +25,9 @@ versioning: semantic, cut from annotated git tags (see [release-runbook](docs/re
   (default PT5M). Compose: `redis` service behind opt-in profile `cache`.
 - **Metrics:** `dargent_cache_hits_total` / `dargent_cache_misses_total` /
   `dargent_cache_failopen_total` (label `path=idempotency-replay`) + observability.md §3.
+- **Security (CodeQL CWE-117):** every `log.warn` site in the cache adapter logs the
+  client-controlled `Idempotency-Key` through `logSafe()` (line breaks cut) — the header is
+  length-validated only, so a forged key must not be able to forge log lines. Lesson #20.
 
 ### Fixed (M5 B1 selo — runtime-smoke leg 7 red ×2, hotfix smoke)
 
