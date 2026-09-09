@@ -9,6 +9,7 @@ import io.dargent.payments.domain.model.Payment;
 import io.dargent.payments.domain.model.Txid;
 import io.dargent.payments.domain.port.out.PaymentQueryPort;
 import io.dargent.payments.domain.port.out.PaymentRail;
+import io.dargent.payments.domain.port.out.RailAssignmentPort;
 import io.dargent.shared.money.Money;
 import jakarta.servlet.http.HttpServletRequest;
 import java.security.MessageDigest;
@@ -52,7 +53,8 @@ class PaymentController {
     private final PaymentQueryPort queryPort;
     private final CreatePaymentUseCase createUseCase;
     private final RefundPaymentUseCase refundUseCase;
-    private final PaymentRail rail;
+    private final Map<String, PaymentRail> railsByRail;
+    private final RailAssignmentPort railAssignment;
     private final Clock clock;
     private final tools.jackson.databind.ObjectMapper objectMapper;
 
@@ -60,13 +62,19 @@ class PaymentController {
             PaymentQueryPort queryPort,
             CreatePaymentUseCase createUseCase,
             RefundPaymentUseCase refundUseCase,
-            PaymentRail rail,
+            List<PaymentRail> rails,
+            RailAssignmentPort railAssignment,
             Clock clock,
             tools.jackson.databind.ObjectMapper objectMapper) {
         this.queryPort = queryPort;
         this.createUseCase = createUseCase;
         this.refundUseCase = refundUseCase;
-        this.rail = rail;
+        // Keyed by the rail's own discriminator (bean names are an opaque Spring artifact): a rail
+        // with no presentment (card) yields null through the same lookup each rail answers.
+        this.railsByRail = rails.stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        PaymentRail::rail, r -> r, (a, b) -> a, java.util.LinkedHashMap::new));
+        this.railAssignment = railAssignment;
         this.clock = clock;
         this.objectMapper = objectMapper;
     }
@@ -80,15 +88,18 @@ class PaymentController {
         long amount = body.validatedAmount();
         String description = body.validatedDescription();
         Duration expiresIn = body.parsedExpiresIn();
+        String method = body.validatedMethod();
+        String cardToken = body.validatedCardToken(method);
         String idempotencyKey = idempotencyKey(request);
         String requestId = (String) request.getAttribute(RequestIdFilter.ATTRIBUTE);
 
         log.info(
-                "Payment create request endpoint={} merchant_id={} amount_cents={} expires_in={}",
+                "Payment create request endpoint={} merchant_id={} amount_cents={} expires_in={} method={}",
                 ENDPOINT,
                 principal.merchantId(),
                 amount,
-                expiresIn);
+                expiresIn,
+                method);
 
         CreatePaymentUseCase.Output out = createUseCase.execute(new CreatePaymentUseCase.Input(
                 principal.merchantId(),
@@ -99,7 +110,9 @@ class PaymentController {
                 requestId,
                 Money.of(amount, BRL),
                 description,
-                expiresIn));
+                expiresIn,
+                method,
+                cardToken));
 
         MDC.put("txid", out.txid().value());
         log.info(
@@ -139,8 +152,14 @@ class PaymentController {
                 p.amount().cents(),
                 BRL,
                 p.expiresAt(),
-                rail.presentment(p.txid(), p.amount().cents()),
+                presentmentFor(p.txid(), p.amount().cents()),
                 Duration.between(clock.instant(), p.expiresAt())));
+    }
+
+    /** BR Code presentment for the payment's rail (card → null; unknown assignment → PIX default). */
+    private String presentmentFor(Txid txid, long amountCents) {
+        PaymentRail selected = railsByRail.getOrDefault(railAssignment.railOf(txid), railsByRail.get("pix"));
+        return selected.presentment(txid, amountCents);
     }
 
     @GetMapping
@@ -253,13 +272,32 @@ class PaymentController {
 
     // ---------------------------------------------------------------- body model
 
-    record CreatePaymentRequest(Integer amount, String description, String expiresIn) {
+    record CreatePaymentRequest(Integer amount, String description, String expiresIn, String method, String cardToken) {
 
         long validatedAmount() {
             if (amount == null || amount <= 0) {
                 throw new RequestValidationException(Map.of("amount", "must be a positive integer"));
             }
             return amount;
+        }
+
+        String validatedMethod() {
+            String resolved =
+                    method == null || method.isBlank() ? "pix" : method.trim().toLowerCase(Locale.ROOT);
+            if (!"pix".equals(resolved) && !"card".equals(resolved)) {
+                throw new RequestValidationException(Map.of("method", "must be \"pix\" or \"card\""));
+            }
+            return resolved;
+        }
+
+        String validatedCardToken(String resolvedMethod) {
+            if ("card".equals(resolvedMethod) && (cardToken == null || cardToken.isBlank())) {
+                throw new RequestValidationException(Map.of("cardToken", "is required for method \"card\""));
+            }
+            if (cardToken != null && cardToken.length() > 500) {
+                throw new RequestValidationException(Map.of("cardToken", "must be at most 500 characters"));
+            }
+            return cardToken;
         }
 
         Duration parsedExpiresIn() {

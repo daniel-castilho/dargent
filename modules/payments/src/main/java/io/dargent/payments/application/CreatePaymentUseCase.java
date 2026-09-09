@@ -38,6 +38,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  *   <li>BD-8 — outbox payloads are serialized once through {@link EventSerializer} inside the envelope
  *   factory (no {@code String.format}); the column carries the full E3 §5.6 envelope (E6 owner decision).</li>
  *   <li>BD-9 — the PSP callback URL comes from the injected config value, never a literal.</li>
+ *   <li>BD-10 — the rail is selected per request from the injected rail map by {@code input.method()}
+ *   (default "pix"); a PSP decline (card 402) mirrors the exhaustion path with reason
+ *   {@code card_declined} and re-throws so the HTTP layer answers 402.</li>
  * </ul>
  */
 public final class CreatePaymentUseCase {
@@ -49,7 +52,7 @@ public final class CreatePaymentUseCase {
     private final IdempotencyStore idempotencyStore;
     private final OutboxWriter outboxWriter;
     private final AuditWriter auditWriter;
-    private final PaymentRail rail;
+    private final Map<String, PaymentRail> rails;
     private final TxidGenerator txidGenerator;
     private final TransactionTemplate txTemplate;
     private final EventEnvelopeFactory envelopeFactory;
@@ -64,7 +67,7 @@ public final class CreatePaymentUseCase {
             IdempotencyStore idempotencyStore,
             OutboxWriter outboxWriter,
             AuditWriter auditWriter,
-            PaymentRail rail,
+            Map<String, PaymentRail> rails,
             TxidGenerator txidGenerator,
             TransactionTemplate txTemplate,
             EventEnvelopeFactory envelopeFactory,
@@ -77,7 +80,7 @@ public final class CreatePaymentUseCase {
         this.idempotencyStore = idempotencyStore;
         this.outboxWriter = outboxWriter;
         this.auditWriter = auditWriter;
-        this.rail = rail;
+        this.rails = rails;
         this.txidGenerator = txidGenerator;
         this.txTemplate = txTemplate;
         this.envelopeFactory = envelopeFactory;
@@ -91,9 +94,10 @@ public final class CreatePaymentUseCase {
     public Output execute(Input input) {
         Instant now = clock.instant();
         Instant expiresAtRequested = now.plus(input.expiresIn());
+        PaymentRail rail = rails.getOrDefault(input.method(), rails.get("pix"));
 
         // 1. Core transaction (atomic: idempotency IN_FLIGHT -> payment -> outbox -> audit)
-        CoreOutcome core = txTemplate.execute(status -> runCore(input, now, expiresAtRequested));
+        CoreOutcome core = txTemplate.execute(status -> runCore(input, now, expiresAtRequested, rail));
         if (core.existing() != null) {
             return handleExisting(core.existing(), input);
         }
@@ -103,14 +107,22 @@ public final class CreatePaymentUseCase {
         ChargeResult psp;
         try {
             psp = rail.createCharge(new CreateChargeInput(
-                    payment.txid(), input.amount().cents(), expiresAtRequested, pspCallbackUrl, input.description()));
+                    payment.txid(),
+                    input.amount().cents(),
+                    expiresAtRequested,
+                    pspCallbackUrl,
+                    input.description(),
+                    input.cardToken()));
+        } catch (PspDeclinedException e) {
+            runDeclined(payment, input, now);
+            throw e;
         } catch (RuntimeException e) {
             runExhaustion(payment, input, now);
             throw new PspUnavailableException("psp_create_exhausted", e);
         }
 
         // 3. Success tx — PSP truth + COMPLETED + exact 201 snapshot (BD-3, BD-6)
-        runSuccess(payment, psp, input, now);
+        runSuccess(payment, psp, input, now, rail);
 
         return new Output(
                 psp.txid(),
@@ -122,7 +134,7 @@ public final class CreatePaymentUseCase {
 
     // ------------------------------------------------------------------ core
 
-    private CoreOutcome runCore(Input input, Instant now, Instant expiresAtRequested) {
+    private CoreOutcome runCore(Input input, Instant now, Instant expiresAtRequested, PaymentRail rail) {
         var existing = idempotencyStore.insertIfAbsent(
                 input.merchantId(), input.idempotencyKey(), input.endpoint(), input.requestFingerprint());
         if (existing.isPresent()) {
@@ -192,13 +204,15 @@ public final class CreatePaymentUseCase {
         Txid txid = new Txid(String.valueOf(body.get("txid")));
         PaymentStatus status = PaymentStatus.valueOf(String.valueOf(body.get("status")));
         Instant expiresAt = Instant.parse(String.valueOf(body.get("expiresAt")));
-        String brcode = String.valueOf(body.get("brcode"));
+        // Card snapshots carry a null brcode (no presentment on that rail): null must replay as
+        // null, never as the literal string "null" (M5 S1 FINDING-S1-1).
+        String brcode = body.get("brcode") == null ? null : String.valueOf(body.get("brcode"));
         return new Output(txid, status, expiresAt, brcode, true);
     }
 
     // -------------------------------------------------------------- PSP phase
 
-    private void runSuccess(Payment payment, ChargeResult psp, Input input, Instant now) {
+    private void runSuccess(Payment payment, ChargeResult psp, Input input, Instant now, PaymentRail rail) {
         txTemplate.executeWithoutResult(t -> {
             Payment reRead = requireReRead(payment.txid());
             Payment updated = reRead.withExpiresAt(psp.expiresAt());
@@ -231,9 +245,26 @@ public final class CreatePaymentUseCase {
                 Payment latestFailed = latest.markFailed("psp_create_exhausted", clock.instant());
                 paymentRepo.updateIfVersionMatches(latestFailed, latestVersion);
             }
-            appendFailedOutbox(failed, input, now);
+            appendFailedOutbox(failed, input, now, "psp_create_exhausted");
             idempotencyStore.delete(input.merchantId(), input.idempotencyKey(), input.endpoint());
             metrics.transition("PENDING", "FAILED", "create_exhaustion");
+        });
+    }
+
+    private void runDeclined(Payment payment, Input input, Instant now) {
+        txTemplate.executeWithoutResult(t -> {
+            Payment reRead = requireReRead(payment.txid());
+            int expectedVersion = reRead.version(); // DB version BEFORE the transition (BD-3)
+            Payment failed = reRead.markFailed("card_declined", clock.instant());
+            if (!paymentRepo.updateIfVersionMatches(failed, expectedVersion)) {
+                Payment latest = requireReRead(payment.txid());
+                int latestVersion = latest.version();
+                Payment latestFailed = latest.markFailed("card_declined", clock.instant());
+                paymentRepo.updateIfVersionMatches(latestFailed, latestVersion);
+            }
+            appendFailedOutbox(failed, input, now, "card_declined");
+            idempotencyStore.delete(input.merchantId(), input.idempotencyKey(), input.endpoint());
+            metrics.transition("PENDING", "FAILED", "card_declined");
         });
     }
 
@@ -243,12 +274,12 @@ public final class CreatePaymentUseCase {
                 .orElseThrow(() -> new IllegalStateException("payment vanished during create: " + txid.value()));
     }
 
-    private void appendFailedOutbox(Payment payment, Input input, Instant now) {
+    private void appendFailedOutbox(Payment payment, Input input, Instant now, String reason) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("txid", payment.txid().value());
         payload.put("merchantId", payment.merchantId().toString());
         payload.put("amount", payment.amount().cents());
-        payload.put("reason", "psp_create_exhausted");
+        payload.put("reason", reason);
         payload.put("failedAt", now.toString());
         String envelope = envelopeFactory.envelope(
                 "payment.failed", 1, payment.txid().value(), payment.merchantId(), input.requestId(), payload, now);
@@ -281,7 +312,9 @@ public final class CreatePaymentUseCase {
             String requestId,
             Money amount,
             String description,
-            Duration expiresIn) {}
+            Duration expiresIn,
+            String method,
+            String cardToken) {}
 
     public record Output(Txid txid, PaymentStatus status, Instant expiresAt, String brcode, boolean replay) {}
 
