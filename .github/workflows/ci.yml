@@ -163,7 +163,7 @@ jobs:
       # push (PR heads are unvetted; fork PRs cannot write packages). GITHUB_TOKEN only — no PATs.
       - name: Login to GHCR
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0 (SHA-pinned, supply-chain per threat-model)
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v3.7.0 (SHA-pinned, supply-chain per threat-model)
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
