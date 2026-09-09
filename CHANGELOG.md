@@ -5,6 +5,20 @@ versioning: semantic, cut from annotated git tags (see [release-runbook](docs/re
 
 ## [Unreleased]
 
+### Fixed (M5 B1 selo — runtime-smoke leg 7 red ×2, hotfix smoke)
+
+- **smoke.sh leg 7 asserted a `fee` field the GET contract never emits** (design §6.2
+  has no `fee` — documented E12 deviation). Both CI runtime-smoke reds (PR CI + main
+  push #286) were this single assertion; legs 1–6 and the card rail handshake were
+  green in every run. Leg 7 now asserts what the contract emits on a confirmed card
+  GET: amount echo + explicit-null `brcode` (FINDING-S1-2).
+- **Extends FINDING-S1-3 masking analysis:** the rail-column no-op (JPA lazy flush)
+  masked **two more** runtime behaviors, now visible: the controller detail presentment
+  would have emitted a PIX BR Code on card GETs (`railOf` defaulted to `pix`), and the
+  reconciler would have polled the PIX cob endpoint for card rows (404 → never
+  reconciled). Smoking out: smoke leg 7 (`brcode:null` on card GET) + CardPaymentIT
+  reconciler test. No code change needed — the flush fix already removes all three.
+
 ### Added (M5 S1 — card as second rail, PR #B)
 
 - **Card payment rail (S1).** A new `CardChargeAdapter` implements the `PaymentRail`

@@ -13,6 +13,9 @@
 #   2 replay    same key+body → 201, Idempotent-Replay: true, response byte-equal (BD-6)
 #   3 pay       POST {psp}/cobs/{txid}/payments → 200 (simulator marks the charge paid)
 #   4 confirm   deadline-poll GET /v1/payments/{txid} → CONFIRMED, txid/amount echoed, X-Request-Id
+#   5 card      card create → 201 PENDING + rail=card + X-Request-Id (webhook fires during create)
+#   6 card      deadline-poll GET → CONFIRMED (same webhook path as PIX; no explicit pay)
+#   7 card      GET detail → amount echoed + explicit-null brcode retained (FINDING-S1-2)
 #
 # Deviation (disclosed in E12 handoff): design §6.2 GET has NO `fee` field; the spec's
 # "status/fee/request_id" is a wording artifact — we assert status + txid echo + amount echo + header.
@@ -113,9 +116,11 @@ CARD_GET_HDR=$(command curl -sSI -H "Authorization: Bearer ${API_KEY}" "$API_BAS
 [[ -n "$CARD_GET_HDR" ]] || fail "leg 6: X-Request-Id header absent on card GET"
 note "leg 6 ok — CONFIRMED ($(echo "$CARD_GET_HDR" | cut -d' ' -f2))"
 
-note "leg 7/7 card GET detail echoes amount and includes fee"
+note "leg 7/7 card GET detail echoes amount and keeps explicit-null brcode"
 grep -q '"amount":100' <<<"$CARD_FINAL" || fail "leg 7: amount not echoed: $CARD_FINAL"
-grep -q '"fee"' <<<"$CARD_FINAL" || fail "leg 7: fee field missing: $CARD_FINAL"
+# The confirmed card detail retains the explicit-null brcode (FINDING-S1-2) and —
+# per the E12 deviation above — the GET contract has NO `fee` field, so none is asserted.
+grep -q '"brcode":null' <<<"$CARD_FINAL" || fail "leg 7: brcode not null on card GET: $CARD_FINAL"
 note "leg 7 ok"
 
 note "SMOKE PASS"
