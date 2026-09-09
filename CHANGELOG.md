@@ -5,6 +5,22 @@ versioning: semantic, cut from annotated git tags (see [release-runbook](docs/re
 
 ## [Unreleased]
 
+### Fixed (E16 queue triage — dependabot updates landed green)
+
+- **OWASP dependency-check pinned 13.0.0 → 12.2.2.** The 13.0.0 line is broken in keyless
+  mode (upstream `dependency-check#8715`: an EMPTY string is passed as the NVD key instead of
+  null, regression from #8549 — fix merged upstream but unreleased), so runs without the
+  secret died with `Invalid API Key, length of 0`. Dependabot PRs receive NO repo secrets, so
+  the gate had to genuinely work keyless. Last 12.x restores the E13 design
+  (throttled-but-working); the pom no longer reads `env.NVD_API_KEY` — CI passes `-DnvdApiKey`
+  only when the secret exists (ci.yml + release.yml). Proven both ways locally.
+- **Dependabot queue shutdown:** maven group merged (#42: compile+test 3.9.16, ArchUnit 1.5.0,
+  Testcontainers 2.0.5, SpotBugs plugin 4.10.4.1, tools.jackson 3.2.2 + `jackson-annotations`
+  2.22 pin in dependencyManagement for Flyway, jqwik 1.10.1, WireMock 3.13.2, AWS SDK 2.54.13;
+  SpotBugs 4.10 gate fix in `OutboxLagGauge`); then the CI-action and compose groups (#38
+  setup-java 6, #39 login-action 4.6.0, #41 compose group 3 updates). Queue empty as of
+  2026-09-09.
+
 ### Changed (E16 S5 — dependabot live: weekly, grouped, noise-budgeted)
 
 - `.github/dependabot.yml`: three ecosystems (maven production deps, github-actions SHA-pin
