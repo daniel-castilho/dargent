@@ -33,7 +33,8 @@ healthy"), distributed tracing deliberately out (a modular monolith with correla
 
 ## 3. Metrics (Micrometer → Prometheus at `/actuator/prometheus`)
 
-**Status: live (E11; proof counter + SLO buckets added in E12; webhook abuse rejections added in E15 S1).** All 10
+**Status: live (E11; proof counter + SLO buckets added in E12; webhook abuse rejections added in E15 S1; cache
+read counters added in M5 S2; webhook reprocess added in M5 S4).** All 14
 series below are wired end-to-end and asserted — with their frozen tag vocabularies and non-zero values (proof-fail
 and webhook-rejections asserted PRESENT AT 0) — on a real `/actuator/prometheus` scrape of a prod-profile boot by
 `MetricsScrapeIT` (CI). Names are FROZEN: renaming any series is a contract break.
@@ -53,6 +54,7 @@ and webhook-rejections asserted PRESENT AT 0) — on a real `/actuator/prometheu
 | `dargent_cache_hits_total` | counter | `path` (idempotency-replay) | Replay-cache reads served from Redis (M5 S2) — is the cache paying for itself? |
 | `dargent_cache_misses_total` | counter | `path` (idempotency-replay) | Cache reads that fell to the DB (first-touch / TTL expiry) |
 | `dargent_cache_failopen_total` | counter | `path` (idempotency-replay) | Cache failures absorbed (Redis down/unhealthy) — the cache is fail-open by contract; sustained growth = Redis needs attention, the money path does NOT |
+| `dargent_webhook_reprocess_total` | counter | `outcome` (processed, duplicate, ignored, attack_evidence, not_found) | Admin re-drives of a stored webhook row (M5 S4) — who/how often operators re-drive; `attack_evidence` trips are the ones that page |
 
 Naming follows Micrometer conventions (dots, lower-case); Prometheus exposition renders `dargent.*` as `dargent_*`.
 

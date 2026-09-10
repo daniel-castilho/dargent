@@ -33,7 +33,7 @@ Mutation testing. Any gate change beyond the k6 addition. Tag v1.2.0 (owner call
 | Var (proposed) | Purpose | Default | Notes |
 |---|---|---|---|
 | `DARGENT_CACHE_REDIS_*` (connection/ttl) | S2 cache | off → DB direct (fail-open trivially) | Q-batch finalizes names |
-| `DARGENT_WEBHOOK_REPROCESS_ADMIN_KEY` | S4 admin | empty = 404-hidden | house pattern; reuse vs dedicated via Q-batch |
+| `DARGENT_WEBHOOK_REPROCESS_ADMIN_KEY` | S4 admin | empty = 404-hidden | Q-batch: **dedicated key** (not shared with outbox) — reprocess can CONFIRM PENDING money (wider blast radius than requeue), so it gets its own key with its own rotation cadence, mirroring the E9/E15 one-key-per-surface discipline; counter `dargent.webhook.reprocess` tag `outcome` (processed, duplicate, ignored, attack_evidence, not_found) |
 | k6 gate inputs (VUs, duration, thresholds) | S3 CI | sized to runner budget | thresholds from honest baselines |
 
 ## §5 Acceptance matrix (fill at S5)

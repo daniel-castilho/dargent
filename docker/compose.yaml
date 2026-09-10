@@ -84,6 +84,9 @@ services:
       # (same posture as the ledger admin key above — never change the default without owner sign-off).
       # scripts/republish-outbox.sh exports the operator's key here.
       DARGENT_OUTBOX_ADMIN_KEY: ${DARGENT_OUTBOX_ADMIN_KEY:-}
+      # M5 S4: webhook reprocess admin gate. Dedicated key (separate blast radius/rotation cadence
+      # from the outbox/ledger admin keys). Default EMPTY = 404-hidden (house posture).
+      DARGENT_WEBHOOK_REPROCESS_ADMIN_KEY: ${DARGENT_WEBHOOK_REPROCESS_ADMIN_KEY:-}
       DARGENT_EXPIRATION_ENABLED: ${DARGENT_EXPIRATION_ENABLED:-false}
       # M5 S2 (D3): Redis read cache — opt-in (compose profile `cache` + enabled=true). Default
       # false → zero Redis beans, DB direct (fail-open trivially).

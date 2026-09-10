@@ -113,6 +113,47 @@ public final class WebhookIntakeUseCase {
                 status -> processFromPayload(input.payloadRaw(), input.providerEventId(), input.requestId()));
     }
 
+    /**
+     * M5 S4: admin re-drive of a stored {@code webhook_events} row through the intake core. Dedupe
+     * makes this idempotent by design — the {@code provider_event_id} UNIQUE already proved itself on
+     * intake, so a re-run of the tool can never double-confirm or double-journal a payment.
+     * <ul>
+     *   <li>unknown {@code providerEventId} → {@link ReprocessResult.NotFound}</li>
+     *   <li>signature-valid=false → {@link ReprocessResult.AttackEvidence}: fail-closed immutable
+     *       attack audit (AGENTS §4.4), never re-driven</li>
+     *   <li>already PROCESSED → {@link ReprocessResult.AlreadyProcessed} (no-op, idempotent)</li>
+     *   <li>RECEIVED or IGNORED → re-run the intake core on the stored (immutable) {@code payload_raw}
+     *       — same transaction as a redelivery would, same conditional confirm</li>
+     * </ul>
+     */
+    public ReprocessResult reprocess(String providerEventId) {
+        Optional<WebhookEventRecord> row = webhookEventStore.findByProviderEventId(providerEventId);
+        if (row.isEmpty()) {
+            return ReprocessResult.notFound();
+        }
+        // Fail-closed: signature-invalid rows are immutable attack evidence (they were persisted on a
+        // 401 before any business decision) and must never become the seed of a confirmation.
+        if (!row.get().signatureValid()) {
+            return ReprocessResult.attackEvidence();
+        }
+        if ("PROCESSED".equals(row.get().status())) {
+            return ReprocessResult.alreadyProcessed();
+        }
+        // The row's txid (already ≤25 chars by schema) is the money aggregate this re-drive
+        // touches — the admin audit records THAT, never the multi-part provider_event_id.
+        String rowTxid = row.get().txid();
+        // RECEIVED or IGNORED → re-drive from payload_raw. The original request id is not recoverable
+        // on an admin re-drive, so the confirm envelope carries null (matches what a re-delivery
+        // already does for a RECEIVED row — the money path is identical).
+        Outcome outcome =
+                txTemplate.execute(status -> processFromPayload(row.get().payloadRaw(), providerEventId, null));
+        return switch (outcome) {
+            case Outcome.Processed ignored -> ReprocessResult.reProcessed(rowTxid);
+            case Outcome.Duplicate ignored -> ReprocessResult.alreadyProcessed();
+            case Outcome.Ignored i -> ReprocessResult.ignoredReProcess(i.reason(), rowTxid);
+        };
+    }
+
     private Outcome processFromPayload(String payloadRaw, String providerEventId, String requestId) {
         // 2. Parse payload_raw
         ParsedPayload payload;
@@ -262,6 +303,50 @@ public final class WebhookIntakeUseCase {
 
     public record ParsedPayload(
             String type, String txid, String endToEndId, long amount, String paidAtText, Instant paidAt) {}
+
+    /**
+     * Result of an admin re-drive (M5 S4), distinguished so the HTTP adapter can map each branch
+     * honestly: not-found vs attack-evidence (refused, fail-closed) vs idempotent no-op vs a real
+     * outcome from the intake core.
+     */
+    public sealed interface ReprocessResult
+            permits ReprocessResult.NotFound,
+                    ReprocessResult.AttackEvidence,
+                    ReprocessResult.AlreadyProcessed,
+                    ReprocessResult.ReProcessed,
+                    ReprocessResult.IgnoredReProcess {
+        static ReprocessResult notFound() {
+            return new NotFound();
+        }
+
+        static ReprocessResult attackEvidence() {
+            return new AttackEvidence();
+        }
+
+        static ReprocessResult alreadyProcessed() {
+            return new AlreadyProcessed();
+        }
+
+        static ReprocessResult reProcessed(String txid) {
+            return new ReProcessed(txid);
+        }
+
+        static ReprocessResult ignoredReProcess(String reason, String txid) {
+            return new IgnoredReProcess(reason, txid);
+        }
+
+        record NotFound() implements ReprocessResult {}
+
+        record AttackEvidence() implements ReprocessResult {}
+
+        record AlreadyProcessed() implements ReprocessResult {}
+
+        /** The re-drive confirmed a payment; {@code txid} is that payment (the money aggregate). */
+        record ReProcessed(String txid) implements ReprocessResult {}
+
+        /** The re-drive re-ignored the row; {@code txid} is the row's txid (nullable). */
+        record IgnoredReProcess(String reason, String txid) implements ReprocessResult {}
+    }
 
     public sealed interface Outcome permits Outcome.Processed, Outcome.Duplicate, Outcome.Ignored {
         static Outcome processed() {

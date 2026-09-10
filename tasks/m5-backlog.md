@@ -70,10 +70,19 @@ abstraction proof — they land TOGETHER or not at all), B2 = S2–S5.
    idempotent by design; double-process impossible by the existing event_id UNIQUE).
 2. House ladder: unset→404-hidden, wrong key→401, right→200 (+body), real actor in audit_log
    (mirrors OutboxAdminRotationIT).
-3. Key posture (Q-batch): reuse `DARGENT_OUTBOX_ADMIN_KEY`-style dedicated env
-   (`DARGENT_WEBHOOK_REPROCESS_ADMIN_KEY`) vs shared admin key — spec §4 table entry with rationale.
+3. Key posture (Q-batch): **dedicated** `DARGENT_WEBHOOK_REPROCESS_ADMIN_KEY` env (NOT shared with
+   outbox) — reprocess can CONFIRM PENDING money, so it gets its own key + own rotation cadence
+   (spec §4 table row with rationale).
 4. Counter for reprocess invocations; observability line.
 5. Evidence: rotation IT run ids; negative-path log lines.
+
+Done ✅ — `reprocess` sealed-outcome re-drive; controller + SecurityConfig explicit rule; audit keyed
+to the payment **txid** (not the 51-char provider_event_id — `audit_log.aggregate_id` is varchar(25),
+the varchar violation surfaced as a 500 in the ITs and was fixed in place); `IgnoredReProcess` carries
+the row's txid; `webhook_reprocessed` audit writes only on a real state change, in the same tx.
+Counter `dargent.webhook.reprocess{outcome=…}` (5 frozen tags) — presence asserted in MetricsScrapeIT
+(not_found driven over the real surface); WebhookReprocessIT 6/6, WebhookReprocessAdminRotationIT 2/2,
+WebhookIntakeUseCaseTest 17/17, full green + k6 gate evidence at the PR.
 
 ### S5 — Docs + milestone flip + citation — 1 PR
 

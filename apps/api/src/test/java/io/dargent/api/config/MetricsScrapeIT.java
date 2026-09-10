@@ -92,6 +92,9 @@ import tools.jackson.databind.json.JsonMapper;
  *   <li>{@code dargent_webhook_rejections_total{reason=rate_limited|body_too_large}} (E15 S1 —
  *       PRESENT at 0: the abuse filter pre-registers both reasons; the S2 alert rule needs the
  *       presence to evaluate)</li>
+ *   <li>{@code dargent_webhook_reprocess_total{outcome=not_found}} (M5 S4 — the not_found
+ *       outcome driven through the real admin surface; the other four tags are carved by
+ *       WebhookReprocessIT)</li>
  *   <li>{@code http_server_requests_seconds_bucket{le="0.25"}} (N12 — SLO bucket line exists)</li>
  * </ol>
  */
@@ -209,6 +212,8 @@ class MetricsScrapeIT {
         registry.add("DARGENT_NOTIFS_QUEUE_URL", () -> notifsUrl);
         // E13 R3: /v1/ledger/proof is admin-gated — the scrape's key doubles as the admin key.
         registry.add("DARGENT_LEDGER_ADMIN_KEY", () -> adminKeyForScrape);
+        // M5 S4: webhook reprocess admin — same scrape key (dedicated env, valid DB key).
+        registry.add("DARGENT_WEBHOOK_REPROCESS_ADMIN_KEY", () -> adminKeyForScrape);
     }
 
     @BeforeEach
@@ -334,6 +339,21 @@ class MetricsScrapeIT {
                 .body();
         assertThat(proofBody).contains("\"ok\":true");
 
+        // 12. webhook reprocess (E16 M5 S4): drive ONE unknown-id call through the real admin
+        //     surface → not_found verdict; the other four outcome tags are registered lazily on
+        //     their own branches (carved non-zero by WebhookReprocessIT).
+        var repr = http.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create(baseUrl + "/v1/webhooks/reprocess"))
+                        .header("Content-Type", "application/json")
+                        .header("Authorization", "Bearer " + adminKeyForScrape)
+                        .header("X-Request-Id", "req-metrics-reproc")
+                        .POST(HttpRequest.BodyPublishers.ofString(
+                                "{\"providerEventId\":\"no-such-webhook-row|payment.confirmed\"}"))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(repr.statusCode()).isEqualTo(404);
+
         // ======================================================================= scrape + asserts
         String scrape = scrapePrometheus();
         assertAllSeries(scrape);
@@ -424,6 +444,11 @@ class MetricsScrapeIT {
         // 11. N12 SLO buckets: the 0.25s bucket line exists (http_server_requests_seconds_bucket).
         assertThat(scrape).contains("http_server_requests_seconds_bucket{");
         assertThat(scrape).containsPattern("http_server_requests_seconds_bucket\\{[^}]*le=\"0.25\"[^}]*\\}");
+
+        // 12. webhook reprocess (E16 M5 S4): not_found was driven (non-zero) above; the other
+        //     frozen outcome tags are carved by WebhookReprocessIT (processed, duplicate, ignored,
+        //     attack_evidence) — presence of the driven tag is the contract here.
+        assertSeries(scrape, "dargent_webhook_reprocess_total", "outcome=\"not_found\"");
     }
 
     // ================================================================================ helpers
