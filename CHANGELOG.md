@@ -5,6 +5,25 @@ versioning: semantic, cut from annotated git tags (see [release-runbook](docs/re
 
 ## [Unreleased]
 
+### Added (M5 S3 — k6 hard gate, D4 money-path tripwire)
+
+- **The money path now has teeth.** `scripts/load/k6-gate.js` + `scripts/ci-k6-gate.sh` + job
+  `k6-gate` in `ci.yml`: a genuine regression tripwire on create → replay → pay → confirm, seeded
+  from the E16 honest baseline (create p95 37.38ms spine-on → **75ms tripwire = 2× with margin**,
+  generous vs the 250ms SLO; `http_req_failed == 0` 0-tolerance; walls replay/pay < 250ms,
+  confirm < 100ms, checks > 0.99).
+- **Bite-proof by construction (mandatory, same job):** leg G4 reruns the gate with an impossible
+  threshold (`p(95)<1ms`) that MUST exit red — a gate that cannot be shown biting is not a gate.
+  The red run is evidence, never retried away.
+- **Cadence/budget (D4):** push to main + `workflow_dispatch` only — no per-PR cost. VUs (8)
+  sized to the CI runner. No retry on genuine breach: rename the threshold, don't hope it away.
+- **Webhook limiter tuned for the run, not measured:** the gate gives the intake generous headroom
+  (`DARGENT_WEBHOOK_RATE_LIMIT_*` overridden, E15 spec §4 "tests tune limits explicitly") so the
+  confirm-leg measures confirm, not the abuse-control limiter (whose own ITs — rate limit + body
+  cap — gate it already).
+- **Evidence:** local G1-G4 PASS — green run 100% (10262/10262 checks, create p95 28.2ms,
+  0/7330 HTTP failures, 1466/1466 CONFIRMED) + bite run red exit 99; PR runs green.
+
 ### Fixed (M5 hotfix — blue-green upgrade contract restored, Option A: out-of-order migrations)
 
 - **The bug:** a v1.1.0 database (history …V112 payments, V207 ledger, V301 notifications) booting
