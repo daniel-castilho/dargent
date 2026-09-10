@@ -1,9 +1,17 @@
 # Dargent load test baseline (E15 S3 + E16 S3 honest run)
 
-Consultative money-path baseline. **NOT a CI gate** (no per-push job). One number
-published: 414 HTTP requests/s sustained by 24 VUs with a 0.00% error rate on the full
-create → idempotent replay → pay → confirm (webhook roundtrip) money path, against a
-single-host docker compose stack.
+Consultative money-path baseline that **seeds the M5 S3 hard gate** (`scripts/load/k6-gate.js`,
+job `k6-gate` in `ci.yml`, legs in `scripts/ci-k6-gate.sh`). One number published: 414 HTTP
+requests/s sustained by 24 VUs with a 0.00% error rate on the full create → idempotent replay →
+pay → confirm (webhook roundtrip) money path, against a single-host docker compose stack.
+
+## The gate (M5 S3, D4) — what this baseline became
+
+The M5 S3 gate is a **regression tripwire, not an SLA** (contract in `tasks/m5-prompt.md` §2.4):
+thresholds seeded from the E16 honest numbers below with margin, gate failure = red build, and
+every gate run carries its own bite-proof leg (an impossible threshold that MUST exit red — a gate
+that cannot be shown biting is not a gate). Cadence/budget: push to main + `workflow_dispatch`
+only (no per-PR cost). See `scripts/load/k6-gate.js` for the exact thresholds.
 
 ## Two-row comparison — happy path vs HONEST path (E16 S3)
 
@@ -34,8 +42,9 @@ which the script counts as a failed check while the system itself stays correct)
 the API never degraded: 0 errors, latency well inside SLO. The money path did not break — the
 *confirmation path* shifted from webhook to reconciler under abuse-control defaults.
 
-**This honest number seeds the M5 k6-gate threshold decision (D4) — recorded, not gated**
-(the M5 fence keeps k6 consultative until that epic decides).
+**This honest number seeds the M5 k6-gate threshold decision (D4)** — recorded here, enforced
+by the gate (`scripts/load/k6-gate.js`: create p95 < 75ms = 2x the 37.38ms honest p95, margin
+per D4 adjudication; `http_req_failed == 0`).
 
 ## Run metadata (happy path — E15 S3)
 

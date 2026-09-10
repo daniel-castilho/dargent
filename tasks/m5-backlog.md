@@ -43,15 +43,26 @@ abstraction proof — they land TOGETHER or not at all), B2 = S2–S5.
 4. Hit/miss metrics (`dargent_cache_*`) + one observability.md section.
 5. compose: redis service (profile or always-on — Q-batch), connection env per spec §4 table.
 
-### S3 — k6 hard gate (D4) — 1 PR
+### S3 — k6 hard gate (D4) — 1 PR ✅ (opened as PR #49; merged after CI)
 
-1. Threshold from the E16 honest numbers: p95 create tripwire (channel leaning: 2× the 37.38 ms
-   honest p95 → 75 ms, generous vs the 250 ms SLO) + error-rate tripwire (0-tolerance). Q-batch
-   argues final numbers + margin.
-2. Cadence + budget (Q-batch): per-push on main only vs nightly + PR-label; VU count sized to CI.
-3. Flake policy: one retry on ambient failure; genuine breach = red. **One intentionally-breached
-   run shown red in-PR (bite-proof).**
-4. Evidence: green run + red run + the gate config.
+1. Threshold from the E16 honest numbers: `create p95 < 75ms` (= 2× the 37.38 ms honest p95,
+   generous vs the 250 ms SLO) + `http_req_failed == 0` 0-tolerance; walls replay/pay < 250 ms,
+   confirm < 100 ms, checks > 0.99. Bite-proof **in the same job** (G4, `DARGENT_K6_GATE_BITE=1`
+   → `p(95)<1ms`, MUST exit red — red is evidence, never retried).
+2. Cadence + budget: push to main + `workflow_dispatch` only (no per-PR k6 cost); 8 VUs sized to
+   the CI runner (15s ramp → 45s steady).
+3. Flake policy: no retry on genuine breach — rename the threshold, don't hope it away. Ambient
+   infra failures are the retry case (documented, distinct from breach).
+4. Evidence: **local G1-G4 PASS** — G3 green 100% (10262/10262 checks, create p95 28.2 ms,
+   0/7330 HTTP failures, 1466/1466 CONFIRMED in-deadline; webhook limiter tuned per E15 spec §4
+   so the confirm-leg measures confirm not the abuse limiter) + G4 bite red exit 99. Gate config
+   in-PR. PR CI green (job `k6-gate` + full suite).
+
+  *Divergence found during S3 (recorded as FINDING, NOT resolved in-block): the Proving-the-gate-
+  locally rule exposed the blue-green upgrade boot break (v1.1.0 volume crash-looped on V113
+  below watermark) → fixed by owner-adjudicated Option A (out-of-order migrations), hotfix PR #48
+  merge `33daf52`/main CI `34439423891`. S3 PR documents this as the finding that shaped its own
+  proving harness.*
 
 ### S4 — Webhook reprocessing admin — 1 PR
 

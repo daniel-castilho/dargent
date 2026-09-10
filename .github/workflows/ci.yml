@@ -237,6 +237,37 @@ jobs:
             /tmp/shutdown.probe.body*
           if-no-files-found: ignore
 
+  # M5 S3 (D4): k6 hard gate — genuine regression tripwire on the money path. Threshold seeded
+  # from the E16 honest baseline (create p95 37.38ms spine-on => 2x margin = 75ms; 0-tolerance on
+  # errors); NOT an SLA gate. Cadence/budget: push to main + workflow_dispatch only (per-push on
+  # PR is the D4 budget's excluded cost). Legs G1-G4 in scripts/ci-k6-gate.sh — G4 is the
+  # bite-proof (impossible threshold MUST exit red); a gate that cannot be shown biting is not a
+  # gate. No retry on breach: rename it not retry-hop it (m5-backlog §S3.3).
+  k6-gate:
+    needs: [build]
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build compose images
+        run: |
+          docker build -t dargent-api:compose -f apps/api/Dockerfile .
+          docker build -t dargent-psp-simulator:compose -f apps/psp-simulator/Dockerfile .
+
+      - name: k6 hard gate — money path tripwire (G1-G4)
+        run: bash scripts/ci-k6-gate.sh
+
+      - name: Upload k6 gate logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: k6-gate
+          path: |
+            /tmp/k6-gate-green.log
+            /tmp/k6-gate-bite.log
+          if-no-files-found: ignore
+
   # E13 S3 — Dependency Review: PR gate, fails on high+ severity NEW vulnerabilities in the
   # dependency diff (base vs head). Action SHA-pinned (third-party, design §11.1).
   dependency-review:
