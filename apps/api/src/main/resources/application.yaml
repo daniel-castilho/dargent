@@ -26,6 +26,17 @@ spring:
     # Gap-versioned per-module migrations (payments V1xx, ledger V2xx, notifications V3xx) —
     # each module owns its schema; zero cross-schema FK/JOIN (design.md §5, D2).
     locations: classpath:db/migration/payments, classpath:db/migration/ledger, classpath:db/migration/notifications
+    # BAND PURITY INVARIANT (owner adjudication 2026-09-10, Option A): versions are per-BAND
+    # (V1xx payments, V2xx ledger, V3xx+ notifications-then-later), and bands are isolated —
+    # no migration ever touches another module's schema (AGENTS §2.4; ArchUnit + boundary
+    # script enforce in code). A late migration in a LOWER band therefore cannot conflict with
+    # anything above the global watermark: its objects live in a schema no other migration
+    # references. The global version ordering Flyway sees is an artifact of the shared
+    # flyway_schema_history, not of any real dependency. out-of-order=true closes the class
+    # (V114+ payments lands below V301+ whenever it ships late) and RESTORES the blue-green
+    # upgrade contract: a v1.1.0 database (history …V112, V301) boots release N+1 and applies
+    # V113 after V301 instead of crash-looping on "resolved migration not applied".
+    out-of-order: ${DARGENT_FLYWAY_OUT_OF_ORDER:true}
 
 dargent:
   psp:

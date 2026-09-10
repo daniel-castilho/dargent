@@ -235,7 +235,7 @@ Merchant            api/payments              psp-simulator             LocalSta
 
 ## 5. Data Model
 
-Postgres schemas per module; Flyway with per-module locations (each jar carries its migrations); **forward-only** (D16). Migration versioning convention: payments V1xx, ledger V2xx, notifications V3xx (gap numbering prevents cross-module conflicts and signals ownership).
+Postgres schemas per module; Flyway with per-module locations (each jar carries its migrations); **forward-only** (D16). Migration versioning convention: payments V1xx, ledger V2xx, notifications V3xx (gap numbering prevents cross-module conflicts and signals ownership). **Out-of-order is ON** (owner adjudication 2026-09-10, Option A): bands are pure by construction — no migration ever touches another module's schema — so a late lower-band migration (e.g. payments V113 landing under an existing V301 watermark) is inert to everything above it; `out-of-order` merely restores the blue-green upgrade contract (a release-N database boots N+1 without "resolved migration not applied" crash-loops). Proven by `OutOfOrderUpgradeIT` (v1.1.0-shaped history → full current set → V113 after V301, expand-only backfill).
 
 ### 5.1 Schema `payments`
 
