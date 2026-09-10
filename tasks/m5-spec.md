@@ -45,7 +45,7 @@ Mutation testing. Any gate change beyond the k6 addition. Tag v1.2.0 (owner call
 | S2 | cache on one path; fail-open proven; metrics | PR #47 (`335b635`); `ReplayCacheIT` (Redis down fallback); hit/miss/failopen counters; CWE-117 sanitize | ✅ |
 | S3 | k6 gate biting (green + red proofs) | PR #49 (`75b69d7`); green main `34480696967` (p95 20.78 ms, 10739/10739) + bite leg red; hotfix #48 Option A | ✅ |
 | S4 | reprocess ladder + audit actor | PR #50 (`c2a44b2`); `WebhookReprocessIT` 6/6 + `WebhookReprocessAdminRotationIT` 2/2; dedicated key; the `aggregate_id` varchar(25) guard bit surfaced by the ITs and fixed in place | ✅ |
-| S5 | sweep + **M5 ✅** + flip + citation | flip <commit B>; citation on `docs/epics.md` E17 <run> | ✅ (citation → commit B) |
+| S5 | sweep + **M5 ✅** + flip + citation | flip `1f234e7` green on runs `34500482117` (CI incl. k6-gate G1–G4: p95 17.49 ms, 10808/10808, bite RED 99) + `34500482116` (CodeQL) | ✅ |
 
 ## §6 Evidence policy
 
