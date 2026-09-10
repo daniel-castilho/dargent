@@ -5,6 +5,27 @@ versioning: semantic, cut from annotated git tags (see [release-runbook](docs/re
 
 ## [Unreleased]
 
+### Fixed (M5 hotfix — blue-green upgrade contract restored, Option A: out-of-order migrations)
+
+- **The bug:** a v1.1.0 database (history …V112 payments, V207 ledger, V301 notifications) booting
+  the M5 release crash-looped — Flyway rejected `V113__payments_rail` as "resolved migration
+  not applied" below the global watermark. Clean boots (CI, fresh volumes) were green; only the
+  **upgrade** path broke, which CI never exercised. Found by proving S3 gate legs locally against
+  a real 30h compose volume (the house rule catching what CI misses, second time running).
+- **The fix (owner adjudication Option A):** `spring.flyway.out-of-order=true` (+ band-purity
+  invariant comment in application.yaml). Gap-versioned bands are isolated by construction —
+  no migration touches another module's schema — so out-of-order application of a late
+  lower-band migration is inert; the watermark collision is an artifact of the shared global
+  history. C renumbering rejected (creates new population splits — lesson 19); D unsupported-
+  upgrade rejected (recurring renunciation). Options B (rename V113) was never on the table
+  (§3.8 immutability).
+- **The proof:** `OutOfOrderUpgradeIT` — seeds a true v1.1.0 shape (migrations extracted from
+  the annotated tag via git plumbing, no copies) + pre-M5 payment row, migrates the current set
+  out-of-order, asserts V113 lands AFTER V301 and the expand-only backfill gives the row
+  `rail='pix'`. Plus live evidence: the 30h compose volume boots both colors (green applied
+  `113 - payments rail [out of order]` at rank 19; blue validated 19 migrations, no-op).
+- **Contract consequence:** v1.1.0 → v1.2.0 upgrade is SUPPORTED (declared at S5 release notes).
+
 ### Added (M5 S2 — Redis read cache, D3 idempotent-replay)
 
 - **Idempotent-replay read cache (the ONE hot read path, D3).** `CachedIdempotencyStore`
