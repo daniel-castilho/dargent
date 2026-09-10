@@ -43,6 +43,10 @@ public class SecurityConfig {
                         .authenticated()
                         .requestMatchers("/v1/notifications")
                         .authenticated()
+                        // M5 S4 admin webhook reprocess (dedicated key; the /v1/** catch-all already
+                        // covers it — this explicit rule honors AGENTS §4.1 for every new endpoint)
+                        .requestMatchers("/v1/webhooks/reprocess")
+                        .authenticated()
                         .requestMatchers("/v1/**")
                         .authenticated()
                         .anyRequest()

@@ -425,6 +425,22 @@ class WebhookIntakeUseCaseTest {
         paymentRepo.save(payment);
     }
 
+    private void seedWebhookRow(String status, boolean signatureValid, String payload) {
+        webhookStore.store.put(
+                PROVIDER_EVENT_ID,
+                new WebhookEventRecord(
+                        UUID.randomUUID(),
+                        PROVIDER_EVENT_ID,
+                        PSP_EVENT_ID,
+                        TYPE,
+                        TXID.value(),
+                        payload,
+                        signatureValid,
+                        status,
+                        FIXED_CLOCK.instant(),
+                        null));
+    }
+
     private WebhookIntakeUseCase.Input input() {
         return new WebhookIntakeUseCase.Input(
                 PROVIDER_EVENT_ID, PSP_EVENT_ID, TYPE, TXID.value(), PAYLOAD_RAW, true, CORRELATION_ID);
@@ -593,6 +609,84 @@ class WebhookIntakeUseCaseTest {
         Payment payment = paymentRepo.findByTxid(TXID).orElseThrow();
         assertThat(payment.status()).isEqualTo(PaymentStatus.CONFIRMED);
         assertThat(payment.lateConfirmation()).isTrue();
+    }
+
+    // ============================================================================ M5 S4 admin reprocess
+
+    @Test
+    void reprocess_of_RECEIVED_row_confirms_payment_marks_PROCESSED_and_appends_outbox() {
+        seedPayment(PaymentStatus.PENDING);
+        seedWebhookRow("RECEIVED", true, PAYLOAD_RAW);
+
+        var result = useCase.reprocess(PROVIDER_EVENT_ID);
+
+        assertThat(result).isInstanceOf(WebhookIntakeUseCase.ReprocessResult.ReProcessed.class);
+        assertThat(paymentRepo.findByTxid(TXID).orElseThrow().status()).isEqualTo(PaymentStatus.CONFIRMED);
+        assertThat(webhookStore.store.get(PROVIDER_EVENT_ID).status()).isEqualTo("PROCESSED");
+        assertThat(outboxWriter.entries).hasSize(1);
+    }
+
+    @Test
+    void reprocess_of_IGNORED_row_re_drives_and_confirms_now_that_payment_exists() {
+        // The operator case: a webhook arrived before the payment was visible → IGNORED.
+        // Once the payment exists, the admin re-drive must confirm it through the intake core.
+        seedPayment(PaymentStatus.PENDING);
+        seedWebhookRow("IGNORED", true, PAYLOAD_RAW);
+
+        var result = useCase.reprocess(PROVIDER_EVENT_ID);
+
+        assertThat(result).isInstanceOf(WebhookIntakeUseCase.ReprocessResult.ReProcessed.class);
+        assertThat(paymentRepo.findByTxid(TXID).orElseThrow().status()).isEqualTo(PaymentStatus.CONFIRMED);
+        assertThat(outboxWriter.entries).hasSize(1);
+    }
+
+    @Test
+    void reprocess_of_PROCESSED_row_is_duplicate_no_op() {
+        seedPayment(PaymentStatus.PENDING);
+        useCase.execute(input()); // row PROCESSED, payment CONFIRMED, 1 outbox + 1 audit
+
+        var result = useCase.reprocess(PROVIDER_EVENT_ID);
+
+        assertThat(result).isInstanceOf(WebhookIntakeUseCase.ReprocessResult.AlreadyProcessed.class);
+        assertThat(outboxWriter.entries).hasSize(1);
+        assertThat(auditWriter.entries).hasSize(1);
+        // the duplicate no-op must not bump the payment version again (still 1, not 2)
+        assertThat(paymentRepo.findByTxid(TXID).orElseThrow().version()).isEqualTo(1);
+    }
+
+    @Test
+    void reprocess_of_signature_invalid_attack_row_is_refused() {
+        seedPayment(PaymentStatus.PENDING);
+        seedWebhookRow("IGNORED", false, PAYLOAD_RAW);
+
+        var result = useCase.reprocess(PROVIDER_EVENT_ID);
+
+        assertThat(result).isInstanceOf(WebhookIntakeUseCase.ReprocessResult.AttackEvidence.class);
+        assertThat(paymentRepo.findByTxid(TXID).orElseThrow().status()).isEqualTo(PaymentStatus.PENDING);
+        assertThat(outboxWriter.entries).isEmpty();
+        assertThat(webhookStore.store.get(PROVIDER_EVENT_ID).status()).isEqualTo("IGNORED");
+        assertThat(webhookStore.store.get(PROVIDER_EVENT_ID).signatureValid()).isFalse();
+    }
+
+    @Test
+    void reprocess_of_unknown_provider_event_id_is_not_found() {
+        var result = useCase.reprocess("E9UNKNOWN00000000000000000000X|payment.confirmed");
+
+        assertThat(result).isInstanceOf(WebhookIntakeUseCase.ReprocessResult.NotFound.class);
+    }
+
+    @Test
+    void reprocess_of_amount_mismatch_row_re_ignores_with_reason() {
+        seedPayment(PaymentStatus.PENDING);
+        seedWebhookRow("IGNORED", true, PAYLOAD_RAW.replace("10000", "9999"));
+
+        var result = useCase.reprocess(PROVIDER_EVENT_ID);
+
+        assertThat(result).isInstanceOf(WebhookIntakeUseCase.ReprocessResult.IgnoredReProcess.class);
+        assertThat(((WebhookIntakeUseCase.ReprocessResult.IgnoredReProcess) result).reason())
+                .isEqualTo("amount mismatch");
+        assertThat(webhookStore.store.get(PROVIDER_EVENT_ID).status()).isEqualTo("IGNORED");
+        assertThat(outboxWriter.entries).isEmpty();
     }
 
     @Test

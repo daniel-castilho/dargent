@@ -5,6 +5,25 @@ versioning: semantic, cut from annotated git tags (see [release-runbook](docs/re
 
 ## [Unreleased]
 
+### Added (M5 S4 — webhook reprocessing admin)
+
+- **Operators re-drive stuck webhooks for real.** `POST /v1/webhooks/reprocess` (JSON body
+  `{"providerEventId": ...}`): re-drives a stored `webhook_events` row through the intake core —
+  confirms the payment for a `RECEIVED`/`IGNORED` row carrying a valid confirmed payload; returns
+  `200 {"status":"processed"}` / `duplicate` (idempotent no-op) / `ignored {reason}`; refuses
+  attack evidence (`409 invalid_state`) — a `signature_valid=false` row is immutable flight data,
+  fail-closed (AGENTS §4.4); unknown id → `404`.
+- **Key posture (Q-batch; spec §4):** **dedicated** `DARGENT_WEBHOOK_REPROCESS_ADMIN_KEY`,
+  separate from the outbox key — reprocessing can CONFIRM PENDING money, so it earns its own
+  blast-radius / rotation cadence (E9/E15 one-key-per-surface). Unset → 404-hidden; wrong key →
+  401; SecurityConfig carries an explicit route rule (AGENTS §4.1).
+- **Audit the real actor, on the real aggregate:** `webhook_reprocessed` audit written only on a
+  state change (processed / ignored), keyed to the payment **txid** in the same transaction — the
+  `aggregate_id` varchar(25) guard bit during the ITs (a 51-char `provider_event_id` violated it;
+  surfaced exactly as the DB arbitrates) and the fix landed as tests, not prose.
+- **Metric:** `dargent.webhook.reprocess{outcome=processed|duplicate|ignored|attack_evidence|not_found}`
+  (frozen 5-tag vocabulary; presence asserted in MetricsScrapeIT; observability.md updated).
+
 ### Added (M5 S3 — k6 hard gate, D4 money-path tripwire)
 
 - **The money path now has teeth.** `scripts/load/k6-gate.js` + `scripts/ci-k6-gate.sh` + job
