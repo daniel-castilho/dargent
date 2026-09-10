@@ -91,8 +91,6 @@ communication flows through the outbox → SNS → SQS, and each consumer has it
 
 ## The money flow
 
-> TARGET STATE — narrates what will exist at M3/M5 (most of it is already live; see *Current state*).
-
 ```
 POST /v1/payments (Idempotency-Key) → PENDING + dynamic QR (BR Code, EMV + CRC16)
 payer pays the QR at the simulator's "bank" → PSP fires signed webhook (HMAC + timestamp)
@@ -103,6 +101,11 @@ QR expired but paid late? → resurrection (E5, live) with audit trail
 POST /v1/payments/{txid}/refunds → partial/total, fee returned proportionally (entry [3]+[4]),
 ledger drains the merchant :available balance; concurrent refunds race is DB-arbitrated — exactly
 one wins, the loser is 409 (payments lock) or IGNORED + refund_skipped_balance audit (ledger drain)
+
+second rail (M5): POST /v1/payments {method:"card", cardToken} → PENDING, no QR (brcode:null)
+→ PSP charges → signed webhook → CONFIRMED on the SAME outbox/ledger/journal path
+PSP 402 card_declined → instant FAILED, zero journal, idempotency key deleted (retry = fresh attempt)
+reconciler confirms approved card charges without a webhook (same guaranteed reconcile path)
 ```
 
 ## Documentation
@@ -188,7 +191,9 @@ unit + integration (Testcontainers) → **SpotBugs (Medium+) + Spotless** → **
 NVD-keyed, cached)** → **per-module coverage floors on combined unit+IT data** → **evidence-lint (cited CI runs
 resolve + carry numbers)** → production build → image build with **non-root gate** + **Trivy 2-pass
 (HIGH/CRITICAL gate) + SBOM CycloneDX** → **CodeQL + Dependency Review** → **runtime smoke** (E2E happy path +
-reconciliation chaos + graceful shutdown under load). k6 performance stays consultative. Gate policy:
+reconciliation chaos + graceful shutdown under load). k6 grew from consultative (E16 baseline) to a **hard gate on
+the money path** (M5 S3 — push-to-main + dispatch only, bite-proof: a gate that cannot be shown red is not a gate).
+Gate policy:
 [docs/ci-vulnerability-gates.md](docs/ci-vulnerability-gates.md).
 
 An annotated tag `vX.Y.Z` produces the semver image + GitHub Release with the jar and the SBOM of the exact
@@ -202,7 +207,9 @@ release notes: [docs/releases/](docs/releases/).
 ## Current state
 
 **Latest tagged release: `v1.1.0`** (E15 operational hardening, 2026-09-08) · E16 (operational hygiene)
-shipped on `main` 2026-09-08. See [CHANGELOG.md](CHANGELOG.md).
+shipped on `main` 2026-09-08. **M5 (E17) — the last milestone — complete 2026-09-10: the plan
+completes. Tag `v1.2.0` is an owner call post-epic (release notes pre-authored at `docs/releases/v1.2.0.md`).**
+See [CHANGELOG.md](CHANGELOG.md).
 
 **E6 + E7 ledger (S1–S5) + E10 notifications (S0–S7) + E8 refunds (S2–S7) + E9 delivery hardening complete**
 **on `main`. Ledger consumes `payment.confirmed`, journals double-entry postings, maintains balance proof +**
@@ -213,6 +220,10 @@ shipped on `main` 2026-09-08. See [CHANGELOG.md](CHANGELOG.md).
 **also detects refund-vs-POSTED discrepancies. M3 is ✅ (E9); M4 is ✅ (E11+E12+E13) — E14 cut**
 **v1.0.0 (tag `v1.0.0` @ `601a669`, 2026-09-07). E15 (operational hardening) shipped 2026-09-08**
 **and cut `v1.1.0` (tag `v1.1.0` on main, 2026-09-08). E16 (operational hygiene) shipped 2026-09-08.**
+**M5 is ✅ (E17, 2026-09-10): card as the second `PaymentRail` behind the extracted Strategy seam**
+**(PIX domain untouched — `docs/audit-m5-s0.md`), Redis read cache (fail-open), k6 hard gate**
+**(bite-proof), webhook reprocessing admin (dedicated key, real-actor audit). The milestone table
+M0–M5 is COMPLETE.**
 
 | Milestone | Scope | Status |
 |---|---|---|
@@ -223,7 +234,7 @@ shipped on `main` 2026-09-08. See [CHANGELOG.md](CHANGELOG.md).
 | M2 (E7/E10) — Events ledger/consumer | Ledger journaling + balance proof/rebuild + settlement (E7 S1–S5 ✓); notifications consumer + `GET /v1/notifications` read API (E10 S0–S7 ✓) | ✅ |
 | M3 — Suffering | Refunds (✓), expiration, resurrection, reconciler, settlement, DLQ/backoff/EXHAUSTED/requeue (E9 ✓) | ✅ |
 | M4 — Finish | Metrics (E11 ✓), blue-green deploy + runtime smoke in CI (E12 ✓), full quality/security gates (E13 ✓) — **✅**; E14 (tag release + SBOM + restore drill) cuts v1.0.0 as its own epic | ✅ |
-| M5 — Stretch | Card as second Strategy, k6 as hard gate, Redis read cache, webhook reprocessing | ◐ |
+| M5 — Stretch | Card as second Strategy, k6 as hard gate, Redis read cache, webhook reprocessing | ✅ 2026-09-10 — the plan completes (E17): card rail behind the extracted seam (PIX untouched), k6 gate bite-proof, cache fail-open, reprocess admin |
 | Post-1.0.0 (E15) — Operational hardening | Webhook abuse controls (429/413, DEBT-8 closed), tested alert rules (promtool in CI + bite-proof), load baseline (k6, 414 rps/0 err), restore at scale (RTO 23 s @ 50k), PITR rehearsal (RPO ≈ 6 s), DEBT-7 Path A — **cut `v1.1.0`** | ✅ 2026-09-08 |
 | Post-1.0.0 (E16) — Operational hygiene | Alertmanager (amtool-validated in CI, logging stub — no pager), PITR v2 (off-disk WAL, pgdata-volume destruction survives), honest k6 (spine ON + defaults: 440 rps/0 err, webhook→reconciler shift), limiter posture declared, dependabot | ✅ 2026-09-08 |
 

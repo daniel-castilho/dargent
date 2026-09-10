@@ -1,7 +1,8 @@
-# M5 — SCOPING (channel-side, in progress; owner authorized prep 2026-09-08)
+# M5 — SCOPING (channel-side; CLOSED 2026-09-10 — M5 delivered, milestone table complete)
 
-Status: RECON DONE (round 1) · deep scoping continues while she executes E16 · package 5/5 targets
-owner review after E16 closes (overlap plan). Nothing here is commissioned to the engineer yet.
+Status: DONE. Scoping recon + the 4 decisions (D1 cirúrgico-disclosed, D2 extend-simulator, D3 one
+hot read path fail-open, D4 honest-baseline tripwire) were adjudicated by the owner package
+2026-09-09 and executed as E17 (S0–S5). Nothing here is pending; kept as the scoping record.
 
 ## What design.md locks (the contract, verbatim references)
 

@@ -40,12 +40,12 @@ Mutation testing. Any gate change beyond the k6 addition. Tag v1.2.0 (owner call
 
 | Step | Deliverable | Evidence | Status |
 |---|---|---|---|
-| S0 | seam extracted; PIX-unchanged (diff-audit + suite + ladders + floors) | | ☐ |
-| S1 | card rail through the SAME invariants | | ☐ |
-| S2 | cache on one path; fail-open proven; metrics | | ☐ |
-| S3 | k6 gate biting (green + red proofs) | | ☐ |
-| S4 | reprocess ladder + audit actor | | ☐ |
-| S5 | sweep + **M5 ✅** + flip + citation | | ☐ |
+| S0 | seam extracted; PIX-unchanged (diff-audit + suite + ladders + floors) | PR #44; `docs/audit-m5-s0.md` (`92afa33`); full verify + floors 5/5 | ✅ |
+| S1 | card rail through the SAME invariants | PR #45 (`e2610a2`) + B1 fix PR #46; `CardPaymentIT` approve/decline/replay/reconciler — one journal, zero-journal decline | ✅ |
+| S2 | cache on one path; fail-open proven; metrics | PR #47 (`335b635`); `ReplayCacheIT` (Redis down fallback); hit/miss/failopen counters; CWE-117 sanitize | ✅ |
+| S3 | k6 gate biting (green + red proofs) | PR #49 (`75b69d7`); green main `34480696967` (p95 20.78 ms, 10739/10739) + bite leg red; hotfix #48 Option A | ✅ |
+| S4 | reprocess ladder + audit actor | PR #50 (`c2a44b2`); `WebhookReprocessIT` 6/6 + `WebhookReprocessAdminRotationIT` 2/2; dedicated key; the `aggregate_id` varchar(25) guard bit surfaced by the ITs and fixed in place | ✅ |
+| S5 | sweep + **M5 ✅** + flip + citation | flip <commit B>; citation on `docs/epics.md` E17 <run> | ✅ (citation → commit B) |
 
 ## §6 Evidence policy
 

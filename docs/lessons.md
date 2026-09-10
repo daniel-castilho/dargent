@@ -10,6 +10,21 @@ When a lesson repeats three times, promote it to [coding-standards.md](coding-st
 
 ---
 
+## 21. A seam extracted from a live flow proves itself by what it did NOT touch — the abstraction proof is a diff, not a diagram (2026-09-10, M5 S0/S5 — the extraction story)
+
+M5's contract was "card added **without touching** the PIX domain". The proof that convinced the
+owner was not the new code but the **diff audit**: `domain/` zero edits (hard — the two new ports
+were additions, not modifications); `application/` exactly 2 files, each with a one-line rationale
+(`docs/audit-m5-s0.md`). The PIX suite, floors and ladders ran byte-identical — behavior-equality
+as the acceptance bar, not "looks equivalent".
+
+1. Extract the **minimal** seam the second consumer actually needs (`rail()` + `presentment()`),
+   not the seam a whiteboard suggests; the card rail then plugs in without renegotiating the core.
+2. Keep routing state (which rail a payment rides) in a **port**, out of the aggregate —
+   infrastructure state masquerading as domain state is how hexagons rot.
+3. The flip citation cites the **diff audit commit**, the seam PR, the card ITs and the gate bite —
+   evidence chain, never prose ("same-PR fix; evidence wins" — AGENTS §6).
+
 ## 20. CodeQL's log-injection sanitizer must sit AT the sink — upstream charset validation does not flow down (2026-09-09, M5 S2 — the ReplayCache annotations)
 
 GitHub Advanced Security annotated 5 `log.warn(...)` sites in `CachedIdempotencyStore` with

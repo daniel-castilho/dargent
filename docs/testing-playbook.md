@@ -91,6 +91,12 @@ Milestone mapping in brackets. Every row = one test (or group) that must exist a
 **Production shape**
 28. Lockdown IT: prod profile boots with Swagger/api-docs absent, actuator health-only, `show-details: never` [M4] — satisfied by `ProductionLockdownIT` (E11 S3; link re-verified E13 S5)
 
+**Card rail (M5 — the second Strategy, PIX untouched)**
+29. `method:"card"` approve → PENDING (`rail=card`, `brcode:null`) → PSP charge webhook → CONFIRMED, **one ledger journal** (same outbox/ledger path) [M5]
+30. Card PSP `402 card_declined` → payment FAILED with **zero journal**, idempotency key deleted → retry is a fresh attempt (re-attemptable) [M5]
+31. Same-key card replay → byte-equal snapshot, **zero new rows**; reconciler confirms approved card charges without a webhook [M5]
+   — satisfied by `CardPaymentIT` (approve/decline/replay/reconciler legs; CardChargeAdapterTest + CreatePaymentUseCaseTest unit)
+
 ## 5. Coverage policy
 
 - Floors **per module** (line + branch), enforced at `verify` on **combined unit + IT data measured after the
@@ -117,7 +123,7 @@ by hand at release time:
 
 | Leg | CI job (dispatch on the RC commit) | Scenarios covered |
 |---|---|---|
-| Full suite + ITs (scenarios 1–28 by taxonomy) | `build` (PR/push gates on the RC head; `./mvnw -B verify`) | 1–15 (idempotency/webhooks/races, incl. **429 burst/413 cap** — `WebhookRateLimitIT`/`WebhookBodyCapIT`), 16–24 (outbox/ledger incl. jqwik property), 25–27 (PSP chaos + reconciler), 28 (prod lockdown) |
+| Full suite + ITs (scenarios 1–31 by taxonomy) | `build` (PR/push gates on the RC head; `./mvnw -B verify`) | 1–15 (idempotency/webhooks/races, incl. **429 burst/413 cap** — `WebhookRateLimitIT`/`WebhookBodyCapIT`), 16–24 (outbox/ledger incl. jqwik property), 25–27 (PSP chaos + reconciler), 28 (prod lockdown), 29–31 (card rail — `CardPaymentIT`) |
 | Alert rules tested firing/quiet | `build` — promtool step (E15 S2) | the 7 operational rules parse, fire and stay quiet as specified (bite-proof on record: run `34228122177` red) |
 | Restore at scale (E15 S4) | `restore-drill-scale` (workflow_dispatch, `DRILL_SCALE_SEED_TXNS=50000`) | §6 legs replayed against a 50k-txn / 150k-posting cluster — measured RTO 23 s (run `34244399134`) |
 | Money path + chaos + shutdown-under-load | `runtime-smoke` | happy path legs, reconciler self-heal (26), drain-window probe |

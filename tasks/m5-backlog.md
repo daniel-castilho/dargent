@@ -92,3 +92,9 @@ WebhookIntakeUseCaseTest 17/17, full green + k6 gate evidence at the PR.
 3. CHANGELOG consolidated; lessons row (the extraction story).
 4. Flip (last content) → citation (ONE) → silence. Tag v1.2.0 = owner call post-epic.
 5. Evidence: verbatim chain + run list.
+
+✅ Done — flip on main (design §1.2 stretch rows delivered, §13 M5 ✅; README money-flow present
+tense + card, milestone table **M5 ✅ — MILESTONE TABLE COMPLETE**; playbook card rows 29–31;
+CHANGELOG `[1.2.0]` consolidated + S0 story; lessons #21 extraction row; release notes
+`docs/releases/v1.2.0.md` pre-authored with the **v1.1.0→v1.2.0 SUPPORTED** migration citation).
+Citation (ONE) on `docs/epics.md` E17 = commit B. Silence after.

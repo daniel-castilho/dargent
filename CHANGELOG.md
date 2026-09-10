@@ -3,7 +3,26 @@
 All notable changes to Dargent are documented here. Format: [Keep a Changelog](https://keepachangelog.com);
 versioning: semantic, cut from annotated git tags (see [release-runbook](docs/release-runbook.md) §1).
 
-## [Unreleased]
+## [1.2.0] - 2026-09-10
+
+### Added (M5 S5 — docs + flip + citation: the milestone table M0–M5 is COMPLETE)
+
+- **The plan completes.** M5 (E17) done 2026-09-10: second rail, k6 hard gate, Redis read cache,
+  webhook reprocessing — `docs/design.md` §13 M5 row flips to delivered; §1.2 stretch non-goals
+  (card, Redis) move to delivered; README *money flow* is now present tense with card; milestone
+  table **M5 ✅ — MILESTONE TABLE COMPLETA**; scenario catalog gains card rows (29–31,
+  `CardPaymentIT`); E17 citation + release notes `docs/releases/v1.2.0.md` (v1.1.0→v1.2.0
+  migration path **SUPPORTED** — expand-only forward migrations + out-of-order contract, proven
+  by `OutOfOrderUpgradeIT`). Release-tag `v1.2.0` = owner call post-epic.
+
+### Added (M5 S0 — PaymentRail seam extraction, the abstraction proof)
+
+- **The Strategy seam, extracted without touching the PIX domain.** `PaymentRail` port (extends the
+  Psp contract, adds `rail()`/`presentment()`), `RailAssignmentPort` (routing state, kept out of the
+  aggregate), `PixRail` strategy (byte-identical presentment), `CREATE 113__payments_rail` expand-only
+  migration (`rail VARCHAR(16) NOT NULL DEFAULT 'pix'`). Domain module: **zero edits** (hard);
+  application: 2 files disclosed with rationale; PIX behavior verified identical by the full suite +
+  floors (`docs/audit-m5-s0.md`).
 
 ### Added (M5 S4 — webhook reprocessing admin)
 

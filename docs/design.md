@@ -34,16 +34,19 @@ The value is not the payment CRUD — it is the guarantees:
 | Every cent traceable and balanced | Double-entry ledger + balance-proof job + property tests (jqwik) |
 | Zero-downtime deploys on bare metal | NGINX blue-green with canary, instant rollback, shutdown-under-load CI gate |
 | Auditable quality | Acceptance matrix per milestone + CI security gates |
+| Strategies beyond PIX | M5: card as a 2nd `Strategy`/`PaymentRail` behind one extracted seam, PIX untouched (abstraction proof) |
+| Ops arc closes | M5: k6 hard gate, Redis read cache (fail-open), webhook reprocessing via admin |
 
-### 1.2 Non-goals (v1.0)
+### 1.2 Non-goals (v1.0 — the two stretch rows landed as M5 deliverables, 2026-09-10)
+
+> The v1.0 stretch non-goals — **card in the core** and **Redis** — were delivered inside M5
+> (see the §13 roadmap M5 row) and are no longer non-goals.
 
 | Out of scope | Reason |
 |---|---|
 | Cloud / k8s | Decision: bare metal on-premises with Docker Compose |
-| Credit cards in the core | Stretch goal (proves the Strategy abstraction at the end) |
 | Static QR (P2P) | Complicates reconciliation, adds nothing; dynamic QR only |
 | Payouts (withdrawals) | Cut for focus; refunds drain the merchant balance |
-| Redis | Stretch (read cache / rate limit) — outside the core |
 | Distributed tracing | Monolith + correlation ids in logs suffice; stretch if services get extracted |
 | Merchant KYC/onboarding, real compliance (PCI/Bacen) | The system is a simulated PSP; PCI posture = never store sensitive data |
 | Web dashboard | REST API only; Swagger UI for exploration |
@@ -659,7 +662,7 @@ Each milestone closes with: green tests in the full pipeline, **filled acceptanc
 | **M2** | Events | Outbox + relay + SNS/SQS FIFO; ledger consuming (entry [1]); balance projection; basic notifications | Catalog 14, 16–18, 21–22 green; queue duplicate → one journal; `ΣDR=ΣCR` after every scenario |
 | **M3** | Suffering ✅ | Refunds (partial/total/concurrent), expiration, resurrection, reconciler, D+1 settlement, **DLQ + backoff + EXHAUSTED + requeue + republish** (E9) | Catalog 6–12, 19–20, 23–24, 26–27 green; signature scenario (11), reconciler (26), **E9: OutboxExhaustionIT, OutboxRequeueIT, OutboxRepublishIT, Scenario20NoDoubleJournalIT, DLQ recipes** in CI |
 | **M4** | Finish | Metrics + JSON logs + correlation; blue-green with canary + rollback; runtime-smoke in CI; tag releases + SBOM; README with diagram + final ADRs; full acceptance matrix; restore drill; full quality gates (SpotBugs/OWASP/JaCoCo/Trivy/CodeQL) | v1→v2 deploy with proven zero downtime; instant rollback exercised; GitHub Release with SBOM |
-| **M5** | Stretch | Simulated card (2nd Strategy), k6 as hard gate, Redis read cache, webhook reprocessing via admin | Card added **without touching** the PIX domain (abstraction proof) |
+| **M5** | Stretch ✅ | Simulated card (2nd Strategy), k6 as hard gate, Redis read cache, webhook reprocessing via admin | **Delivered 2026-09-10 (E17 — the plan completes):** card added **without touching** the PIX domain (abstraction proof — `docs/audit-m5-s0.md`, domain zero-edits); k6 hard gate with bite proof; Redis read cache fail-open; webhook reprocessing admin |
 
 ---
 
@@ -667,7 +670,7 @@ Each milestone closes with: green tests in the full pipeline, **filled acceptanc
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| Scope creep (card/Redis/k8s early) | Eternally unfinished project | Non-goals §1.2; card/Redis were locked at M5 — the lock BROKE 2026-09-09 (M5 commissioned, E17): the second rail, read cache and load gate now land as the proven abstraction + ops arc (§M5, tasks/m5-*.md); k8s stays out |
+| Scope creep (card/Redis/k8s early) | Eternally unfinished project | Non-goals §1.2; card/Redis were locked at M5 — the lock BROKE 2026-09-09 (M5 commissioned, E17) and the second rail, read cache and load gate LANDED 2026-09-10 as the proven abstraction + ops arc (tasks/m5-*.md); k8s stays out |
 | LocalStack quirks (SNS→SQS FIFO, signatures) | Integration surprises | Testcontainers from M0; idempotent provisioning at startup; own envelope shrinks the contact area |
 | Slow CI (Testcontainers + many jobs) | Slow PRs, avoided suite | Singleton containers; fast gates first; chaos/stress tagged separately; NVD/Trivy caches |
 | Migrations breaking blue-green | Downtime deploys | Expand/contract mandatory (D16); migration smoke in runtime-smoke |
