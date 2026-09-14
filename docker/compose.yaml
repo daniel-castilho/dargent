@@ -155,7 +155,7 @@ services:
   # DARGENT_CACHE_REDIS_ENABLED=false). Enable together: `DARGENT_CACHE_REDIS_ENABLED=true` +
   # `DARGENT_CACHE_REDIS_URI=redis://redis:6379`.
   redis:
-    image: redis:7-alpine
+    image: redis:8-alpine
     profiles: ["cache"]
     ports:
       - "6379:6379"
