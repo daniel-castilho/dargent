@@ -46,7 +46,7 @@
          #8549; fix merged upstream but unreleased). Dependabot PRs receive NO repo secrets, so
          the gate must genuinely work keyless (throttled-but-working, the E13 design). Pin the
          last 12.x until the fixed 13.x ships; the NVD data cache keys stay compatible. -->
-    <dependency-check.version>12.2.2</dependency-check.version>
+    <dependency-check.version>13.0.0</dependency-check.version>
     <!-- Per-module LINE coverage floors (owner-fixed, testing-playbook §5). The parent is pom
          packaging (no classes): jacoco.skip=true here is inherited as the DEFAULT-OFF, and every
          floored module opts back in explicitly with jacoco.skip=false + its floor number — a
