@@ -201,7 +201,7 @@ services:
   # E16 S1: Alertmanager — severity routes to a webhook-logger stub (NO pager, NO external
   # sink; spec §2 non-goal). The stub is a real HTTP target so "alerts flowing" is provable.
   alertmanager:
-    image: prom/alertmanager:v0.34.0
+    image: prom/alertmanager:v0.34.1
     profiles: ["metrics"]
     volumes:
       - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
