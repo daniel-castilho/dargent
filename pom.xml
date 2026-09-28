@@ -29,7 +29,7 @@
 
   <properties>
     <java.version>25</java.version>
-    <archunit.version>1.5.0</archunit.version>
+    <archunit.version>1.5.1</archunit.version>
     <!-- E13 S1: OWASP Dependency-Check flagged tomcat-embed-core 11.0.24 (Boot 4.1.1 management)
          with 9 CVEs CVSS 7.5-9.8 (CVE-2026-65183/65905/65927/66422/68763/68525/68569/65182/65637).
          Bump to the latest stable 11.0.x via the Boot property — the gate's finding gets a
