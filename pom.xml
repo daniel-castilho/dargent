@@ -29,7 +29,7 @@
 
   <properties>
     <java.version>25</java.version>
-    <archunit.version>1.5.0</archunit.version>
+    <archunit.version>1.5.1</archunit.version>
     <!-- E13 S1: OWASP Dependency-Check flagged tomcat-embed-core 11.0.24 (Boot 4.1.1 management)
          with 9 CVEs CVSS 7.5-9.8 (CVE-2026-65183/65905/65927/66422/68763/68525/68569/65182/65637).
          Bump to the latest stable 11.0.x via the Boot property — the gate's finding gets a
@@ -39,7 +39,7 @@
     <!-- 4.10.x line (wrapper bumped to Maven 3.9.16 by the same update batch — the 3.8.7 pin
          constraint is gone; see .mvn/wrapper/maven-wrapper.properties). -->
     <spotbugs.version>4.10.4.1</spotbugs.version>
-    <spotless.version>3.10.2</spotless.version>
+    <spotless.version>3.10.4</spotless.version>
     <jacoco.version>0.8.15</jacoco.version>
     <!-- 12.2.2, not 13.0.0: dependency-check 13 keyless mode is BROKEN (upstream bug — empty
          string is passed as the NVD key instead of null, dependency-check#8715, regression from
