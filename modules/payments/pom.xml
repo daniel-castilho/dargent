@@ -58,12 +58,12 @@
     <dependency>
       <groupId>tools.jackson.core</groupId>
       <artifactId>jackson-databind</artifactId>
-      <version>3.2.2</version>
+      <version>3.2.3</version>
     </dependency>
     <dependency>
       <groupId>tools.jackson.core</groupId>
       <artifactId>jackson-core</artifactId>
-      <version>3.2.2</version>
+      <version>3.2.3</version>
     </dependency>
     <!-- Compile dependencies stay framework-free: JPA above already granted by spec §3.3. -->
     <dependency>
@@ -80,7 +80,7 @@
     <dependency>
       <groupId>net.jqwik</groupId>
       <artifactId>jqwik</artifactId>
-      <version>1.10.1</version>
+      <version>1.10.2</version>
       <scope>test</scope>
     </dependency>
     <!-- Real-PostgreSQL ITs (spec §3.3) — the adapter contract suite + the race proof. -->
@@ -128,17 +128,17 @@
     <dependency>
       <groupId>software.amazon.awssdk</groupId>
       <artifactId>sns</artifactId>
-      <version>2.54.13</version>
+      <version>2.56.0</version>
     </dependency>
     <dependency>
       <groupId>software.amazon.awssdk</groupId>
       <artifactId>sqs</artifactId>
-      <version>2.54.13</version>
+      <version>2.56.0</version>
     </dependency>
     <dependency>
       <groupId>software.amazon.awssdk</groupId>
       <artifactId>url-connection-client</artifactId>
-      <version>2.54.13</version>
+      <version>2.56.0</version>
     </dependency>
     <!-- LocalStack testcontainer for E6 ITs (Block 2) -->
     <dependency>
